@@ -24,15 +24,24 @@ export class AnthropicProvider implements LLMProvider {
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
     const model = this.modelFor(req.tier);
-    try {
-      const res = await this.client.messages.create({
+    const send = (withTemperature: boolean) =>
+      this.client.messages.create({
         model,
         max_tokens: req.maxTokens,
         system: [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }],
         messages: withImagesAnthropic(req),
-        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+        ...(withTemperature && req.temperature !== undefined ? { temperature: req.temperature } : {}),
         ...(req.jsonSchema ? { output_config: { format: zodOutputFormat(req.jsonSchema.schema as never) } } : {}),
       });
+    try {
+      let res: Anthropic.Message;
+      try {
+        res = await send(supportsTemperature(model));
+      } catch (e) {
+        // Newer models reject sampling parameters outright; retry once without.
+        if (e instanceof Anthropic.BadRequestError && /temperature/i.test(e.message)) res = await send(false);
+        else throw e;
+      }
       const text = res.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
@@ -48,6 +57,14 @@ export class AnthropicProvider implements LLMProvider {
       throw classifyAnthropicError(e);
     }
   }
+}
+
+/**
+ * Claude 5-generation models (Sonnet 5, Opus 5, Opus 5.5) reject `temperature`
+ * ("deprecated for this model"); older ones accept it.
+ */
+export function supportsTemperature(model: string): boolean {
+  return !/claude-(sonnet|opus)-5/.test(model);
 }
 
 function withImagesAnthropic(req: CompletionRequest): Anthropic.MessageParam[] {
