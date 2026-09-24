@@ -35,7 +35,7 @@ export async function teardown(): Promise<void> {
   await closeDb();
 }
 
-export async function waitFor<T>(fn: () => Promise<T | undefined | null | false>, { timeoutMs = 20_000, intervalMs = 100, label = "condition" } = {}): Promise<T> {
+export async function waitFor<T>(fn: () => T | undefined | null | false | Promise<T | undefined | null | false>, { timeoutMs = 20_000, intervalMs = 100, label = "condition" } = {}): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const v = await fn();
