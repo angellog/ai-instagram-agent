@@ -24,6 +24,8 @@ Brief §23 coverage: memory extraction, intent classification, repetition detect
 
 ## Blocked on the operator (cannot be done by the build)
 
+0. **Anthropic credits**: the key from telegram-agents is out of credit (live check 2026-09-25: "credit balance is too low"). Top it up, or set another key / an OpenAI-compatible provider.
+
 1. **Persona Instagram account**: create/choose the Business account for Zuri, make it public, turn on the in-app "AI-generated profile" label, then connect it (docs/deployment/RAILWAY.md).
 2. **Credentials to Railway**: `scripts/set-railway-secrets.sh --from-feetbit` (LLM, kie, Supabase, imgbb) and the Instagram/Meta values.
 3. **Merge angellog/openreply#1** and set the three `AGENT_RELAY_*` variables on OpenReply (Vercel + worker).
