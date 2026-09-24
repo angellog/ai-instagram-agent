@@ -74,6 +74,7 @@ export async function seedAccountFromEnv(): Promise<void> {
   if (!e.INSTAGRAM_ACCOUNT_ID || !e.INSTAGRAM_ACCESS_TOKEN) return;
   const existing = await one<IgAccountRow>("SELECT * FROM ig_accounts WHERE ig_user_id = $1", [e.INSTAGRAM_ACCOUNT_ID]);
   if (existing && openToken(existing)) {
+    if (!existing.username) await fillProfile(existing.ig_user_id);
     if (!existing.is_primary) {
       await one("UPDATE ig_accounts SET is_primary = false WHERE is_primary");
       await one("UPDATE ig_accounts SET is_primary = true WHERE id = $1", [existing.id]);
@@ -87,7 +88,18 @@ export async function seedAccountFromEnv(): Promise<void> {
     expiresAt: new Date(Date.now() + 55 * 24 * 3600 * 1000),
     makePrimary: true,
   });
+  await fillProfile(e.INSTAGRAM_ACCOUNT_ID);
   await recordEvent("info", "instagram", "Seeded primary Instagram account from environment", { igUserId: e.INSTAGRAM_ACCOUNT_ID });
+}
+
+/** Best effort: store username/profile for display. Never blocks boot. */
+async function fillProfile(igUserId: string): Promise<void> {
+  try {
+    const profile = await (await instagramClient()).getProfile();
+    await one("UPDATE ig_accounts SET username = $2, profile = $3, updated_at = now() WHERE ig_user_id = $1", [igUserId, profile.username, JSON.stringify(profile)]);
+  } catch {
+    // offline or token issue: the refresh job and dashboard surface real problems
+  }
 }
 
 let clientOverride: InstagramClient | undefined;
