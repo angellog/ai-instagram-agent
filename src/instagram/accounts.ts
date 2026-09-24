@@ -92,6 +92,11 @@ export async function seedAccountFromEnv(): Promise<void> {
 
 let clientOverride: InstagramClient | undefined;
 
+/** True when a client can be built (a primary account is connected, or a test client is set). */
+export async function hasAccount(): Promise<boolean> {
+  return Boolean(clientOverride) || Boolean(await primaryAccount());
+}
+
 /** Test hook: route every Instagram call through a fake client. */
 export function setInstagramClient(c: InstagramClient | undefined): void {
   clientOverride = c;

@@ -1,5 +1,5 @@
 import { many, one } from "../db/pool.js";
-import { instagramClient } from "../instagram/accounts.js";
+import { hasAccount, instagramClient } from "../instagram/accounts.js";
 import { recordEvent } from "../lib/events.js";
 import { upsertMemory } from "../memory/store.js";
 import { applyMemoryPolicy } from "../memory/policy.js";
@@ -86,6 +86,7 @@ export async function collectEngagement(postId: string, checkpoint: string): Pro
 
 /** `account.collect`: daily account snapshot. */
 export async function collectAccount(now = new Date()): Promise<void> {
+  if (!(await hasAccount())) return; // nothing to measure before an account is connected
   const ig = await instagramClient();
   const profile = await ig.getProfile();
   let insights: Record<string, number> = {};

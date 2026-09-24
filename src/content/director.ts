@@ -11,6 +11,7 @@ import { personaSystemBlock } from "../persona/prompt.js";
 import type { Persona, Slot } from "../persona/schema.js";
 import { SLOTS } from "../persona/schema.js";
 import { learningsForPrompt } from "../analytics/learnings.js";
+import { hasAccount } from "../instagram/accounts.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { ensureDayPlan, type ActivityRow } from "./activities.js";
 import { enforceContinuity } from "./continuity.js";
@@ -187,6 +188,8 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
 export async function postingGate(c: Controls, p: Persona, now: Date): Promise<string | undefined> {
   if (c.paused) return "paused";
   if (!c.content_enabled) return "content generation disabled";
+  // Producing a post costs money; don't until there is an account to publish it to.
+  if (!(await hasAccount())) return "no Instagram account connected";
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(

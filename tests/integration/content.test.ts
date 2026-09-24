@@ -229,3 +229,13 @@ describe("engagement and learning loop", () => {
     expect(await learningsForPrompt()).toMatch(/format: (carousel|single)=/);
   });
 });
+
+describe("no connected account", () => {
+  it("does not plan (or spend) until an Instagram account is connected", async () => {
+    setInstagramClient(undefined);
+    await one("DELETE FROM ig_accounts");
+    expect(await planContent()).toMatchObject({ status: "skipped", reason: "no Instagram account connected" });
+    const { collectAccount } = await import("../../src/analytics/learnings.js");
+    await expect(collectAccount()).resolves.toBeUndefined();
+  });
+});

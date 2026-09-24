@@ -32,10 +32,28 @@ else
   echo "usage: $0 <secrets.env> | --from-feetbit [extra.env]" >&2; exit 1
 fi
 
+# Sanity-check an Instagram token before shipping it: it must work and belong to the given account id.
+tok=$(grep -E "^INSTAGRAM_ACCESS_TOKEN=" "$tmp" | tail -1 | cut -d= -f2- || true)
+if [[ -n "$tok" ]]; then
+  me=$(curl -s -H "Authorization: Bearer $tok" "https://graph.instagram.com/v25.0/me?fields=user_id,username,account_type")
+  uid=$(printf '%s' "$me" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('user_id',''))" 2>/dev/null || true)
+  uname=$(printf '%s' "$me" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('username',''), d.get('account_type',''))" 2>/dev/null || true)
+  [[ -z "$uid" ]] && { echo "✗ Instagram token rejected by Meta: $me" >&2; exit 1; }
+  echo "  token OK for @$uname (user_id $uid)"
+  given=$(grep -E "^INSTAGRAM_ACCOUNT_ID=" "$tmp" | tail -1 | cut -d= -f2- || true)
+  if [[ -z "$given" ]]; then echo "INSTAGRAM_ACCOUNT_ID=$uid" >> "$tmp"; echo "  INSTAGRAM_ACCOUNT_ID filled in from the token"
+  elif [[ "$given" != "$uid" ]]; then echo "✗ INSTAGRAM_ACCOUNT_ID $given does not match the token's account ($uid)" >&2; exit 1; fi
+fi
+
 args=()
 for k in "${KEYS[@]}"; do
   v=$(grep -E "^$k=" "$tmp" | tail -1 | cut -d= -f2- || true)
   [[ -n "$v" ]] && args+=(--set "$k=$v") && echo "  will set $k"
 done
 [[ ${#args[@]} -eq 0 ]] && { echo "nothing to set"; exit 1; }
-for s in web worker; do railway variables --service "$s" "${args[@]}" >/dev/null && echo "✓ $s updated (redeploying)"; done
+# --skip-deploys + explicit redeploy: variable changes alone don't rebuild a
+# service whose GitHub source Railway can't reach.
+for s in web worker; do
+  railway variables --service "$s" --skip-deploys "${args[@]}" >/dev/null && echo "✓ $s variables set"
+  railway redeploy --service "$s" --yes >/dev/null && echo "✓ $s redeploy started"
+done
