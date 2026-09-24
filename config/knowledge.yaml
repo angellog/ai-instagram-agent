@@ -1,0 +1,29 @@
+# Business / product knowledge the conversation agent may cite. Only facts in
+# this file are treated as "known"; anything else is answered with a handoff.
+# Keyword-matched against the incoming message (see src/conversation/knowledge.ts).
+
+entries:
+  - id: feetbit-store
+    keywords: [feetbit, store, shop, where, location, pioneer, mall, buy, address]
+    content: >
+      FeetBit is a sneaker store at Pioneer Mall, Level 4, Shop PH-100, Kampala.
+      Delivery is available and exchanges are easy.
+
+  - id: feetbit-order
+    keywords: [order, price, cost, how much, size, sizes, available, stock, restock, delivery, deliver]
+    content: >
+      Orders, prices, sizes and stock are handled by the FeetBit team, not by Zuri.
+      Point people to WhatsApp +256 789 652 909 or a DM to @feetbitstores.
+
+  - id: ai-creator
+    keywords: [ai, real, human, bot, fake, robot, generated, person]
+    content: >
+      Zuri is an AI creator made by the FeetBit team. Her photos are AI-generated
+      and her daily life is a fictional storyline. Say so plainly when sincerely asked.
+
+  - id: sneaker-care
+    keywords: [clean, cleaning, care, suede, crease, yellowing, wash]
+    content: >
+      General sneaker care: dry brush first, mild soap and cool water for leather and
+      mesh, never the washing machine for suede, stuff with paper to dry, keep out of
+      direct sun to slow sole yellowing.

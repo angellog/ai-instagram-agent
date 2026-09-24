@@ -1,0 +1,22 @@
+// Runs before every test file (vitest setupFiles), before app modules load.
+Object.assign(process.env, {
+  NODE_ENV: "test",
+  LOG_LEVEL: process.env.TEST_LOG_LEVEL ?? "silent",
+  DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgresql://localhost:5432/aia_test",
+  REDIS_URL: process.env.TEST_REDIS_URL ?? "redis://localhost:6379/6",
+  QUEUE_PREFIX: "aiatest",
+  PUBLIC_BASE_URL: "http://localhost:3999",
+  LLM_PROVIDER: "mock",
+  MOCK_IMAGES: "true",
+  LOCAL_MEDIA_DIR: "output/test-media",
+  INSTAGRAM_APP_ID: "123456",
+  INSTAGRAM_APP_SECRET: "test-ig-secret",
+  WEBHOOK_VERIFY_TOKEN: "verify-me",
+  OPENREPLY_RELAY_SECRET: "relay-secret",
+  OPENREPLY_DEFER_KEYWORDS: "LINK,GUIDE",
+  ENCRYPTION_KEY: "0f".repeat(32),
+  SUPABASE_URL: "",
+  IMGBB_API_KEY: "",
+  TELEGRAM_BOT_TOKEN: "",
+  KIE_API_KEY: "",
+});
