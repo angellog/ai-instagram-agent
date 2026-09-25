@@ -145,7 +145,9 @@ describe("publishing", () => {
     const parent = creates.find((c) => c.body.media_type === "CAROUSEL")!;
     expect(children.length).toBeGreaterThanOrEqual(2);
     expect(parent.body.children.split(",")).toHaveLength(children.length);
-    expect(creates.every((c) => c.body.is_ai_generated === true)).toBe(true);
+    // AI label on the carousel container, never on the items (Meta rejects that).
+    expect(parent.body.is_ai_generated).toBe(true);
+    expect(children.every((c) => c.body.is_ai_generated === undefined)).toBe(true);
     expect(fake.callsTo("POST", /media_publish/)).toHaveLength(1);
     const delayed = await queue("analytics").getJobs(["delayed"]);
     expect(delayed.map((j) => j.data.checkpoint).sort()).toEqual(["24h", "72h", "7d"]);

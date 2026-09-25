@@ -116,7 +116,9 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     } else {
       const children = [...post.ig_child_container_ids];
       for (const a of assets.slice(children.length)) {
-        const child = await ig.createImageContainer({ imageUrl: a.public_url, isCarouselItem: true, altText: a.overlay?.alt_text, isAiGenerated: true });
+        // Meta: the AI label goes on the carousel container only; setting it on
+        // a carousel item is rejected (code 100, subcode 2207100).
+        const child = await ig.createImageContainer({ imageUrl: a.public_url, isCarouselItem: true, altText: a.overlay?.alt_text });
         children.push(child.id);
         await one("UPDATE posts SET ig_child_container_ids = $2 WHERE id = $1", [postId, children]);
       }

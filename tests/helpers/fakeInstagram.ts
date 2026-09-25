@@ -94,6 +94,10 @@ export class FakeInstagram {
         return ok({ recipient_id: body.recipient?.id ?? "x", message_id: mid });
       }
       if (method === "POST" && sub === "media") {
+        // Real API rule (observed 2026-09-25): AI label only on the carousel container.
+        if (body.is_carousel_item && body.is_ai_generated) {
+          return err(400, 100, "AI Label for Carousels should be set at the container and not on individual carousel items");
+        }
         const cid = `c_${id()}`;
         const children = body.children ? String(body.children).split(",") : undefined;
         if (children) {

@@ -38,7 +38,7 @@ Inspected 2026-09-24 at commit `059cf3a`.
 - Carousel: children with `is_carousel_item=true`, parent `media_type=CAROUSEL`, `children` = up to **10** ids; all slides are cropped to the first slide's aspect ratio. → Composer outputs every slide at 1080×1350 (4:5).
 - Limit: **100** API-published posts per rolling 24 h (a carousel counts as one); `GET /{ig-user-id}/content_publishing_limit`. → Checked before every publish.
 - Images: **JPEG only**, ≤ 8 MB, aspect 4:5 … 1.91:1, width 320–1440, sRGB. → Composer re-encodes to sRGB JPEG q88 at 1080×1350.
-- Optional fields used: `alt_text` (≤ 1000 chars, images), `is_ai_generated`.
+- Optional fields used: `alt_text` (≤ 1000 chars, images), `is_ai_generated`. **Verified live 2026-09-25:** for carousels `is_ai_generated` must be set on the CAROUSEL container only; on a carousel item Meta returns code 100 / subcode 2207100.
 - Meta recommends polling container status about once a minute for ≤ 5 minutes; we poll with backoff (3 s → 30 s, ≤ 5 min) because image containers usually finish in seconds.
 
 ### Comments
