@@ -34,6 +34,7 @@ export const JOBS = {
   reviewsExpire: "reviews.expire",
   calendarRecap: "calendar.recap",
   benchmarkRun: "generation.benchmark",
+  hatchFaces: "hatch.faces",
   sweep: "maintenance.sweep",
 } as const;
 

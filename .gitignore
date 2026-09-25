@@ -7,3 +7,4 @@ output
 *.log
 .DS_Store
 coverage
+.claude/

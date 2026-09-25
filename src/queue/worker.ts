@@ -2,6 +2,8 @@ import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "../config/env.js";
 import { currentInfluencer, listInfluencers, loadInfluencer, withInfluencer } from "../context.js";
 import { recapCalendar } from "../calendar/recap.js";
+import { runBenchmark } from "../generation/benchmark.js";
+import { generateFaceCandidates } from "../influencers/hatch.js";
 import { one } from "../db/pool.js";
 import { processWebhookEvent } from "../ingest/process.js";
 import { processInteraction } from "../conversation/agent.js";
@@ -75,6 +77,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.accountCollect]: () => forEachActiveInfluencer("account snapshot", () => collectAccount()),
   [JOBS.memoryExpire]: () => forEachActiveInfluencer("memory expiry", expireMemories),
   [JOBS.calendarRecap]: () => forEachActiveInfluencer("calendar recap", () => recapCalendar()),
+  [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
+  [JOBS.benchmarkRun]: scoped((j) => runBenchmark((j.data.modelIds as number[]).map(Number), Number(j.data.maxUsd ?? 2), String(j.data.tag ?? Date.now()))),
   // Platform-wide maintenance.
   [JOBS.tokenRefresh]: () => refreshExpiringTokens(),
   [JOBS.reviewsExpire]: () => expireReviews(),
@@ -97,6 +101,8 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.memoryExtract]: 2 * 60_000,
   [JOBS.contentPlan]: 6 * 60_000,
   [JOBS.contentProduce]: 45 * 60_000,
+  [JOBS.benchmarkRun]: 60 * 60_000,
+  [JOBS.hatchFaces]: 20 * 60_000,
   [JOBS.postPublish]: 15 * 60_000,
 };
 
@@ -257,12 +263,17 @@ export async function syncInfluencerSchedulers(): Promise<{ active: number; remo
       await recordEvent("warn", "worker", `No valid persona for ${inf.slug}; not scheduling content`, { error: errorMessage(e) });
       continue;
     }
-    await queue("content").upsertJobScheduler(planSchedulerId(id), { pattern: planCron, tz }, {
-      name: JOBS.contentPlan,
-      data: { influencerId: id },
-      opts: { attempts: 3, backoff: { type: "smart", delay: 30_000 } },
-    });
-    active++;
+    try {
+      await queue("content").upsertJobScheduler(planSchedulerId(id), { pattern: planCron, tz }, {
+        name: JOBS.contentPlan,
+        data: { influencerId: id },
+        opts: { attempts: 3, backoff: { type: "smart", delay: 30_000 } },
+      });
+      active++;
+    } catch (e) {
+      // A bad cron or timezone must never take the whole worker down.
+      await recordEvent("error", "worker", `Could not schedule content for ${inf.slug}`, { cron: planCron, tz, error: errorMessage(e) });
+    }
   }
   logger.info({ active, removed, planCron }, "job schedulers upserted");
   return { active, removed };

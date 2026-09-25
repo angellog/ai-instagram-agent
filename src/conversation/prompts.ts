@@ -49,8 +49,8 @@ export type Decision = z.infer<typeof decisionSchema>;
 export const PERCEPTION_SYSTEM = `You label one incoming Instagram message for an AI sneaker/lifestyle creator. Be literal and fast.
 Intents:
 - greeting, compliment (on a post/fit/pair), sneaker_talk (discussing shoes, fits, culture),
-- question_product (price, size, stock, where to buy), question_about_persona (who/what she is, is she AI, her day),
-- question_general, opinion_or_debate, content_request (asks her to post about something),
+- question_product (price, size, stock, where to buy), question_about_persona (who/what they are, are they AI, their day),
+- question_general, opinion_or_debate, content_request (asks the persona to post about something),
 - collab_or_business (brand deals, partnerships), order_intent (wants to buy now),
 - complaint, spam (promo bots, "DM for collab" spam, crypto, follow-for-follow, links), harassment, other.
 Return JSON only.`;

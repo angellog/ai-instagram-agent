@@ -193,8 +193,9 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
 export async function postingGate(c: Controls, p: Persona, now: Date): Promise<string | undefined> {
   if (c.paused) return "paused";
   if (!c.content_enabled) return "content generation disabled";
-  // Producing a post costs money; don't until there is an account to publish it to.
-  if (!(await hasAccount())) return "no Instagram account connected";
+  // Producing a post costs money; outside the preview modes, don't until there
+  // is an account to publish it to. dry_run/development may plan to preview.
+  if (!["dry_run", "development"].includes(c.mode) && !(await hasAccount())) return "no Instagram account connected";
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(
@@ -241,11 +242,11 @@ Principles:
 - Natural feed: mix formats and structures; vary locations, outfits and shot types; no identical compositions back to back.
 ${
     p.carousel.text_overlays
-      ? `- Carousels have ${p.carousel.min_slides}-${p.carousel.max_slides} slides. Text overlays are allowed only on slides without her in them: educational/listicle detail slides may use overlay_kind "body"; every photo of her uses overlay_kind "none".`
+      ? `- Carousels have ${p.carousel.min_slides}-${p.carousel.max_slides} slides. Text overlays are allowed only on slides without the persona in them: educational/listicle detail slides may use overlay_kind "body"; every photo of the persona uses overlay_kind "none".`
       : `- Carousels have ${p.carousel.min_slides}-${p.carousel.max_slides} slides of plain photos, exactly like a real person posting from their camera roll: overlay_kind "none" on every slide, no text on images. Put the hook and any tips in the caption instead.`
   }
 - Single images: one strong frame, no text on the image.
-- Shots should feel like her own iPhone photos or ones a friend took: candid, everyday, varied angles (mirror fit check, feet-and-floor shot, coffee on the table, walking away).
+- Shots should feel like the persona's own iPhone photos or ones a friend took: candid, everyday, varied angles (mirror fit check, feet-and-floor shot, coffee on the table, walking away).
 - Never claim experiences as real-world facts; the day is a storyline for an AI creator. Keep sneaker facts accurate or phrase them as opinion.
 - Captions: conversational, ${c.max_posts_per_day > 1 ? "varied openings" : "a fresh opening"}, end with a light question or thought now and then (not always). No hashtags inside the caption text; put them in "hashtags" (max ${p.hashtags.max}, from: ${p.hashtags.pool.join(" ")}).
 - Overlay text must be plain Latin text (no emoji).

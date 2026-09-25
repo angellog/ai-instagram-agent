@@ -46,6 +46,8 @@ export interface GenerationRequest {
   /** Override the influencer's routing policy for this job. */
   mode?: RoutingMode;
   preferred?: { provider: string; model: string };
+  /** Only this registry model may run (benchmarks, operator "try this model"). */
+  pinModelId?: number;
   maxCostUsd?: number;
   timeoutSeconds?: number;
   metadata?: Record<string, unknown>;

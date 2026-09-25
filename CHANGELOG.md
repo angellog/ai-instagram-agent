@@ -3,6 +3,45 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.3: Hatch an influencer (with the v1.0.1 and v1.0.2 work)
+
+The three releases shipped as one commit because the new console underpins all of them.
+
+**v1.0.3 Hatch wizard** (`/admin/hatch`)
+1. The **brief** (name, niche, city, look, vibe…) is turned by the LLM into a complete, validated persona.
+2. **Review** the persona, edit it, or re-compose it.
+3. **Soul**: generate three face options through the engine or bring your own photos, then name the Soul ID (e.g. `soul_nova_v1`). Optionally train a Higgsfield Soul ID.
+4. **Instagram**: attach by token (validated with `/me`; Creator/Business only; webhooks subscribed), log in with Instagram (OAuth now carries the influencer), or skip.
+5. **Launch**: pick the starting mode (human approval by default), posts per day and budgets. The per-influencer schedule starts in its own timezone, with an optional first post.
+
+**v1.0.2 Console redesign + calendar**
+- A new design system: tokens, light/dark, Fira type, SVG icons, WCAG AA, reduced motion. See `docs/design/HANDOFF.md`.
+- An app shell with sections, an influencer switcher and pause/resume.
+- An interactive **calendar** (FullCalendar 7). You can add, drag, edit and delete events.
+  - Events are world (shared) or private.
+  - Each event has an importance and a "use for" setting.
+  - "What happened?" outcomes become memories.
+  - Upcoming events feed the director and the conversation agent.
+- Every page is scoped to the selected influencer.
+
+**v1.0.1 Config + Generation Control Center**
+- **Config & keys**: one page for every service key (LLM, 7 generation providers, storage, Meta app, OpenReply, Telegram).
+  - Keys are encrypted and override env. Changes apply in about 15 seconds.
+  - A setup checklist shows what is missing.
+  - Per-provider **Test** buttons.
+- **Generation Control Center**, with five views:
+  - Providers & models (health, quarantine release, enable/disable).
+  - Routing policy (platform + per influencer) with a spend-free **route preview**.
+  - Jobs & failures (route + attempts per request).
+  - Assets.
+  - **Benchmarks**: a vision-judged suite, budget-capped, whose scores feed the router.
+
+Also:
+- Shared prompts are gender-neutral, so influencers can be of any gender.
+- Planning is allowed in dry-run/development before an Instagram account is attached.
+- A bad cron or timezone can no longer crash the worker.
+- `scripts/preview-console.sh` runs a fully offline preview.
+
 ## v1.0.0 — Multi-influencer core + Generation Engine
 
 **Platform**

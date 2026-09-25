@@ -44,3 +44,12 @@ Brief §23 coverage: memory extraction, intent classification, repetition detect
 
 ## Next executable task
 Run `scripts/set-railway-secrets.sh --from-feetbit`, connect the persona account, set mode to `dry_run` in `/admin/controls` for 24h, review `/admin/posts` and `/admin/conversations`, then switch to `human_approval`.
+
+## v1.0.3 (2026-09-25)
+Status: multi-influencer platform with a Generation Engine (7 providers), an
+in-app Config page, the Generation Control Center, an interactive calendar
+that feeds memory, a redesigned console and a Hatch wizard. 211 tests pass.
+Offline preview: `scripts/preview-console.sh`. See CHANGELOG.md.
+Provider adapters beyond kie are contract-tested against their documented
+APIs. Each stays "unverified" in the Engine page until its first real call
+succeeds.

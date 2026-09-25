@@ -129,6 +129,10 @@ export function route(
   }
 
   const byId = new Map(eligible.map((c) => [c.model.id, c]));
+  if (req.pinModelId !== undefined) {
+    const pinned = byId.get(req.pinModelId);
+    return { mode, candidates: pinned ? [{ ...pinned, reason: "pinned" }] : [], excluded };
+  }
   let ordered: Candidate[];
   switch (mode) {
     case "fixed":

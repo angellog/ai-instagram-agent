@@ -163,9 +163,12 @@ export async function buildServer(): Promise<FastifyInstance> {
   // ------------------------------------------------------------ login
   app.get("/admin/login", async (req: FastifyRequest<{ Querystring: Record<string, string> }>, reply) => {
     const next = safeNext(req.query.next);
-    return reply.type("text/html").send(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title>
-<style>body{font:16px system-ui;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f5f2}form{background:#fff;padding:24px;border-radius:14px;border:1px solid #e6e3dd;display:grid;gap:10px;width:min(360px,90vw)}input,button{font:inherit;padding:8px;border-radius:8px;border:1px solid #ddd}button{background:#ff5a1f;color:#fff;border:0}</style>
-<form method="post" action="/admin/login"><b>AI agent admin</b><input type="password" name="token" placeholder="ADMIN_TOKEN" autofocus><input type="hidden" name="next" value="${next.replace(/"/g, "")}"><button>Sign in</button></form>`);
+    return reply.type("text/html").send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Influencer OS</title>
+<style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;min-height:100dvh;margin:0;background:light-dark(#f6f6f8,#0d0e12);color:light-dark(#12141a,#eceef2)}
+form{background:light-dark(#fff,#15171c);padding:28px;border-radius:16px;border:1px solid light-dark(#e3e4ea,#262a33);display:grid;gap:12px;width:min(380px,calc(100vw - 32px));box-shadow:0 12px 32px rgb(0 0 0/.08)}
+h1{font-size:20px;margin:0}label{font-weight:600;font-size:14px}input,button{font:inherit;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid light-dark(#d3d5dd,#343945);background:transparent;color:inherit}
+button{background:#c8410e;border:0;color:#fff;font-weight:600;cursor:pointer}input:focus-visible,button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}</style>
+<form method="post" action="/admin/login"><h1>Influencer OS</h1><label for="t">Admin token</label><input id="t" type="password" name="token" autocomplete="current-password" autofocus required><input type="hidden" name="next" value="${next.replace(/"/g, "")}"><button>Sign in</button></form></html>`);
   });
   app.post("/admin/login", async (req: FastifyRequest<{ Body: Record<string, string> }>, reply) => {
     const token = env().ADMIN_TOKEN;

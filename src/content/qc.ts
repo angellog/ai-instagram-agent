@@ -76,7 +76,7 @@ export async function visionQc(o: {
   };
   const images: InputImage[] = [];
   const withRef = Boolean(o.reference && o.includeCharacter);
-  if (withRef) images.push({ label: "REFERENCE (who she is; ignore this image's background and clothes):", data: await faceCrop(o.reference!), mediaType: "image/jpeg" });
+  if (withRef) images.push({ label: "REFERENCE (who the person is; ignore this image's background and clothes):", data: await faceCrop(o.reference!), mediaType: "image/jpeg" });
   images.push({ label: "CANDIDATE (the generated photo to judge):", data: await small(o.image), mediaType: "image/jpeg" });
   return llm().structured(visionQcSchema, {
     operation: "image.validate",
@@ -91,8 +91,8 @@ export async function visionQc(o: {
       withRef ? "Two images are attached: REFERENCE (a face crop) and CANDIDATE. Describe and judge only the CANDIDATE; use the REFERENCE only to check identity." : "One image is attached: the CANDIDATE.",
       `Brief: ${o.shotBrief}`,
       o.includeCharacter
-        ? "It should show one woman who is the same person as the reference. Judge identity only from what is visible: if her face is small, turned or partly hidden (phone, mirror, hair), answer character_consistent 'yes' unless she is clearly a different person (different skin tone, face structure or hair)."
-        : "This is a detail/product/environment shot. Her hands, arms, legs or feet partly in frame are FINE and natural; only a visible face or a second person counts as extra_people.",
+        ? "It should show one person who is the same person as the reference. Judge identity only from what is visible: if the face is small, turned or partly hidden (phone, mirror, hair), answer character_consistent 'yes' unless it is clearly a different person (different skin tone, face structure or hair)."
+        : "This is a detail/product/environment shot. The persona's hands, arms, legs or feet partly in frame are FINE and natural; only a visible face or a second person counts as extra_people.",
       "Only these are real problems: anatomy errors, garbled text/logos, an extra person, a clearly different person, or the wrong subject entirely. Pose, props, exact framing or a missing detail from the brief are NOT problems; a real phone photo is never exactly as planned. List only real problems in issues.",
     ].join("\n"),
   });

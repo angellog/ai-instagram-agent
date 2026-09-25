@@ -68,10 +68,34 @@ describe("health and auth", () => {
     expect(r.json()).toMatchObject({ version: expect.stringMatching(/^1\./), influencers: [{ slug: "zuri", mode: "autonomous", account: { igUserId: expect.any(String) } }] });
   });
   it("renders every dashboard page", async () => {
-    for (const url of ["/admin", "/admin/reviews", "/admin/posts", "/admin/content", "/admin/conversations", "/admin/people", "/admin/costs", "/admin/events", "/admin/controls", "/admin/persona"]) {
+    for (const url of [
+      "/admin",
+      "/admin/reviews",
+      "/admin/reviews?status=all",
+      "/admin/posts",
+      "/admin/posts?status=attention",
+      "/admin/content",
+      "/admin/conversations",
+      "/admin/people",
+      "/admin/calendar",
+      "/admin/persona",
+      "/admin/controls",
+      "/admin/generation",
+      "/admin/generation/policy",
+      "/admin/generation/requests",
+      "/admin/generation/assets",
+      "/admin/generation/benchmarks",
+      "/admin/influencers",
+      "/admin/config",
+      "/admin/costs",
+      "/admin/events",
+      "/admin/hatch",
+    ]) {
       const r = await app.inject({ url });
       expect(r.statusCode, url).toBe(200);
-      expect(r.body).toContain("<main>");
+      expect(r.body, url).toContain('id="main"');
+      const main = r.body.slice(r.body.indexOf('id="main"'), r.body.indexOf("</main>"));
+      expect(main, url).not.toMatch(/\bundefined\b|\[object Object\]|\bNaN\b/);
     }
   });
   it("updates controls from the form and validates them", async () => {

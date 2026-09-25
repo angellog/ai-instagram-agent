@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { LLM } from "./llm.js";
 import { MockProvider } from "./providers.js";
 import type { CompletionRequest } from "./types.js";
@@ -75,6 +77,9 @@ export function createDevMockProvider(): MockProvider {
       return { memories: m ? [{ kind: "interest", content: `Likes ${m[1].trim()}`, confidence: 0.85, importance: 0.6, expires_on: null }] : [] };
     })
     .on("memory.summarize", () => "Friendly follower who talks sneakers.")
+    .on("config.test", () => "OK")
+    .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
+    .on("persona.compose", (r) => devPersona(lastUser(r)))
     .on("image.validate", () => ({
       acceptable: true,
       character_consistent: "yes",
@@ -122,6 +127,13 @@ export function createDevMockProvider(): MockProvider {
         },
       };
     });
+}
+
+/** Offline persona composer: the reference persona, renamed from the brief. */
+function devPersona(prompt: string): string {
+  const name = /^Name: (.+)$/m.exec(prompt.split("BRIEF:")[1] ?? "")?.[1]?.trim() ?? "Nova";
+  const tpl = readFileSync(resolve(process.env.PERSONA_PATH ?? "config/persona.yaml"), "utf8");
+  return tpl.replace(/^  name: .+$/m, `  name: ${name}`).replace(/^  handle: .+$/m, `  handle: "@${name.toLowerCase().replace(/[^a-z0-9]/g, "")}"`);
 }
 
 export function createDevLLM(): LLM {
