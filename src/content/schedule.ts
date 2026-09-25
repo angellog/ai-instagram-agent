@@ -11,7 +11,7 @@ import { JOBS, jobId, queue } from "../queue/queues.js";
  * RED safety verdict, a pause, or development mode (no external writes).
  */
 
-export const PUBLISHABLE = ["awaiting_review", "dry_run", "approved", "failed"];
+export const PUBLISHABLE = ["awaiting_review", "dry_run", "approved", "failed", "qc_failed"];
 const MAX_AHEAD_DAYS = 60;
 
 /** Local wall-clock time in an IANA timezone ("2026-09-27T18:30") → UTC Date. */
@@ -57,6 +57,11 @@ export async function operatorPublish(postId: string, when: "now" | Date, review
   if (post.status === "publishing") return { ok: false, message: "Publishing is already in progress" };
   if (!PUBLISHABLE.includes(post.status)) return { ok: false, message: `A ${post.status} post can't be published` };
   if (post.safety_level === "red") return { ok: false, message: "RED posts are never published" };
+  const slides = await one<{ n: number; missing: number }>(
+    "SELECT count(*)::int AS n, count(*) FILTER (WHERE public_url IS NULL)::int AS missing FROM post_assets WHERE post_id = $1",
+    [postId],
+  );
+  if (!slides?.n || slides.missing) return { ok: false, message: "This post has no finished images yet: use Retry production first" };
   const c = await getControls();
   if (c.mode === "development") return { ok: false, message: "Development mode makes no external writes; switch mode in Controls" };
 

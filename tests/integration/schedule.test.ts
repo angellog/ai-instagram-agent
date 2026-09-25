@@ -107,3 +107,20 @@ describe("Schedule", () => {
     expect(flash(await post(`/admin/posts/${id}/schedule`, { at: "soon" }))).toMatch(/^Not saved/);
   });
 });
+
+describe("Publish card visibility", () => {
+  it("always shows on unpublished posts, explaining why when it can't publish", async () => {
+    const id = await draft();
+    // Budget-stopped post with no images: disabled buttons + the fix.
+    const bare = await one<{ id: string }>("INSERT INTO posts (influencer_id, media_type, caption, status) VALUES (1, 'IMAGE', 'c', 'failed') RETURNING id");
+    const page = await app.inject({ url: `/admin/posts/${bare!.id}` });
+    expect(page.body).toContain('aria-disabled="true"');
+    expect(page.body).toContain("No images yet");
+    expect(flash(await post(`/admin/posts/${bare!.id}/post-now`))).toMatch(/no finished images yet/);
+    // QC-flagged post with images: the operator may still post it.
+    await one("UPDATE posts SET status = 'qc_failed' WHERE id = $1", [id]);
+    const qc = await app.inject({ url: `/admin/posts/${id}` });
+    expect(qc.body).toContain("The quality check flagged this post.");
+    expect(flash(await post(`/admin/posts/${id}/post-now`))).toBe("Posting now");
+  });
+});

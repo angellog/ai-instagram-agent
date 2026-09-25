@@ -37,6 +37,17 @@ export async function removeSlide(postId: string, position: number): Promise<str
   });
 }
 
+/** Why a post can't be published yet, and the one action that unblocks it. */
+export function publishBlocker(status: string, slides: number, safety: string | null, published: boolean): { reason: string; fix?: string } {
+  if (published) return { reason: "Already on Instagram." };
+  if (safety === "red") return { reason: "The safety check marked this post RED; it is never published." };
+  if (status === "rejected") return { reason: "This post was rejected." };
+  if (["draft", "generating", "composing"].includes(status)) return { reason: "Images are still being made; the buttons appear when they're ready." };
+  if (status === "publishing") return { reason: "Publishing is in progress." };
+  if (!slides) return { reason: "No images yet (production stopped before any were made). Use Retry production above, or Plan a post now." };
+  return { reason: `A ${status.replace("_", " ")} post can't be published.` };
+}
+
 export async function rerunInteraction(id: number): Promise<string> {
   const own = await one("SELECT 1 FROM interactions WHERE id = $1 AND influencer_id = $2", [id, influencerId()]);
   if (!own) return "Interaction not found";
@@ -263,7 +274,7 @@ ${card(
     ]);
     const tz = persona().identity.timezone;
     const acct = await primaryAccount();
-    const canPublish = PUBLISHABLE.includes(p.status) && !p.ig_media_id && assets.length > 0 && p.safety_level !== "red";
+    const canPublish = PUBLISHABLE.includes(p.status) && !p.ig_media_id && assets.length > 0 && assets.every((a) => a.public_url) && p.safety_level !== "red";
     const scheduled = p.status === "approved" && p.scheduled_for && new Date(p.scheduled_for).getTime() > Date.now() + 60_000;
     const ctl = await getControls();
     const defaultAt = (() => {
@@ -272,11 +283,16 @@ ${card(
       const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(next).map((x) => [x.type, x.value]));
       return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
     })();
+    const blocked = publishBlocker(p.status, assets.length, p.safety_level, Boolean(p.ig_media_id));
     const publishBar = canPublish
       ? card(
           `${scheduled ? `<div class="callout ok" style="margin-bottom:12px">${icon("calendar")}<p>Scheduled for <b>${esc(localLabel(new Date(p.scheduled_for), tz))}</b> (${esc(tz)}).</p></div>` : ""}
           <div class="row" style="align-items:flex-end;gap:12px">
-            ${action(`/admin/posts/${id}/post-now`, "Post now", { variant: "primary", icon: "send", confirm: `Publish this post to ${acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram"} right now?` })}
+            ${action(`/admin/posts/${id}/post-now`, "Post now", {
+              variant: "primary",
+              icon: "send",
+              confirm: `${p.status === "qc_failed" ? "The quality check flagged this post. " : ""}Publish it to ${acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram"} right now?`,
+            })}
             <form method="post" action="/admin/posts/${id}/schedule" class="row" style="align-items:flex-end">
               <div class="field" style="margin:0"><label for="sched-at">Schedule for <span class="meta">(${esc(tz)})</span></label><input id="sched-at" type="datetime-local" name="at" value="${esc(defaultAt)}" required style="width:auto"></div>
               ${button(scheduled ? "Reschedule" : "Schedule", { icon: "calendar" })}
@@ -286,7 +302,13 @@ ${card(
           <p class="help" style="margin-top:8px">Your choice wins over the posting window${ctl.mode === "dry_run" ? " and dry-run mode" : ""}. RED posts are never published.</p>`,
           { title: "Publish", id: "publish" },
         )
-      : "";
+      : p.status === "published"
+        ? ""
+        : card(
+            `<div class="row" style="align-items:center;gap:12px"><button class="btn primary" disabled aria-disabled="true">${icon("send", 16)}<span>Post now</span></button><button class="btn" disabled aria-disabled="true">${icon("calendar", 16)}<span>Schedule</span></button>
+             <span class="meta">${esc(blocked.reason)}</span>${blocked.fix ?? ""}</div>`,
+            { title: "Publish", id: "publish" },
+          );
     const actions = [
       ["awaiting_review", "dry_run"].includes(p.status) ? action(`/admin/posts/${id}/approve`, "Approve (next window)", { icon: "check", variant: "ghost" }) : "",
       ["qc_failed", "failed"].includes(p.status) && !p.ig_media_id ? action(`/admin/posts/${id}/retry`, "Retry production", { icon: "refresh" }) : "",
