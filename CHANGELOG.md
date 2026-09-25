@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.5: Post now / Schedule
+
+- A **Publish** card on every unpublished post, plus the same buttons on post review cards:
+  - **Post now** publishes immediately. From a review card, an edited caption is applied first.
+  - **Schedule** takes a date and time in the influencer's timezone (DST-safe). Reschedule and **Unschedule** are included.
+- These are explicit operator decisions, so they win over the posting window and dry-run mode (`posts.publish_override = 'operator'`). They never override a RED safety verdict, development mode, or a pause; a paused influencer's post goes out on resume.
+- Rescheduling replaces the queued job, so a post is never published twice. Scheduled times show on the Posts grid.
+
 ## v1.0.4: Wardrobe rotation + Profile kit
 
 **Wardrobe rotation** (fixes "same all-black fit two days running")

@@ -2,12 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { getControls } from "../../config/controls.js";
 import { env } from "../../config/env.js";
 import { currentInfluencer, influencerId } from "../../context.js";
-import { schedulePublish } from "../../content/produce.js";
+import { nextPublishTime, schedulePublish } from "../../content/produce.js";
+import { cancelSchedule, localLabel, operatorPublish, PUBLISHABLE, zonedToUtc } from "../../content/schedule.js";
 import { spendSummary } from "../../cost/ledger.js";
 import { many, one, tx } from "../../db/pool.js";
 import { storeWebhookEvent } from "../../ingest/webhook.js";
 import { primaryAccount } from "../../instagram/accounts.js";
 import { forgetUser } from "../../memory/store.js";
+import { assessText } from "../../safety/safety.js";
 import { persona } from "../../persona/loader.js";
 import { JOBS, jobId, queue, queueCounts } from "../../queue/queues.js";
 import { listEvents } from "../../calendar/events.js";
@@ -174,7 +176,9 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
         ${
           actionable
             ? `<form method="post" action="/admin/reviews/${rv.id}/approve">${field(isPost ? "Caption" : "Reply", textarea("text", text, { rows: isPost ? 6 : 3 }), { help: "Edit before approving if needed." })}
-               <div class="row">${button(isPost ? "Approve & schedule" : "Approve & send", { variant: "primary", icon: "check" })}${isPost ? link("Open post", `/admin/posts/${esc(rv.subject_id)}`, { variant: "ghost" }) : ""}</div></form>
+               <div class="row">${button(isPost ? "Approve (next window)" : "Approve & send", { variant: isPost ? "default" : "primary", icon: "check" })}${
+                 isPost ? `<button class="btn primary" formaction="/admin/posts/${esc(rv.subject_id)}/post-now">${icon("send", 16)}<span>Post now</span></button>${link("Schedule…", `/admin/posts/${esc(rv.subject_id)}#publish`, { variant: "ghost", icon: "calendar" })}` : ""
+               }</div></form>
                <form method="post" action="/admin/reviews/${rv.id}/reject" class="row" style="margin-top:10px"><input name="note" placeholder="Reason (optional)" aria-label="Rejection reason" style="max-width:320px">${button("Reject", { variant: "danger", icon: "x" })}</form>`
             : `<pre>${esc(text)}</pre>`
         }`,
@@ -205,8 +209,8 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
   // ------------------------------------------------------------ posts
   r.get("/admin/posts", async (req: Req, reply) => {
     const filter = req.query.status ?? "all";
-    const rows = await many<{ id: string; status: string; media_type: string; caption: string; created_at: Date; published_at: Date | null; score: number | null; cover: string | null; topic: string | null; slides: number }>(
-      `SELECT p.id, p.status, p.media_type, p.caption, p.created_at, p.published_at, ci.topic,
+    const rows = await many<{ id: string; status: string; media_type: string; caption: string; created_at: Date; published_at: Date | null; scheduled_for: Date | null; score: number | null; cover: string | null; topic: string | null; slides: number }>(
+      `SELECT p.id, p.status, p.media_type, p.caption, p.created_at, p.published_at, p.scheduled_for, ci.topic,
          (SELECT score FROM engagement_metrics em WHERE em.post_id = p.id ORDER BY collected_at DESC LIMIT 1) AS score,
          (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover,
          (SELECT count(*)::int FROM post_assets pa WHERE pa.post_id = p.id) AS slides
@@ -228,7 +232,7 @@ ${card(
           (p) =>
             `<a href="/admin/posts/${p.id}">${p.cover ? `<img src="${esc(p.cover)}" alt="${esc(p.topic ?? "post")}" loading="lazy">` : `<div class="empty" style="aspect-ratio:4/5;border:1px dashed var(--line-2);border-radius:12px">${icon("image")}<span class="small">${esc(p.status)}</span></div>`}
             <div class="cap"><span>${esc((p.topic ?? p.caption).slice(0, 34))}</span>${pill(p.status)}</div>
-            <div class="meta">${p.slides > 1 ? `${p.slides} slides · ` : ""}${p.published_at ? `published ${ago(p.published_at)}` : `created ${ago(p.created_at)}`}${p.score !== null ? ` · score ${Number(p.score).toFixed(1)}` : ""}</div></a>`,
+            <div class="meta">${p.slides > 1 ? `${p.slides} slides · ` : ""}${p.published_at ? `published ${ago(p.published_at)}` : p.status === "approved" && p.scheduled_for ? `scheduled ${esc(localLabel(new Date(p.scheduled_for), persona().identity.timezone))}` : `created ${ago(p.created_at)}`}${p.score !== null ? ` · score ${Number(p.score).toFixed(1)}` : ""}</div></a>`,
         )
         .join("")}</div>`
     : empty("No posts here"),
@@ -257,9 +261,34 @@ ${card(
       ),
       one<{ usd: number }>("SELECT coalesce(sum(cost_usd),0)::float AS usd FROM cost_ledger WHERE ref_type = 'post' AND ref_id = $1", [id]),
     ]);
+    const tz = persona().identity.timezone;
+    const acct = await primaryAccount();
+    const canPublish = PUBLISHABLE.includes(p.status) && !p.ig_media_id && assets.length > 0 && p.safety_level !== "red";
+    const scheduled = p.status === "approved" && p.scheduled_for && new Date(p.scheduled_for).getTime() > Date.now() + 60_000;
+    const ctl = await getControls();
+    const defaultAt = (() => {
+      const q = 15 * 60_000;
+      const next = nextPublishTime(new Date(Math.ceil((Date.now() + 60 * 60_000) / q) * q), ctl, tz);
+      const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(next).map((x) => [x.type, x.value]));
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    })();
+    const publishBar = canPublish
+      ? card(
+          `${scheduled ? `<div class="callout ok" style="margin-bottom:12px">${icon("calendar")}<p>Scheduled for <b>${esc(localLabel(new Date(p.scheduled_for), tz))}</b> (${esc(tz)}).</p></div>` : ""}
+          <div class="row" style="align-items:flex-end;gap:12px">
+            ${action(`/admin/posts/${id}/post-now`, "Post now", { variant: "primary", icon: "send", confirm: `Publish this post to ${acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram"} right now?` })}
+            <form method="post" action="/admin/posts/${id}/schedule" class="row" style="align-items:flex-end">
+              <div class="field" style="margin:0"><label for="sched-at">Schedule for <span class="meta">(${esc(tz)})</span></label><input id="sched-at" type="datetime-local" name="at" value="${esc(defaultAt)}" required style="width:auto"></div>
+              ${button(scheduled ? "Reschedule" : "Schedule", { icon: "calendar" })}
+            </form>
+            ${scheduled ? action(`/admin/posts/${id}/unschedule`, "Unschedule", { variant: "ghost", icon: "x" }) : ""}
+          </div>
+          <p class="help" style="margin-top:8px">Your choice wins over the posting window${ctl.mode === "dry_run" ? " and dry-run mode" : ""}. RED posts are never published.</p>`,
+          { title: "Publish", id: "publish" },
+        )
+      : "";
     const actions = [
-      ["awaiting_review", "dry_run"].includes(p.status) ? action(`/admin/posts/${id}/approve`, "Approve & schedule", { variant: "primary", icon: "check" }) : "",
-      ["approved", "failed"].includes(p.status) && assets.length ? action(`/admin/posts/${id}/publish`, "Publish now", { icon: "send", confirm: "Publish this post to Instagram now?" }) : "",
+      ["awaiting_review", "dry_run"].includes(p.status) ? action(`/admin/posts/${id}/approve`, "Approve (next window)", { icon: "check", variant: "ghost" }) : "",
       ["qc_failed", "failed"].includes(p.status) && !p.ig_media_id ? action(`/admin/posts/${id}/retry`, "Retry production", { icon: "refresh" }) : "",
       !["published", "rejected"].includes(p.status) ? action(`/admin/posts/${id}/reject`, "Reject", { variant: "danger", icon: "x", confirm: "Reject this post?" }) : "",
       p.permalink ? link("Open on Instagram", p.permalink, { external: true }) : "",
@@ -270,6 +299,7 @@ ${card(
       actions,
     })}
 ${p.last_error ? `<div class="callout bad">${icon("alert")}<p>${esc(p.last_error)}</p></div>` : ""}
+${publishBar}
 ${card(
   `<div class="slides">${
     assets
@@ -341,6 +371,29 @@ ${card(
     await one("UPDATE posts SET status = 'approved', reviewed_by = $2, reviewed_at = now() WHERE id = $1", [id, reviewer(req)]);
     const at = await schedulePublish(id, await getControls(), persona());
     return done(req, reply, to, `Approved; publishing ${at.getTime() <= Date.now() + 60_000 ? "now" : `at ${at.toISOString()}`}`);
+  });
+  r.post("/admin/posts/:id/post-now", async (req: Req, reply) => {
+    // From a review card the (possibly edited) caption comes along; apply it first, never if it turns RED.
+    const edited = String(req.body?.text ?? "").trim();
+    if (edited) {
+      const a = await assessText(edited, { direction: "outbound", skipLlm: true });
+      if (a.level === "red") return done(req, reply, `/admin/posts/${req.params.id}`, `Edited caption is red: ${a.categories.join(", ")}`, false);
+      await one("UPDATE posts SET caption = $2 WHERE id = $1 AND influencer_id = $3 AND ig_media_id IS NULL", [req.params.id, edited, influencerId()]);
+    }
+    const res = await operatorPublish(req.params.id, "now", reviewer(req));
+    return done(req, reply, `/admin/posts/${req.params.id}`, res.message, res.ok);
+  });
+  r.post("/admin/posts/:id/schedule", async (req: Req, reply) =>
+    attempt(req, reply, `/admin/posts/${req.params.id}`, async () => {
+      const at = zonedToUtc(String(req.body?.at ?? ""), persona().identity.timezone);
+      const res = await operatorPublish(req.params.id, at, reviewer(req));
+      if (!res.ok) throw new Error(res.message);
+      return res.message;
+    }),
+  );
+  r.post("/admin/posts/:id/unschedule", async (req: Req, reply) => {
+    const res = await cancelSchedule(req.params.id, reviewer(req));
+    return done(req, reply, `/admin/posts/${req.params.id}`, res.message, res.ok);
   });
   r.post("/admin/posts/:id/publish", async (req: Req, reply) => {
     const id = req.params.id;

@@ -1,6 +1,6 @@
 {
   "name": "ai-instagram-agent",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Autonomous AI Instagram persona: conversation, memory, content, carousels, publishing, analytics",
   "scripts": {
     "dev": "tsx watch src/main.ts",

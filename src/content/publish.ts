@@ -22,6 +22,7 @@ interface PublishRow {
   ig_media_id: string | null;
   publish_attempts: number;
   content_idea_id: number | null;
+  publish_override: "operator" | null;
   updated_at: Date;
 }
 
@@ -68,7 +69,9 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     await recordEvent("info", "publish", "Publishing deferred while paused", { postId });
     return "deferred";
   }
-  if (isSendingDisabled(c)) {
+  // An operator's explicit "Post now"/"Schedule" beats dry_run (never pause or development).
+  const operator = post.publish_override === "operator" && c.mode === "dry_run";
+  if (isSendingDisabled(c) && !operator) {
     await one("UPDATE posts SET status = 'dry_run', updated_at = now() WHERE id = $1", [postId]);
     await recordEvent("info", "publish", "Dry run: would publish now", { postId });
     return "dry_run";
