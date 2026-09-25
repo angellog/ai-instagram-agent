@@ -67,12 +67,15 @@ export function supportsTemperature(model: string): boolean {
   return !/claude-(sonnet|opus)-5/.test(model);
 }
 
-function withImagesAnthropic(req: CompletionRequest): Anthropic.MessageParam[] {
+export function withImagesAnthropic(req: CompletionRequest): Anthropic.MessageParam[] {
   if (!req.images?.length) return req.messages;
   const msgs: Anthropic.MessageParam[] = req.messages.map((m) => ({ role: m.role, content: m.content }));
   const last = msgs[msgs.length - 1];
   last.content = [
-    ...req.images.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } })),
+    ...req.images.flatMap((img) => [
+      ...(img.label ? [{ type: "text" as const, text: img.label }] : []),
+      { type: "image" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } },
+    ]),
     { type: "text" as const, text: typeof last.content === "string" ? last.content : "" },
   ];
   return msgs;
@@ -156,7 +159,10 @@ function withImagesOpenAI(req: CompletionRequest): Array<{ role: string; content
   const msgs: Array<{ role: string; content: unknown }> = req.messages.map((m) => ({ ...m }));
   const last = msgs[msgs.length - 1];
   last.content = [
-    ...req.images.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mediaType};base64,${img.data}` } })),
+    ...req.images.flatMap((img) => [
+      ...(img.label ? [{ type: "text", text: img.label }] : []),
+      { type: "image_url", image_url: { url: `data:${img.mediaType};base64,${img.data}` } },
+    ]),
     { type: "text", text: last.content },
   ];
   return msgs;

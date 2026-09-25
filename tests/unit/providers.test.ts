@@ -41,3 +41,22 @@ describe("Anthropic sampling parameters", () => {
     expect(bodies.map((b) => "temperature" in b)).toEqual([true, false]);
   });
 });
+
+describe("image labels", () => {
+  it("places each label directly before its image, prompt last", async () => {
+    const { withImagesAnthropic } = await import("../../src/llm/providers.js");
+    const msgs = withImagesAnthropic({
+      system: "s",
+      messages: [{ role: "user", content: "judge" }],
+      images: [
+        { label: "REFERENCE:", data: "AAA", mediaType: "image/jpeg" },
+        { label: "CANDIDATE:", data: "BBB", mediaType: "image/jpeg" },
+      ],
+      tier: "fast",
+      maxTokens: 10,
+      operation: "t",
+    });
+    const blocks = msgs[0].content as Array<{ type: string; text?: string; source?: { data: string } }>;
+    expect(blocks.map((b) => b.text ?? b.source?.data)).toEqual(["REFERENCE:", "AAA", "CANDIDATE:", "BBB", "judge"]);
+  });
+});

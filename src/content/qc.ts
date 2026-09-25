@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { z } from "zod";
 import { llm } from "../llm/llm.js";
+import type { InputImage } from "../llm/types.js";
 import type { Persona } from "../persona/schema.js";
 import { MAX_CAPTION, MAX_HASHTAGS } from "./caption.js";
 import { SLIDE_H, SLIDE_W } from "../render/compose.js";
@@ -64,18 +65,30 @@ export async function visionQc(o: {
   ref: { type: string; id: string };
 }): Promise<VisionQc> {
   const small = async (b: Buffer) => (await sharp(b).resize(768, 960, { fit: "inside" }).jpeg({ quality: 80 }).toBuffer()).toString("base64");
-  const images = [{ data: await small(o.image), mediaType: "image/jpeg" as const }];
-  if (o.reference && o.includeCharacter) images.push({ data: await small(o.reference), mediaType: "image/jpeg" as const });
+  // The reference is cropped to the face so its background can't be mistaken
+  // for the candidate's scene; each image is labelled explicitly.
+  const faceCrop = async (b: Buffer) => {
+    const m = await sharp(b).metadata();
+    const w = m.width ?? 0;
+    const h = m.height ?? 0;
+    const side = Math.round(Math.min(w, h) * 0.7);
+    return (await sharp(b).extract({ left: Math.round((w - side) / 2), top: Math.round(h * 0.05), width: side, height: Math.min(side, h - Math.round(h * 0.05)) }).resize(512, 512).jpeg({ quality: 85 }).toBuffer()).toString("base64");
+  };
+  const images: InputImage[] = [];
+  const withRef = Boolean(o.reference && o.includeCharacter);
+  if (withRef) images.push({ label: "REFERENCE (who she is; ignore this image's background and clothes):", data: await faceCrop(o.reference!), mediaType: "image/jpeg" });
+  images.push({ label: "CANDIDATE (the generated photo to judge):", data: await small(o.image), mediaType: "image/jpeg" });
   return llm().structured(visionQcSchema, {
     operation: "image.validate",
-    tier: "fast",
+    // Identity judgement is where a weaker model made confident mistakes.
+    tier: "smart",
     maxTokens: 400,
     ref: o.ref,
     images,
     system:
       "You are a strict photo editor reviewing AI-generated images for a realistic lifestyle Instagram account. Judge only what you see. Return JSON.",
     prompt: [
-      `Image 1 is the candidate.${images.length > 1 ? " Image 2 is the character reference." : ""}`,
+      withRef ? "Two images are attached: REFERENCE (a face crop) and CANDIDATE. Describe and judge only the CANDIDATE; use the REFERENCE only to check identity." : "One image is attached: the CANDIDATE.",
       `Brief: ${o.shotBrief}`,
       o.includeCharacter
         ? "It should show one woman who is the same person as the reference. Judge identity only from what is visible: if her face is small, turned or partly hidden (phone, mirror, hair), answer character_consistent 'yes' unless she is clearly a different person (different skin tone, face structure or hair)."

@@ -11,6 +11,8 @@ export interface InputImage {
   /** base64 (no data: prefix) */
   data: string;
   mediaType: "image/jpeg" | "image/png" | "image/webp";
+  /** Caption placed immediately before the image so the model knows which is which. */
+  label?: string;
 }
 
 export interface CompletionRequest {
