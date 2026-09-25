@@ -117,7 +117,9 @@ const wantsJson = (req: FastifyRequest) => String(req.headers.accept ?? "").incl
 /** Finish a POST: JSON for async forms, redirect-with-flash otherwise. */
 export function done(req: FastifyRequest, reply: FastifyReply, to: string, message: string, ok = true, extra: Record<string, unknown> = {}) {
   if (wantsJson(req)) return reply.send({ ok, message, ...extra });
-  return reply.redirect(`${to}${to.includes("?") ? "&" : "?"}flash=${encodeURIComponent(message)}`, 303);
+  // The flash goes in the query string, before any #fragment (browsers never send fragments).
+  const [path, hash] = to.split("#");
+  return reply.redirect(`${path}${path.includes("?") ? "&" : "?"}flash=${encodeURIComponent(message)}${hash ? `#${hash}` : ""}`, 303);
 }
 
 /** Run a POST action; any error becomes a readable flash instead of a 500. */

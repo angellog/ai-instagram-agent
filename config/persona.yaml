@@ -107,6 +107,7 @@ visual:
       - red cropped cardigan buttoned up with dark-wash wide-leg jeans
       - grey cropped crewneck sweatshirt with black bike shorts (activewear)
       - teal zip-up track jacket with matching track pants (activewear)
+    signature_accessories: [thin gold bracelet, gold hoop earrings]
     reference_images:
       # Face v2 (2026-09-25): chosen by Angelo, the identity anchor for every photo.
       - https://oeaajqcssoukezpqtbtg.supabase.co/storage/v1/object/public/ai-agent-media/persona/zuri-face-v2.jpg

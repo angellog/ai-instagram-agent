@@ -45,8 +45,12 @@ export function action(url: string, label: string, o: { variant?: Variant; icon?
 let fid = 0;
 /** Labelled field with helper text (labels are always visible, never placeholder-only). */
 export function field(label: string, control: string, o: { help?: string; id?: string; required?: boolean } = {}): string {
-  const id = o.id ?? `f${++fid}`;
-  const ctl = control.replace(/^<(input|select|textarea)/, `<$1 id="${id}"${o.help ? ` aria-describedby="${id}-h"` : ""}`);
+  // Reuse an id the control already has (e.g. an upload target); never emit two.
+  const existing = /^<(?:input|select|textarea)\b[^>]*\sid="([^"]+)"/.exec(control)?.[1];
+  const id = o.id ?? existing ?? `f${++fid}`;
+  const ctl = existing
+    ? control.replace(/^<(input|select|textarea)/, `<$1${o.help ? ` aria-describedby="${id}-h"` : ""}`)
+    : control.replace(/^<(input|select|textarea)/, `<$1 id="${id}"${o.help ? ` aria-describedby="${id}-h"` : ""}`);
   return `<div class="field"><label for="${id}">${esc(label)}${o.required ? ' <span class="req" aria-hidden="true">*</span>' : ""}</label>${ctl}${
     o.help ? `<p class="help" id="${id}-h">${o.help}</p>` : ""
   }</div>`;

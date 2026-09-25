@@ -139,3 +139,14 @@ describe("remove slide", () => {
     expect(await removeSlide(p!.id, 0)).toMatch(/can't be changed/);
   });
 });
+
+describe("console markup", () => {
+  it("never emits duplicate ids and keeps the flash before a #fragment", async () => {
+    const page = await app.inject({ url: "/admin/persona" });
+    const ids = [...page.body.matchAll(/<(?:input|select|textarea)\b[^>]*>/g)].map((m) => [...m[0].matchAll(/\sid="/g)].length);
+    expect(Math.max(...ids)).toBe(1);
+    expect(page.body).toMatch(/<textarea[^>]*id="soul-src"/);
+    const r = await app.inject({ method: "POST", url: "/admin/soul/higgsfield/bind", payload: "id=nope", headers: { "content-type": "application/x-www-form-urlencoded" } });
+    expect(String(r.headers.location)).toMatch(/^\/admin\/persona\?flash=.+#soul$/);
+  });
+});
