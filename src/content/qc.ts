@@ -46,7 +46,7 @@ export const visionQcSchema = z.object({
   character_consistent: z.enum(["yes", "no", "not_applicable"]),
   anatomy_issues: z.boolean().describe("extra/missing fingers or limbs, warped faces, broken feet"),
   garbled_text_or_logos: z.boolean().describe("unreadable or malformed text, fake watermarks"),
-  extra_people: z.boolean(),
+  extra_people: z.boolean().describe("a second person, or on a detail shot a visible face; hands/feet/limbs do not count"),
   matches_brief: z.boolean(),
   issues: z.array(z.string()).max(5),
 });
@@ -79,8 +79,8 @@ export async function visionQc(o: {
       `Brief: ${o.shotBrief}`,
       o.includeCharacter
         ? "It should show exactly one woman who is clearly the same person as the reference (face, skin tone, build)."
-        : "It should show no people (hands or feet are fine).",
-      "Set acceptable=false for any anatomy problem, garbled text/logos, an extra person, identity mismatch, or an image that clearly misses the brief. Minor stylistic differences are fine.",
+        : "This is a detail/product/environment shot. Her hands, arms, legs or feet partly in frame are FINE and natural; only a visible face or a second person counts as extra_people.",
+      "Set acceptable=false only for an anatomy problem, garbled text/logos, an extra person, identity mismatch, or an image that clearly misses the brief's subject. Small differences in props, counts or framing are fine; a real phone photo is never perfect.",
     ].join("\n"),
   });
 }
@@ -89,8 +89,8 @@ export function visionVerdict(v: VisionQc, includeCharacter: boolean): { ok: boo
   const problems = [...v.issues];
   if (v.anatomy_issues) problems.push("anatomy issues");
   if (v.garbled_text_or_logos) problems.push("garbled text or logos");
-  if (v.extra_people && includeCharacter) problems.push("extra people");
+  if (v.extra_people) problems.push("extra people");
   if (includeCharacter && v.character_consistent === "no") problems.push("character does not match reference");
-  const ok = v.acceptable && !v.anatomy_issues && !v.garbled_text_or_logos && !(includeCharacter && v.character_consistent === "no");
+  const ok = !v.anatomy_issues && !v.garbled_text_or_logos && !v.extra_people && !(includeCharacter && v.character_consistent === "no") && (v.acceptable || v.issues.length === 0);
   return { ok, problems: [...new Set(problems)] };
 }

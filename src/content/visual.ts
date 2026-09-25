@@ -58,7 +58,7 @@ export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide
   lines.push(`Light: ${LIGHT_TEXT[state.time_of_day ?? "morning"] ?? state.time_of_day}. ${ph.lighting}.`);
   lines.push(`Style: ${ph.style}; ${ph.camera_feel}; ${ph.realism}. Vertical 4:5 Instagram photo.`);
   if (total > 1) lines.push(`This is photo ${index + 1} of ${total} from one continuous shoot: same outfit, same place, same light as the others.`);
-  lines.push("Leave calm, uncluttered space in the lower third of the frame.");
+  if (p.carousel.text_overlays && !slide.include_character) lines.push("Leave calm, uncluttered space in the lower third of the frame.");
   if (ph.negative) lines.push(`Avoid: ${ph.negative.trim()}`);
   return lines.join("\n");
 }

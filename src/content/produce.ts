@@ -194,13 +194,12 @@ async function generateValidatedSlide(
 }
 
 async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: GeneratedImage): Promise<void> {
-  const overlay: Overlay = {
-    kind: slide.overlay_kind,
-    heading: slide.overlay_heading || undefined,
-    body: slide.overlay_body || undefined,
-    counter: total > 1 ? `${index + 1}/${total}` : undefined,
-    handle: total > 1 && index === 0 ? p.identity.handle : undefined,
-  };
+  // No handle or slide counter ever (Instagram shows its own dots); text only
+  // when the persona opts in, and never on a photo of her.
+  const textAllowed = p.carousel.text_overlays && !slide.include_character;
+  const overlay: Overlay = textAllowed
+    ? { kind: slide.overlay_kind, heading: slide.overlay_heading || undefined, body: slide.overlay_body || undefined }
+    : { kind: "none" };
   const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors);
   const digest = sha256(jpeg);
   const hosted = await hostImage(jpeg, `posts/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);

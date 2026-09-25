@@ -75,6 +75,9 @@ export const personaSchema = z.object({
   carousel: z.object({
     structures: z.array(z.string()).min(1),
     min_slides: z.number().int().min(2).max(20).default(4),
+    // Real creators post plain phone photos. Text on images (and any branding)
+    // is opt-in, and even then never on photos of the persona herself.
+    text_overlays: z.boolean().default(false),
     max_slides: z.number().int().min(2).max(20).default(6),
     brand_colors: z.object({
       primary: z.string().default("#FF5A1F"),

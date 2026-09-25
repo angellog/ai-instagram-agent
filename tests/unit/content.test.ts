@@ -132,3 +132,25 @@ describe("posting window", () => {
     expect(at.toISOString()).toBe("2026-09-25T05:05:00.000Z"); // 08:05 Kampala
   });
 });
+
+describe("vision QC verdict", () => {
+  const base = { acceptable: true, character_consistent: "not_applicable" as const, anatomy_issues: false, garbled_text_or_logos: false, extra_people: false, matches_brief: true, issues: [] };
+  it("accepts hands and feet on detail shots", async () => {
+    const { visionVerdict } = await import("../../src/content/qc.js");
+    expect(visionVerdict(base, false).ok).toBe(true);
+  });
+  it("rejects anatomy problems, garbled text, extra people and identity drift", async () => {
+    const { visionVerdict } = await import("../../src/content/qc.js");
+    expect(visionVerdict({ ...base, anatomy_issues: true }, false).ok).toBe(false);
+    expect(visionVerdict({ ...base, garbled_text_or_logos: true }, false).ok).toBe(false);
+    expect(visionVerdict({ ...base, extra_people: true }, false).ok).toBe(false);
+    expect(visionVerdict({ ...base, character_consistent: "no" }, true).ok).toBe(false);
+  });
+});
+
+describe("persona photo style", () => {
+  it("defaults to plain photos with no text overlays", () => {
+    expect(persona.carousel.text_overlays).toBe(false);
+    expect(persona.visual.photography.camera_feel).toMatch(/iPhone/);
+  });
+});

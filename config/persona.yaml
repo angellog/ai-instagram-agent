@@ -96,8 +96,8 @@ visual:
       - https://d8j0ntlcm91z4.cloudfront.net/user_3FGKDQO9yCdDyq9LWIU2Z8jI1wK/hf_20260617_190141_2d5c202e-f665-46a5-a8bb-c38048458741.png
     face_policy: visible
   photography:
-    style: candid lifestyle and street photography, editorial but unposed
-    camera_feel: shot on a 35mm prime, natural depth of field, slight film grain
+    style: candid iPhone photos a real creator would take and post herself, unposed, everyday
+    camera_feel: shot on an iPhone main camera, natural phone-photo look, casual framing, slight imperfection, no studio polish
     lighting: natural light; golden hour outdoors, soft window light indoors
     realism: photorealistic, true-to-life skin texture, no plastic retouching
     negative: >
@@ -144,6 +144,8 @@ carousel:
     - behind_the_scenes
   min_slides: 4
   max_slides: 6
+  # Plain photos, like posting straight from the camera roll. No text, handle or counters on images.
+  text_overlays: false
   brand_colors:
     primary: "#FF5A1F"
     text: "#FFFFFF"
