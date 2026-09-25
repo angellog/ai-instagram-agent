@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { llm } from "../llm/llm.js";
 import { allowedContacts } from "../conversation/knowledge.js";
@@ -34,13 +35,13 @@ Rules:
  */
 export async function extractMemories(interactionId: number): Promise<{ stored: number; rejected: number }> {
   const it = await one<{ id: number; text: string; sender_ig_id: string; kind: string }>(
-    "SELECT id, text, sender_ig_id, kind FROM interactions WHERE id = $1",
-    [interactionId],
+    "SELECT id, text, sender_ig_id, kind FROM interactions WHERE id = $1 AND influencer_id = $2",
+    [interactionId, influencerId()],
   );
   if (!it || !it.text.trim()) return { stored: 0, rejected: 0 };
   const user = await one<{ id: number; username: string | null; interaction_count: number }>(
-    "SELECT id, username, interaction_count FROM ig_users WHERE ig_scoped_id = $1",
-    [it.sender_ig_id],
+    "SELECT id, username, interaction_count FROM ig_users WHERE influencer_id = $2 AND ig_scoped_id = $1",
+    [it.sender_ig_id, influencerId()],
   );
   if (!user) return { stored: 0, rejected: 0 };
 
@@ -87,8 +88,8 @@ export async function extractMemories(interactionId: number): Promise<{ stored: 
 /** Denormalized profile fields + a periodic relationship summary. */
 async function refreshUserProfile(igUserId: number, interactionCount: number): Promise<void> {
   const mems = await many<{ kind: string; content: string }>(
-    "SELECT kind, content FROM memories WHERE layer = 'relationship' AND ig_user_id = $1 AND status = 'active' ORDER BY updated_at DESC LIMIT 30",
-    [igUserId],
+    "SELECT kind, content FROM memories WHERE influencer_id = $2 AND layer = 'relationship' AND ig_user_id = $1 AND status = 'active' ORDER BY updated_at DESC LIMIT 30",
+    [igUserId, influencerId()],
   );
   const interests = mems.filter((m) => m.kind === "interest").map((m) => m.content).slice(0, 10);
   const prefs = Object.fromEntries(mems.filter((m) => m.kind === "preference").slice(0, 10).map((m, i) => [`p${i + 1}`, m.content]));

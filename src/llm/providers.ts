@@ -225,3 +225,59 @@ export function providerFromEnv(e: Env): LLMProvider {
     baseURL: e.LLM_BASE_URL,
   });
 }
+
+export interface LLMConfig {
+  provider: string;
+  apiKey?: string;
+  baseURL?: string;
+  model: string;
+  fastModel: string;
+  timeoutMs: number;
+}
+
+export function providerFromConfig(c: LLMConfig): LLMProvider {
+  if (c.provider === "mock") throw new Error("mock provider must be constructed via createDevMockProvider()");
+  if (!c.apiKey) throw new PermanentError(`LLM_API_KEY is not set (Config → Language model) for provider ${c.provider}`);
+  if (c.provider === "openai_compatible") {
+    if (!c.baseURL) throw new PermanentError("LLM_BASE_URL is required for the openai_compatible provider");
+    return new OpenAICompatibleProvider({ apiKey: c.apiKey, baseURL: c.baseURL, model: c.model, fastModel: c.fastModel, timeoutMs: c.timeoutMs });
+  }
+  return new AnthropicProvider({ apiKey: c.apiKey, model: c.model, fastModel: c.fastModel, timeoutMs: c.timeoutMs, baseURL: c.baseURL });
+}
+
+/**
+ * Provider whose configuration comes from Config-page settings (falling back
+ * to env) and is re-read on every call through the 15s settings cache. Saving
+ * a new key or model in the UI takes effect in web and worker without a
+ * restart; the concrete client is rebuilt only when the config changes.
+ */
+export class SettingsProvider implements LLMProvider {
+  private current?: { fingerprint: string; provider: LLMProvider };
+  private last?: LLMConfig;
+
+  constructor(
+    private readonly resolve: () => Promise<LLMConfig>,
+    private readonly build: (c: LLMConfig) => LLMProvider = providerFromConfig,
+  ) {}
+
+  get name(): string {
+    return this.current?.provider.name ?? this.last?.provider ?? "unconfigured";
+  }
+
+  modelFor(tier: Tier): string {
+    if (this.current) return this.current.provider.modelFor(tier);
+    return tier === "fast" ? (this.last?.fastModel ?? "") : (this.last?.model ?? "");
+  }
+
+  async active(): Promise<LLMProvider> {
+    const c = await this.resolve();
+    this.last = c;
+    const fingerprint = JSON.stringify([c.provider, c.apiKey, c.baseURL, c.model, c.fastModel, c.timeoutMs]);
+    if (!this.current || this.current.fingerprint !== fingerprint) this.current = { fingerprint, provider: this.build(c) };
+    return this.current.provider;
+  }
+
+  async complete(req: CompletionRequest): Promise<CompletionResult> {
+    return (await this.active()).complete(req);
+  }
+}

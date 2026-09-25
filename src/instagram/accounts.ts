@@ -1,12 +1,15 @@
 import { env } from "../config/env.js";
+import { currentInfluencer, influencerId, maybeInfluencer } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { decrypt, encrypt } from "../lib/crypto.js";
 import type { FetchLike } from "../lib/async.js";
+import { PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
 import { InstagramClient } from "./client.js";
 
 export interface IgAccountRow {
   id: number;
+  influencer_id: number;
   ig_user_id: string;
   username: string | null;
   access_token_enc: string | null;
@@ -31,7 +34,13 @@ export function openToken(row: Pick<IgAccountRow, "access_token_enc" | "access_t
   return row.access_token_plain ?? undefined;
 }
 
+/**
+ * Attach (or refresh) an Instagram account for an influencer. An account that
+ * already belongs to a different influencer is refused: one Instagram page,
+ * one influencer, always.
+ */
 export async function upsertAccount(o: {
+  influencerId?: number;
   igUserId: string;
   username?: string;
   accessToken: string;
@@ -39,11 +48,19 @@ export async function upsertAccount(o: {
   makePrimary?: boolean;
   profile?: Record<string, unknown>;
 }): Promise<IgAccountRow> {
+  const owner = o.influencerId ?? influencerId();
+  const existing = await one<{ influencer_id: number }>("SELECT influencer_id FROM ig_accounts WHERE ig_user_id = $1", [o.igUserId]);
+  if (existing && Number(existing.influencer_id) !== owner) {
+    const other = await one<{ slug: string }>("SELECT slug FROM influencers WHERE id = $1", [existing.influencer_id]);
+    throw new PermanentError(`Instagram account ${o.igUserId} is already attached to influencer "${other?.slug}"`);
+  }
   const sealed = sealToken(o.accessToken);
-  if (o.makePrimary) await one("UPDATE ig_accounts SET is_primary = false WHERE is_primary AND ig_user_id <> $1", [o.igUserId]);
+  if (o.makePrimary) {
+    await one("UPDATE ig_accounts SET is_primary = false WHERE influencer_id = $1 AND is_primary AND ig_user_id <> $2", [owner, o.igUserId]);
+  }
   const row = await one<IgAccountRow>(
-    `INSERT INTO ig_accounts (ig_user_id, username, access_token_enc, access_token_plain, token_expires_at, token_refreshed_at, is_primary, profile)
-     VALUES ($1,$2,$3,$4,$5, now(), $6, $7)
+    `INSERT INTO ig_accounts (influencer_id, ig_user_id, username, access_token_enc, access_token_plain, token_expires_at, token_refreshed_at, is_primary, profile)
+     VALUES ($1,$2,$3,$4,$5,$6, now(), $7, $8)
      ON CONFLICT (ig_user_id) DO UPDATE SET
        username = coalesce(EXCLUDED.username, ig_accounts.username),
        access_token_enc = EXCLUDED.access_token_enc,
@@ -54,77 +71,96 @@ export async function upsertAccount(o: {
        profile = CASE WHEN EXCLUDED.profile = '{}'::jsonb THEN ig_accounts.profile ELSE EXCLUDED.profile END,
        updated_at = now()
      RETURNING *`,
-    [o.igUserId, o.username ?? null, sealed.enc, sealed.plain, o.expiresAt ?? null, o.makePrimary ?? false, JSON.stringify(o.profile ?? {})],
+    [owner, o.igUserId, o.username ?? null, sealed.enc, sealed.plain, o.expiresAt ?? null, o.makePrimary ?? false, JSON.stringify(o.profile ?? {})],
   );
   return row!;
 }
 
-export async function primaryAccount(): Promise<IgAccountRow | undefined> {
-  return one<IgAccountRow>("SELECT * FROM ig_accounts WHERE is_primary LIMIT 1");
+export async function primaryAccount(id: number | undefined = maybeInfluencer()?.id): Promise<IgAccountRow | undefined> {
+  if (id === undefined) return undefined;
+  return one<IgAccountRow>("SELECT * FROM ig_accounts WHERE influencer_id = $1 AND is_primary LIMIT 1", [id]);
+}
+
+/** Which influencer owns this Instagram account (webhook routing). */
+export async function influencerForIgAccount(igUserId: string): Promise<number | undefined> {
+  const r = await one<{ influencer_id: number }>("SELECT influencer_id FROM ig_accounts WHERE ig_user_id = $1", [igUserId]);
+  return r ? Number(r.influencer_id) : undefined;
 }
 
 /**
- * Seed the persona's account from INSTAGRAM_ACCOUNT_ID / INSTAGRAM_ACCESS_TOKEN
- * on boot. The DB copy is authoritative afterwards because the refresh job
- * rotates the token; the env value is only used if nothing is stored yet or the
- * operator changed the account id.
+ * Seed influencer #1's account from INSTAGRAM_ACCOUNT_ID / INSTAGRAM_ACCESS_TOKEN
+ * (the single-influencer v0 setup). The DB copy is authoritative afterwards.
  */
-export async function seedAccountFromEnv(): Promise<void> {
+export async function seedAccountFromEnv(target = 1): Promise<void> {
   const e = env();
   if (!e.INSTAGRAM_ACCOUNT_ID || !e.INSTAGRAM_ACCESS_TOKEN) return;
   const existing = await one<IgAccountRow>("SELECT * FROM ig_accounts WHERE ig_user_id = $1", [e.INSTAGRAM_ACCOUNT_ID]);
   if (existing && openToken(existing)) {
-    if (!existing.username) await fillProfile(existing.ig_user_id);
-    if (!existing.is_primary) {
-      await one("UPDATE ig_accounts SET is_primary = false WHERE is_primary");
-      await one("UPDATE ig_accounts SET is_primary = true WHERE id = $1", [existing.id]);
-    }
+    if (!existing.username) await fillProfile(existing);
     return;
   }
-  await upsertAccount({
+  const row = await upsertAccount({
+    influencerId: target,
     igUserId: e.INSTAGRAM_ACCOUNT_ID,
     accessToken: e.INSTAGRAM_ACCESS_TOKEN,
-    // Unknown until the first refresh; assume a fresh 60-day token.
     expiresAt: new Date(Date.now() + 55 * 24 * 3600 * 1000),
     makePrimary: true,
   });
-  await fillProfile(e.INSTAGRAM_ACCOUNT_ID);
-  await recordEvent("info", "instagram", "Seeded primary Instagram account from environment", { igUserId: e.INSTAGRAM_ACCOUNT_ID });
+  await fillProfile(row);
+  await recordEvent("info", "instagram", "Seeded Instagram account from environment", { igUserId: e.INSTAGRAM_ACCOUNT_ID, influencerId: target });
 }
 
 /** Best effort: store username/profile for display. Never blocks boot. */
-async function fillProfile(igUserId: string): Promise<void> {
+async function fillProfile(row: IgAccountRow): Promise<void> {
   try {
-    const profile = await (await instagramClient()).getProfile();
-    await one("UPDATE ig_accounts SET username = $2, profile = $3, updated_at = now() WHERE ig_user_id = $1", [igUserId, profile.username, JSON.stringify(profile)]);
+    const token = openToken(row);
+    if (!token) return;
+    const profile = await clientFor(row, token).getProfile();
+    await one("UPDATE ig_accounts SET username = $2, profile = $3, updated_at = now() WHERE id = $1", [row.id, profile.username, JSON.stringify(profile)]);
   } catch {
     // offline or token issue: the refresh job and dashboard surface real problems
   }
 }
 
+function clientFor(row: Pick<IgAccountRow, "ig_user_id">, token: string, fetchImpl?: FetchLike): InstagramClient {
+  const e = env();
+  return new InstagramClient({ accessToken: token, igUserId: row.ig_user_id, host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl });
+}
+
 let clientOverride: InstagramClient | undefined;
+const overrides = new Map<number, InstagramClient>();
+
+/** Test hook: route every Instagram call through a fake client (optionally per influencer). */
+export function setInstagramClient(c: InstagramClient | undefined, forInfluencer?: number): void {
+  if (forInfluencer !== undefined) {
+    if (c) overrides.set(forInfluencer, c);
+    else overrides.delete(forInfluencer);
+    return;
+  }
+  clientOverride = c;
+  if (!c) overrides.clear();
+}
 
 /** True when a client can be built (a primary account is connected, or a test client is set). */
 export async function hasAccount(): Promise<boolean> {
+  const id = maybeInfluencer()?.id;
+  if (id !== undefined && overrides.has(id)) return true;
   return Boolean(clientOverride) || Boolean(await primaryAccount());
 }
 
-/** Test hook: route every Instagram call through a fake client. */
-export function setInstagramClient(c: InstagramClient | undefined): void {
-  clientOverride = c;
-}
-
+/** The current influencer's Instagram client. Never another influencer's token. */
 export async function instagramClient(fetchImpl?: FetchLike): Promise<InstagramClient> {
-  if (clientOverride) return clientOverride;
-  const acct = await primaryAccount();
-  if (!acct) throw new Error("No Instagram account connected (set INSTAGRAM_ACCOUNT_ID + INSTAGRAM_ACCESS_TOKEN or use /admin/connect)");
+  const ctx = currentInfluencer();
+  const o = overrides.get(ctx.id) ?? clientOverride;
+  if (o) return o;
+  const acct = await primaryAccount(ctx.id);
+  if (!acct) throw new PermanentError(`${ctx.name} has no Instagram account connected`);
   const token = openToken(acct);
-  if (!token) throw new Error("Primary Instagram account has no stored token");
-  const e = env();
-  return new InstagramClient({ accessToken: token, igUserId: acct.ig_user_id, host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl });
+  if (!token) throw new PermanentError(`${ctx.name}'s Instagram account has no stored token`);
+  return clientFor(acct, token, fetchImpl);
 }
 
-/** Refresh long-lived tokens with < `withinDays` left (they last 60 days). */
+/** Refresh long-lived tokens with < `withinDays` left, for every influencer. */
 export async function refreshExpiringTokens(withinDays = 20, fetchImpl?: FetchLike): Promise<{ refreshed: number; failed: number }> {
   const rows = await many<IgAccountRow>(
     `SELECT * FROM ig_accounts
@@ -151,6 +187,7 @@ export async function refreshExpiringTokens(withinDays = 20, fetchImpl?: FetchLi
       const daysLeft = row.token_expires_at ? (new Date(row.token_expires_at).getTime() - Date.now()) / 86_400_000 : NaN;
       await recordEvent(daysLeft < 7 ? "error" : "warn", "instagram", "Token refresh failed", {
         igUserId: row.ig_user_id,
+        influencerId: row.influencer_id,
         daysLeft: Number.isFinite(daysLeft) ? Math.round(daysLeft) : null,
         error: (e as Error).message,
       });

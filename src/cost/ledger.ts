@@ -1,4 +1,5 @@
-import { getControls } from "../config/controls.js";
+import { getControls, PLATFORM } from "../config/controls.js";
+import { maybeInfluencer } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { BudgetExceededError } from "../lib/errors.js";
 
@@ -33,11 +34,12 @@ export function llmCostUsd(model: string, inputTokens: number, outputTokens: num
   return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
 }
 
-export async function recordCost(e: CostEntry): Promise<void> {
+export async function recordCost(e: CostEntry & { influencerId?: number | null }): Promise<void> {
+  const influencer = e.influencerId !== undefined ? e.influencerId : (maybeInfluencer()?.id ?? null);
   await one(
-    `INSERT INTO cost_ledger (category, provider, model, operation, units, cost_usd, ref_type, ref_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [e.category, e.provider, e.model ?? null, e.operation, JSON.stringify(e.units ?? {}), e.costUsd, e.refType ?? null, e.refId ?? null],
+    `INSERT INTO cost_ledger (influencer_id, category, provider, model, operation, units, cost_usd, ref_type, ref_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [influencer, e.category, e.provider, e.model ?? null, e.operation, JSON.stringify(e.units ?? {}), e.costUsd, e.refType ?? null, e.refId ?? null],
   );
 }
 
@@ -49,7 +51,8 @@ export interface SpendSummary {
   month: number;
 }
 
-export async function spendSummary(): Promise<SpendSummary> {
+/** Spend for one influencer, or the whole platform when influencerId is "all". */
+export async function spendSummary(influencerId: number | "all" = maybeInfluencer()?.id ?? "all"): Promise<SpendSummary> {
   const r = await one<{ today: number; today_llm: number; today_image: number; week: number; month: number }>(`
     SELECT
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now())), 0)                          AS today,
@@ -57,7 +60,7 @@ export async function spendSummary(): Promise<SpendSummary> {
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now()) AND category = 'image'), 0)   AS today_image,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= now() - interval '7 days'), 0)                         AS week,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('month', now())), 0)                        AS month
-    FROM cost_ledger`);
+    FROM cost_ledger WHERE ($1::bigint IS NULL OR influencer_id = $1)`, [influencerId === "all" ? null : influencerId]);
   return {
     today: Number(r?.today ?? 0),
     todayLlm: Number(r?.today_llm ?? 0),
@@ -72,7 +75,13 @@ export async function spendSummary(): Promise<SpendSummary> {
  * the money is spent, with a conservative estimate.
  */
 export async function assertBudget(category: CostCategory, estimateUsd: number): Promise<void> {
-  const [c, s] = await Promise.all([getControls(), spendSummary()]);
+  const [c, s, platform, total] = await Promise.all([getControls(), spendSummary(), getControls(false, PLATFORM), spendSummary("all")]);
+  if (over(total.today, estimateUsd, platform.platform_daily_budget_usd)) {
+    throw new BudgetExceededError(`Platform daily budget $${platform.platform_daily_budget_usd} reached across all influencers`);
+  }
+  if (over(total.month, estimateUsd, platform.platform_monthly_budget_usd)) {
+    throw new BudgetExceededError(`Platform monthly budget $${platform.platform_monthly_budget_usd} reached across all influencers`);
+  }
   if (over(s.today, estimateUsd, c.daily_budget_usd)) {
     throw new BudgetExceededError(`Daily budget $${c.daily_budget_usd} reached (spent $${s.today.toFixed(4)})`);
   }
@@ -93,21 +102,21 @@ function over(spent: number, estimate: number, limit: number): boolean {
 }
 
 /** Cost report rows for the dashboard and COSTS.md (brief §21). */
-export async function costReport(): Promise<Record<string, number>> {
+export async function costReport(influencerId: number | null = maybeInfluencer()?.id ?? null): Promise<Record<string, number>> {
   const [perPost, perConv, perImage, perCarousel] = await Promise.all([
     one<{ v: number }>(`SELECT coalesce(avg(t), 0) AS v FROM (
         SELECT p.id, sum(c.cost_usd) AS t FROM posts p
         JOIN cost_ledger c ON c.ref_type = 'post' AND c.ref_id = p.id::text
-        WHERE p.status = 'published' GROUP BY p.id) x`),
+        WHERE p.status = 'published' AND ($1::bigint IS NULL OR p.influencer_id = $1) GROUP BY p.id) x`, [influencerId]),
     one<{ v: number }>(`SELECT coalesce(avg(t), 0) AS v FROM (
-        SELECT ref_id, sum(cost_usd) AS t FROM cost_ledger WHERE ref_type = 'interaction' GROUP BY ref_id) x`),
-    one<{ v: number }>(`SELECT coalesce(avg(cost_usd), 0) AS v FROM cost_ledger WHERE category = 'image'`),
+        SELECT ref_id, sum(cost_usd) AS t FROM cost_ledger WHERE ref_type = 'interaction' AND ($1::bigint IS NULL OR influencer_id = $1) GROUP BY ref_id) x`, [influencerId]),
+    one<{ v: number }>(`SELECT coalesce(avg(cost_usd), 0) AS v FROM cost_ledger WHERE category = 'image' AND ($1::bigint IS NULL OR influencer_id = $1)`, [influencerId]),
     one<{ v: number }>(`SELECT coalesce(avg(t), 0) AS v FROM (
         SELECT p.id, sum(c.cost_usd) AS t FROM posts p
         JOIN cost_ledger c ON c.ref_type = 'post' AND c.ref_id = p.id::text
-        WHERE p.media_type = 'CAROUSEL' GROUP BY p.id) x`),
+        WHERE p.media_type = 'CAROUSEL' AND ($1::bigint IS NULL OR p.influencer_id = $1) GROUP BY p.id) x`, [influencerId]),
   ]);
-  const s = await spendSummary();
+  const s = await spendSummary(influencerId ?? "all");
   return {
     daily_cost: s.today,
     weekly_cost: s.week,
@@ -119,11 +128,11 @@ export async function costReport(): Promise<Record<string, number>> {
   };
 }
 
-export async function costByOperation(days = 30): Promise<Array<{ category: string; operation: string; n: number; usd: number }>> {
+export async function costByOperation(days = 30, influencerId: number | null = maybeInfluencer()?.id ?? null): Promise<Array<{ category: string; operation: string; n: number; usd: number }>> {
   return many(
     `SELECT category, operation, count(*)::int AS n, sum(cost_usd)::float AS usd
-     FROM cost_ledger WHERE occurred_at >= now() - ($1 || ' days')::interval
+     FROM cost_ledger WHERE occurred_at >= now() - ($1 || ' days')::interval AND ($2::bigint IS NULL OR influencer_id = $2)
      GROUP BY 1, 2 ORDER BY usd DESC`,
-    [String(days)],
+    [String(days), influencerId],
   );
 }

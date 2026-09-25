@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parse } from "yaml";
-import { env } from "../config/env.js";
-import { sha256 } from "../lib/crypto.js";
+import { currentInfluencer } from "../context.js";
 import { one } from "../db/pool.js";
-import { personaSchema, type Persona } from "./schema.js";
+import { sha256 } from "../lib/crypto.js";
+import { parsePersona } from "./parse.js";
+import type { Persona } from "./schema.js";
+
+export { parsePersona } from "./parse.js";
 
 export interface LoadedPersona {
   persona: Persona;
@@ -12,55 +14,30 @@ export interface LoadedPersona {
   source: string;
 }
 
-let cached: LoadedPersona | undefined;
-
-export function parsePersona(source: string): Persona {
-  const parsed = personaSchema.safeParse(parse(source));
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-    throw new Error(`Invalid persona: ${issues}`);
-  }
-  const p = parsed.data;
-  if (p.carousel.min_slides > p.carousel.max_slides) throw new Error("Invalid persona: carousel.min_slides > max_slides");
-  const locIds = new Set(p.visual.locations.map((l) => l.id));
-  for (const a of p.daily_life.activities) {
-    for (const l of a.locations) {
-      if (!locIds.has(l)) throw new Error(`Invalid persona: activity "${a.activity}" references unknown location "${l}"`);
-    }
-  }
-  return p;
-}
-
-export function loadPersonaFromFile(path = env().PERSONA_PATH): LoadedPersona {
+/** A persona file on disk (bootstrap of the first influencer, CLI validation, tests). */
+export function loadPersonaFromFile(path = process.env.PERSONA_PATH ?? "config/persona.yaml"): LoadedPersona {
   const source = readFileSync(resolve(path), "utf8");
   return { persona: parsePersona(source), hash: sha256(source).slice(0, 16), source };
 }
 
-/** The active persona. Loaded once per process; `reloadPersona` re-reads it. */
+/** The persona of the influencer this code is running for. */
 export function persona(): Persona {
-  cached ??= loadPersonaFromFile();
-  return cached.persona;
+  return currentInfluencer().persona;
 }
 
 export function personaInfo(): LoadedPersona {
-  cached ??= loadPersonaFromFile();
-  return cached;
+  const c = currentInfluencer();
+  return { persona: c.persona, hash: c.personaHash, source: c.personaYaml };
 }
 
-export function setPersona(p: LoadedPersona): void {
-  cached = p;
-}
-
-export function reloadPersona(): LoadedPersona {
-  cached = loadPersonaFromFile();
-  return cached;
-}
-
-/** Record the persona version in the DB so every decision can be traced to it. */
-export async function recordPersonaVersion(p: LoadedPersona = personaInfo()): Promise<void> {
+/** Record the persona version so every decision can be traced to it. */
+export async function recordPersonaVersion(influencerId: number, source: string): Promise<string> {
+  const p = parsePersona(source);
+  const hash = sha256(source).slice(0, 16);
   await one(
-    `INSERT INTO persona_versions (hash, name, source_yaml, parsed) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (hash) DO NOTHING`,
-    [p.hash, p.persona.identity.name, p.source, JSON.stringify(p.persona)],
+    `INSERT INTO persona_versions (influencer_id, hash, name, source_yaml, parsed) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (influencer_id, hash) DO NOTHING`,
+    [influencerId, hash, p.identity.name, source, JSON.stringify(p)],
   );
+  return hash;
 }

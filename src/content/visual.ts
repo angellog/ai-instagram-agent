@@ -38,13 +38,13 @@ export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide
 
   if (slide.include_character) {
     lines.push(
-      `Photograph of the same young woman shown in the reference image${ch.reference_images.length > 1 ? "s" : ""}: keep her face, skin tone, body and proportions identical to the reference.`,
-      `She is ${ch.appearance.trim()}. Hair: ${ch.hairstyle}. Skin tone: ${ch.skin_tone}. Build: ${ch.body_type}.`,
-      `Wearing ${state.outfit ?? ch.recurring_clothing_preferences[0]}${state.sneakers ? `, with ${state.sneakers} on her feet` : ""}.${
+      `Photograph of the same person shown in the identity reference image(s): keep the face, skin tone, body and proportions identical to the reference.`,
+      `Appearance: ${ch.appearance.trim()}. Hair: ${ch.hairstyle}. Skin tone: ${ch.skin_tone}. Build: ${ch.body_type}.`,
+      `Wearing ${state.outfit ?? ch.recurring_clothing_preferences[0]}${state.sneakers ? `, with ${state.sneakers} on their feet` : ""}.${
         ch.signature_accessories.length ? ` Accessories: ${ch.signature_accessories.join(", ")}.` : ""
       }`,
     );
-    if (ch.face_policy === "faceless") lines.push("Her face is not visible: framed from the chin down or turned away.");
+    if (ch.face_policy === "faceless") lines.push("The face is not visible: framed from the chin down or turned away.");
   } else {
     lines.push(
       `No people in frame${state.sneakers ? ` except possibly hands or feet; the focus is ${state.sneakers}` : ""}.`,
@@ -61,15 +61,4 @@ export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide
   if (p.carousel.text_overlays && !slide.include_character) lines.push("Leave calm, uncluttered space in the lower third of the frame.");
   if (ph.negative) lines.push(`Avoid: ${ph.negative.trim()}`);
   return lines.join("\n");
-}
-
-/**
- * Reference images for a slide: the persona's identity references for
- * character shots, plus the already generated cover for later slides so the
- * environment and outfit carry over (the approach proven in Kickshot).
- */
-export function slideReferences(p: Persona, slide: Slide, coverUrl?: string): string[] {
-  const refs = slide.include_character ? [...p.visual.character.reference_images] : [];
-  if (coverUrl) refs.push(coverUrl);
-  return refs;
 }

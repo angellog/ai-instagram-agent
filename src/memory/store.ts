@@ -1,3 +1,4 @@
+import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import type { PolicyVerdict } from "./policy.js";
 
@@ -30,8 +31,8 @@ export async function upsertMemory(
   source: { type: string; id?: string },
 ): Promise<MemoryRow> {
   const existing = await one<MemoryRow>(
-    `SELECT * FROM memories WHERE layer = $1 AND coalesce(ig_user_id, 0) = coalesce($2::bigint, 0) AND kind = $3 AND key = $4 AND status = 'active'`,
-    [layer, igUserId, v.kind, v.key],
+    `SELECT * FROM memories WHERE influencer_id = $5 AND layer = $1 AND coalesce(ig_user_id, 0) = coalesce($2::bigint, 0) AND kind = $3 AND key = $4 AND status = 'active'`,
+    [layer, igUserId, v.kind, v.key, influencerId()],
   );
   if (existing) {
     const r = await one<MemoryRow>(
@@ -44,9 +45,9 @@ export async function upsertMemory(
     return r!;
   }
   const r = await one<MemoryRow>(
-    `INSERT INTO memories (layer, ig_user_id, kind, key, content, confidence, importance, source_type, source_id, expires_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [layer, igUserId, v.kind, v.key, v.content, v.confidence, v.importance, source.type, source.id ?? null, v.expiresAt],
+    `INSERT INTO memories (influencer_id, layer, ig_user_id, kind, key, content, confidence, importance, source_type, source_id, expires_at)
+     VALUES ($11,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [layer, igUserId, v.kind, v.key, v.content, v.confidence, v.importance, source.type, source.id ?? null, v.expiresAt, influencerId()],
   );
   return r!;
 }
@@ -58,10 +59,10 @@ export async function upsertMemory(
 export async function relationshipMemories(igUserId: number, limit = 12): Promise<MemoryRow[]> {
   const rows = await many<MemoryRow>(
     `SELECT * FROM memories
-     WHERE layer = 'relationship' AND ig_user_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+     WHERE influencer_id = $3 AND layer = 'relationship' AND ig_user_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
      ORDER BY importance * confidence * power(0.5, extract(epoch FROM now() - updated_at) / (60*86400)) DESC
      LIMIT $2`,
-    [igUserId, limit],
+    [igUserId, limit, influencerId()],
   );
   if (rows.length) {
     await one("UPDATE memories SET times_used = times_used + 1, last_used_at = now() WHERE id = ANY($1)", [rows.map((r) => r.id)]);
@@ -72,10 +73,10 @@ export async function relationshipMemories(igUserId: number, limit = 12): Promis
 export async function worldMemories(kinds: string[] = [], limit = 20): Promise<MemoryRow[]> {
   return many<MemoryRow>(
     `SELECT * FROM memories
-     WHERE layer = 'world' AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+     WHERE influencer_id = $3 AND layer = 'world' AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
        AND ($1::text[] = '{}' OR kind = ANY($1))
      ORDER BY updated_at DESC LIMIT $2`,
-    [kinds, limit],
+    [kinds, limit, influencerId()],
   );
 }
 
@@ -90,12 +91,12 @@ export async function expireMemories(): Promise<number> {
 export async function forgetUser(igUserId: number): Promise<number> {
   const r = await many<{ id: number }>(
     `UPDATE memories SET status = 'deleted', content = '[deleted]', updated_at = now()
-     WHERE ig_user_id = $1 AND status <> 'deleted' RETURNING id`,
-    [igUserId],
+     WHERE ig_user_id = $1 AND influencer_id = $2 AND status <> 'deleted' RETURNING id`,
+    [igUserId, influencerId()],
   );
   await one(
-    "UPDATE ig_users SET relationship_summary = NULL, known_interests = '{}', preferences = '{}', updated_at = now() WHERE id = $1",
-    [igUserId],
+    "UPDATE ig_users SET relationship_summary = NULL, known_interests = '{}', preferences = '{}', updated_at = now() WHERE id = $1 AND influencer_id = $2",
+    [igUserId, influencerId()],
   );
   return r.length;
 }

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { localParts } from "../lib/time.js";
 import type { Persona, Slot } from "../persona/schema.js";
@@ -82,17 +83,18 @@ export function planActivities(
 /** Ensure today's plan exists in the DB. Idempotent (unique day+slot+activity). */
 export async function ensureDayPlan(p: Persona, now = new Date()): Promise<ActivityRow[]> {
   const { day, weekday } = localParts(now, p.identity.timezone);
-  const existing = await many<ActivityRow>("SELECT * FROM activities WHERE day = $1 ORDER BY id", [day]);
+  const inf = influencerId();
+  const existing = await many<ActivityRow>("SELECT * FROM activities WHERE influencer_id = $1 AND day = $2 ORDER BY id", [inf, day]);
   if (existing.length) return existing;
   const yDay = localParts(new Date(now.getTime() - 86_400_000), p.identity.timezone).day;
-  const yesterday = await many<{ activity: string; location: string | null }>("SELECT activity, location FROM activities WHERE day = $1", [yDay]);
+  const yesterday = await many<{ activity: string; location: string | null }>("SELECT activity, location FROM activities WHERE influencer_id = $1 AND day = $2", [inf, yDay]);
   for (const a of planActivities(p, day, weekday, yesterday)) {
     const loc = a.location ? p.visual.locations.find((l) => l.id === a.location) : undefined;
     await one(
-      `INSERT INTO activities (day, slot, activity, location, description, decision, reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (day, slot, activity) DO NOTHING`,
-      [day, a.slot, a.activity, a.location, loc?.description ?? null, a.postable ? "planned" : "skip", a.postable ? null : "not a postable activity"],
+      `INSERT INTO activities (influencer_id, day, slot, activity, location, description, decision, reason)
+       VALUES ($8,$1,$2,$3,$4,$5,$6,$7) ON CONFLICT (influencer_id, day, slot, activity) DO NOTHING`,
+      [day, a.slot, a.activity, a.location, loc?.description ?? null, a.postable ? "planned" : "skip", a.postable ? null : "not a postable activity", inf],
     );
   }
-  return many<ActivityRow>("SELECT * FROM activities WHERE day = $1 ORDER BY id", [day]);
+  return many<ActivityRow>("SELECT * FROM activities WHERE influencer_id = $1 AND day = $2 ORDER BY id", [inf, day]);
 }

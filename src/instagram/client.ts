@@ -114,6 +114,15 @@ export class InstagramClient {
     });
   }
 
+  /** Subscribe this Instagram account to the app's webhook fields (Instagram Login API). */
+  subscribeWebhooks(fields: string[] = ["comments", "messages"]): Promise<{ success: boolean }> {
+    return this.request("POST", "me/subscribed_apps", { subscribed_fields: fields.join(",") });
+  }
+
+  subscribedWebhooks(): Promise<{ data: Array<{ subscribed_fields?: string[] }> }> {
+    return this.request("GET", "me/subscribed_apps");
+  }
+
   // ------------------------------------------------------------- comments
   replyToComment(commentId: string, message: string): Promise<{ id: string }> {
     return this.request("POST", `${commentId}/replies`, { message });

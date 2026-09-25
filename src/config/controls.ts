@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maybeInfluencer } from "../context.js";
 import { many, one } from "../db/pool.js";
 
 /**
@@ -39,47 +40,59 @@ export const controlsSchema = z.object({
   // Local hours (persona timezone) when publishing is allowed.
   posting_window_start_hour: z.number().int().min(0).max(23).default(8),
   posting_window_end_hour: z.number().int().min(1).max(24).default(22),
+  // Platform-wide ceilings across ALL influencers (read from influencer 0 only).
+  platform_daily_budget_usd: z.number().min(0).default(15),
+  platform_monthly_budget_usd: z.number().min(0).default(300),
 });
 
 export type Controls = z.infer<typeof controlsSchema>;
 export type ControlKey = keyof Controls;
 
+/** influencer_id 0 holds platform-wide values: defaults for every influencer. */
+export const PLATFORM = 0;
+
 const TTL_MS = 5_000;
-let cache: { at: number; value: Controls } | undefined;
+const cache = new Map<number, { at: number; value: Controls }>();
 
-export async function getControls(force = false): Promise<Controls> {
-  if (!force && cache && Date.now() - cache.at < TTL_MS) return cache.value;
-  const rows = await many<{ key: string; value: unknown }>("SELECT key, value FROM controls");
-  const raw: Record<string, unknown> = {};
-  for (const r of rows) raw[r.key] = r.value;
-  const value = controlsSchema.parse(pickKnown(raw));
-  cache = { at: Date.now(), value };
-  return value;
-}
-
-function pickKnown(raw: Record<string, unknown>): Record<string, unknown> {
+async function rows(influencerId: number): Promise<Record<string, unknown>> {
+  const r = await many<{ key: string; value: unknown }>("SELECT key, value FROM controls WHERE influencer_id = $1", [influencerId]);
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(controlsSchema.shape)) if (k in raw) out[k] = raw[k];
+  for (const row of r) if (row.key in controlsSchema.shape) out[row.key] = row.value;
   return out;
 }
 
-export async function setControls(patch: Partial<Controls>, by = "operator"): Promise<Controls> {
-  // Validate the merged result before writing anything.
-  const current = await getControls(true);
+/**
+ * Effective controls: schema defaults < platform values < influencer values.
+ * Without an explicit id the current influencer context is used.
+ */
+export async function getControls(force = false, id?: number): Promise<Controls> {
+  const influencer = id ?? maybeInfluencer()?.id ?? PLATFORM;
+  const hit = cache.get(influencer);
+  if (!force && hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  const platform = await rows(PLATFORM);
+  const own = influencer === PLATFORM ? {} : await rows(influencer);
+  const value = controlsSchema.parse({ ...platform, ...own });
+  cache.set(influencer, { at: Date.now(), value });
+  return value;
+}
+
+export async function setControls(patch: Partial<Controls>, by = "operator", id?: number): Promise<Controls> {
+  const influencer = id ?? maybeInfluencer()?.id ?? PLATFORM;
+  const current = await getControls(true, influencer);
   const next = controlsSchema.parse({ ...current, ...patch });
-  for (const [key, value] of Object.entries(patch)) {
+  for (const key of Object.keys(patch)) {
     await one(
-      `INSERT INTO controls (key, value, updated_by, updated_at) VALUES ($1, $2, $3, now())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-      [key, JSON.stringify((next as Record<string, unknown>)[key]), by],
+      `INSERT INTO controls (influencer_id, key, value, updated_by, updated_at) VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (influencer_id, key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+      [influencer, key, JSON.stringify((next as Record<string, unknown>)[key]), by],
     );
   }
-  cache = { at: Date.now(), value: next };
+  invalidateControls();
   return next;
 }
 
 export function invalidateControls(): void {
-  cache = undefined;
+  cache.clear();
 }
 
 /** True when nothing may leave the system (no IG writes). */

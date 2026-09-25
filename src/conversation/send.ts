@@ -1,3 +1,4 @@
+import { influencerId } from "../context.js";
 import { one } from "../db/pool.js";
 import { instagramClient } from "../instagram/accounts.js";
 import { errorMessage, PermanentError, RateLimitedError, TransientError } from "../lib/errors.js";
@@ -20,9 +21,9 @@ export function windowOpen(it: Pick<InteractionRow, "kind" | "occurred_at">, cha
 export async function outboundCountLastHour(kind: "comments" | "dms"): Promise<number> {
   const channels = kind === "dms" ? ["dm"] : ["public_reply", "private_reply"];
   const r = await one<{ n: number }>(
-    `SELECT count(*)::int AS n FROM messages WHERE direction = 'out' AND channel = ANY($1)
+    `SELECT count(*)::int AS n FROM messages WHERE influencer_id = $2 AND direction = 'out' AND channel = ANY($1)
      AND status IN ('sent','sending') AND created_at > now() - interval '1 hour'`,
-    [channels],
+    [channels, influencerId()],
   );
   return r?.n ?? 0;
 }
@@ -41,11 +42,11 @@ export async function reserveOutbound(o: {
   decisionId?: number;
 }): Promise<{ id: number; status: string; created: boolean }> {
   const inserted = await one<{ id: number; status: string }>(
-    `INSERT INTO messages (conversation_id, interaction_id, direction, channel, text, status, decision_id)
-     VALUES ($1,$2,'out',$3,$4,$5,$6)
+    `INSERT INTO messages (influencer_id, conversation_id, interaction_id, direction, channel, text, status, decision_id)
+     VALUES ($7,$1,$2,'out',$3,$4,$5,$6)
      ON CONFLICT (interaction_id, channel) WHERE direction = 'out' DO NOTHING
      RETURNING id, status`,
-    [o.conversationId, o.interactionId, o.channel, o.text, o.status, o.decisionId ?? null],
+    [o.conversationId, o.interactionId, o.channel, o.text, o.status, o.decisionId ?? null, influencerId()],
   );
   if (inserted) return { ...inserted, created: true };
   const existing = await one<{ id: number; status: string }>(

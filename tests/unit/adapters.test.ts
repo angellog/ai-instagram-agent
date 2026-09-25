@@ -29,17 +29,17 @@ describe("webhook normalization", () => {
 
 describe("webhook signatures", () => {
   const body = JSON.stringify(commentPayload({ commentId: "c1", text: "x" }));
-  it("accepts Meta's HMAC with the app secret and rejects tampering", () => {
+  it("accepts Meta's HMAC with the app secret and rejects tampering", async () => {
     const sig = `sha256=${hmacSha256Hex("test-ig-secret", body)}`;
-    expect(verifyMetaSignature(body, sig)).toBe(true);
-    expect(verifyMetaSignature(body + " ", sig)).toBe(false);
-    expect(verifyMetaSignature(body, undefined)).toBe(false);
+    expect(await verifyMetaSignature(body, sig)).toBe(true);
+    expect(await verifyMetaSignature(body + " ", sig)).toBe(false);
+    expect(await verifyMetaSignature(body, undefined)).toBe(false);
   });
-  it("accepts a fresh OpenReply relay signature and rejects replays", () => {
-    expect(verifyRelaySignature(body, signRelay(body, "relay-secret"))).toBe(true);
-    expect(verifyRelaySignature(body, signRelay(body, "wrong-secret"))).toBe(false);
+  it("accepts a fresh OpenReply relay signature and rejects replays", async () => {
+    expect(await verifyRelaySignature(body, signRelay(body, "relay-secret"))).toBe(true);
+    expect(await verifyRelaySignature(body, signRelay(body, "wrong-secret"))).toBe(false);
     const old = Math.floor(Date.now() / 1000) - 3600;
-    expect(verifyRelaySignature(body, signRelay(body, "relay-secret", old))).toBe(false);
+    expect(await verifyRelaySignature(body, signRelay(body, "relay-secret", old))).toBe(false);
   });
 });
 

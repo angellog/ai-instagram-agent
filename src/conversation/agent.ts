@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { deferKeywords } from "../config/env.js";
+import { deferKeywords } from "../config/settings.js";
+import { influencerId } from "../context.js";
 import { getControls, type Controls } from "../config/controls.js";
 import { one } from "../db/pool.js";
 import { instagramClient } from "../instagram/accounts.js";
 import { recordDecision } from "../lib/decisions.js";
-import { errorMessage } from "../lib/errors.js";
+import { errorMessage, PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
 import { containsKeyword, isLowContent, truncate } from "../lib/text.js";
 import { llm } from "../llm/llm.js";
@@ -62,8 +63,15 @@ const SPAM_PATTERNS = [
  */
 export async function processInteraction(interactionId: number): Promise<ConversationOutcome> {
   const started = Date.now();
-  const it = await one<InteractionRow>("SELECT * FROM interactions WHERE id = $1", [interactionId]);
-  if (!it) return "already_done";
+  const it = await one<InteractionRow>("SELECT * FROM interactions WHERE id = $1 AND influencer_id = $2", [interactionId, influencerId()]);
+  if (!it) {
+    // Isolation: an id that exists under another influencer is a routing bug, never a silent no-op.
+    if (await one("SELECT 1 FROM interactions WHERE id = $1", [interactionId])) {
+      await recordEvent("error", "isolation", "Blocked a job for another influencer's interaction", { interactionId });
+      throw new PermanentError(`interaction ${interactionId} belongs to another influencer`);
+    }
+    return "already_done";
+  }
   if (["done", "ignored", "escalated"].includes(it.status)) return "already_done";
   await one("UPDATE interactions SET status = 'processing', attempts = attempts + 1, updated_at = now() WHERE id = $1", [it.id]);
 
@@ -82,7 +90,7 @@ export async function processInteraction(interactionId: number): Promise<Convers
   };
 
   // ---------------------------------------------------------- perception
-  const pre = perceive(it, user.trust, c);
+  const pre = perceive(it, user.trust, c, await deferKeywords());
   if (pre.skip) {
     await recordDecision({
       agent: "conversation_agent",
@@ -326,11 +334,11 @@ export function perceive(
   it: Pick<InteractionRow, "text" | "kind">,
   trust: string,
   c: Controls,
+  defer: string[] = [],
 ): { skip: false } | { skip: true; reason: string; outcome?: ConversationOutcome; rememberAnyway: boolean } {
   if (!c.conversation_enabled || c.paused) return { skip: true, reason: "conversation disabled or paused", rememberAnyway: false };
   if (trust === "blocked" || trust === "muted") return { skip: true, reason: `user is ${trust}`, rememberAnyway: false };
   if (it.kind === "story_mention") return { skip: true, reason: "story mention (no reply API for mentions)", rememberAnyway: false };
-  const defer = deferKeywords();
   if (defer.some((k) => containsKeyword(it.text, k))) {
     return { skip: true, reason: "keyword handled by an OpenReply campaign", rememberAnyway: false };
   }
@@ -361,7 +369,7 @@ export function sampled(id: number, rate: number): boolean {
 async function upsertUserOnce(it: InteractionRow) {
   // A retried job must not count the same interaction twice.
   if (it.attempts > 0) {
-    const existing = await one<Awaited<ReturnType<typeof upsertUser>>>("SELECT * FROM ig_users WHERE ig_scoped_id = $1", [it.sender_ig_id]);
+    const existing = await one<Awaited<ReturnType<typeof upsertUser>>>("SELECT * FROM ig_users WHERE influencer_id = $1 AND ig_scoped_id = $2", [it.influencer_id, it.sender_ig_id]);
     if (existing) return existing;
   }
   return upsertUser(it);
@@ -369,7 +377,7 @@ async function upsertUserOnce(it: InteractionRow) {
 
 async function enqueueMemory(interactionId: number, worthIt: boolean): Promise<void> {
   if (!worthIt) return;
-  await queue("conversation").add(JOBS.memoryExtract, { interactionId }, { jobId: jobId("memory", interactionId), delay: 5_000 });
+  await queue("conversation").add(JOBS.memoryExtract, { influencerId: influencerId(), interactionId }, { jobId: jobId("memory", interactionId), delay: 5_000 });
 }
 
 /**
@@ -378,8 +386,8 @@ async function enqueueMemory(interactionId: number, worthIt: boolean): Promise<v
  */
 export async function sendApprovedReply(messageId: number, editedText?: string): Promise<{ status: string; error?: string }> {
   const msg = await one<{ id: number; interaction_id: number; status: string }>(
-    "SELECT id, interaction_id, status FROM messages WHERE id = $1 AND direction = 'out'",
-    [messageId],
+    "SELECT id, interaction_id, status FROM messages WHERE id = $1 AND direction = 'out' AND influencer_id = $2",
+    [messageId, influencerId()],
   );
   if (!msg) return { status: "not_found" };
   if (msg.status !== "pending_review") return { status: `not_pending (${msg.status})` };

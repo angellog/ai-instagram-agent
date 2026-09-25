@@ -1,8 +1,9 @@
-import { env } from "../config/env.js";
 import { getControls, type Controls } from "../config/controls.js";
-import { assertBudget, recordCost } from "../cost/ledger.js";
+import { currentInfluencer, influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
-import { imageGenerator, type GeneratedImage } from "../kie/generator.js";
+import { assetBytes, generate } from "../generation/service.js";
+import { GenerationError } from "../generation/types.js";
+import { activeSoul, soulContext } from "../souls/souls.js";
 import { sha256 } from "../lib/crypto.js";
 import { recordDecision } from "../lib/decisions.js";
 import { BudgetExceededError, errorMessage, PermanentError } from "../lib/errors.js";
@@ -18,7 +19,7 @@ import { download, hostImage } from "../storage/host.js";
 import type { Idea } from "./director.js";
 import type { VisualState } from "./history.js";
 import { structuralQc, visionQc, visionVerdict } from "./qc.js";
-import { slidePrompt, slideReferences } from "./visual.js";
+import { slidePrompt } from "./visual.js";
 
 type Slide = Idea["slides"][number];
 
@@ -49,7 +50,7 @@ export type ProduceOutcome = "approved" | "awaiting_review" | "dry_run" | "rejec
  * pays for an image twice.
  */
 export async function producePost(postId: string): Promise<ProduceOutcome> {
-  const post = await one<PostRow>("SELECT * FROM posts WHERE id = $1", [postId]);
+  const post = await one<PostRow>("SELECT * FROM posts WHERE id = $1 AND influencer_id = $2", [postId, influencerId()]);
   if (!post || !["draft", "generating", "composing"].includes(post.status)) return "skipped";
   const idea = await one<{ plan: { slides: Slide[] }; format: string; topic: string }>("SELECT plan, format, topic FROM content_ideas WHERE id = $1", [
     post.content_idea_id,
@@ -80,7 +81,7 @@ export async function producePost(postId: string): Promise<ProduceOutcome> {
         return "qc_failed";
       }
       await composeAndHost(p, post, slide, i, total, generated);
-      if (i === 0) coverSource = generated.sourceUrl;
+      if (i === 0) coverSource = generated.url;
     } catch (e) {
       if (e instanceof BudgetExceededError) {
         await failPost(postId, "failed", e.message);
@@ -94,7 +95,22 @@ export async function producePost(postId: string): Promise<ProduceOutcome> {
   return finalizePost(postId, c, p);
 }
 
-/** image.generate + image.validate for one slide, with bounded retries. */
+interface SlideImage {
+  bytes: Buffer;
+  url: string; // durable, influencer-owned asset URL
+  assetId: string;
+  providerRequestId: string;
+  provider: string;
+  model: string;
+}
+
+/**
+ * image.generate + image.validate for one slide, through the Generation
+ * Engine. The engine picks the provider; this function owns the creative
+ * intent (prompt, identity references, ratio) and quality. Each QC retry is a
+ * new idempotency key; a crashed job replays the same key and gets the stored
+ * result instead of paying again.
+ */
 async function generateValidatedSlide(
   p: Persona,
   c: Controls,
@@ -102,98 +118,69 @@ async function generateValidatedSlide(
   slide: Slide,
   index: number,
   total: number,
-  coverSource: string | undefined,
-): Promise<GeneratedImage | undefined> {
-  const gen = imageGenerator();
+  coverUrl: string | undefined,
+): Promise<SlideImage | undefined> {
+  const soul = await activeSoul();
   const prompt = slidePrompt(p, { format: post.media_type === "CAROUSEL" ? "carousel" : "single" }, slide, post.visual_state, index, total);
-  const refs = slideReferences(p, slide, index > 0 ? coverSource : undefined);
+  const identity = slide.include_character ? (soul?.identityRefs ?? []) : [];
+  const refs = [...identity, ...(index > 0 && coverUrl ? [coverUrl] : [])];
   let reference: Buffer | undefined;
 
   for (let attempt = 1; attempt <= c.max_retries_per_image + 1; attempt++) {
-    const usd = gen.estimateCredits() * env().KIE_USD_PER_CREDIT;
-    if (usd > 0) await assertBudget("image", usd);
-
-    // Resume a task a crashed attempt already paid for.
-    const pending = await one<{ id: number; task_id: string; key_index: number | null }>(
-      `SELECT id, task_id, key_index FROM generation_jobs WHERE post_id = $1 AND position = $2 AND status = 'submitted' AND task_id IS NOT NULL ORDER BY id DESC LIMIT 1`,
-      [post.id, index],
-    );
-    let jobRowId: number;
-    let img: GeneratedImage;
+    let result;
     try {
-      if (pending && gen.resume) {
-        jobRowId = pending.id;
-        img = await gen.resume(pending.task_id, pending.key_index ?? undefined);
-      } else {
-        const row = await one<{ id: number }>(
-          `INSERT INTO generation_jobs (post_id, position, provider, model, prompt, input, attempt) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-          [post.id, index, gen.name, gen.model, prompt, JSON.stringify({ references: refs }), attempt],
-        );
-        jobRowId = row!.id;
-        img = await gen.generate({ prompt, referenceUrls: refs, aspectRatio: "4:5" }, async (taskId, keyIndex) => {
-          await one("UPDATE generation_jobs SET status = 'submitted', task_id = $2, key_index = $3, updated_at = now() WHERE id = $1", [jobRowId, taskId, keyIndex]);
-        });
-      }
+      result = await generate({
+        influencerId: influencerId(),
+        idempotencyKey: `post:${post.id}:slide:${index}:try:${attempt}`,
+        purpose: "post",
+        postId: post.id,
+        modality: refs.length ? "reference_image" : "text_to_image",
+        prompt,
+        negativePrompt: p.visual.photography.negative || undefined,
+        references: refs,
+        soul: slide.include_character ? soulContext(soul) : undefined,
+        aspectRatio: "4:5",
+        resolution: "2K",
+        quality: "high",
+        identityConsistency: slide.include_character ? "high" : "medium",
+        metadata: { position: index, retry: attempt - 1 },
+      });
     } catch (e) {
-      // Transient errors (timeouts, network, 429) leave a submitted task as
-      // `submitted` so the job retry resumes it instead of paying again.
-      if (!(e instanceof PermanentError)) throw e;
-      await one("UPDATE generation_jobs SET status = 'failed', error = $1, updated_at = now() WHERE post_id = $2 AND position = $3 AND status IN ('queued','submitted')", [
-        errorMessage(e).slice(0, 500),
-        post.id,
-        index,
-      ]);
-      if (attempt <= c.max_retries_per_image && !(e instanceof BudgetExceededError)) {
-        await recordEvent("warn", "image", "Image generation failed; retrying with a fresh task", { postId: post.id, index, attempt, error: errorMessage(e) });
+      if (e instanceof GenerationError && e.errorClass === "budget") throw new BudgetExceededError(e.message);
+      if (e instanceof GenerationError && !["unsupported", "validation", "auth"].includes(e.errorClass) && attempt <= c.max_retries_per_image) {
+        await recordEvent("warn", "image", "Slide generation failed on every eligible model; retrying with a fresh request (content filters are stochastic)", { postId: post.id, index, attempt, error: errorMessage(e) });
         continue;
       }
+      if (e instanceof GenerationError) throw new PermanentError(`Generation failed: ${e.message}`);
       throw e;
     }
-
-    const cost = img.credits * env().KIE_USD_PER_CREDIT;
-    await one("UPDATE generation_jobs SET status = 'success', result_urls = $2, credits = $3, cost_usd = $4, latency_ms = $5, updated_at = now() WHERE id = $1", [
-      jobRowId,
-      [img.sourceUrl],
-      img.credits,
-      cost,
-      img.latencyMs,
-    ]);
-    await recordCost({
-      category: "image",
-      provider: gen.name,
-      model: img.model,
-      operation: attempt > 1 ? "image_retry" : "image",
-      units: { credits: img.credits },
-      costUsd: cost,
-      refType: "post",
-      refId: post.id,
-    });
-
-    const pixels = await inspectImage(img.bytes);
+    const asset = result.assets[0];
+    const bytes = await assetBytes(asset);
+    const pixels = await inspectImage(bytes);
     let problems = pixels.problems;
-    if (pixels.ok && gen.name !== "mock") {
-      if (slide.include_character && p.visual.character.reference_images[0] && !reference) {
-        reference = await download(p.visual.character.reference_images[0]).catch(() => undefined);
-      }
-      const v = await visionQc({ image: img.bytes, reference, shotBrief: slide.shot, includeCharacter: slide.include_character, ref: { type: "post", id: post.id } });
+    if (pixels.ok && result.provider !== "mock") {
+      if (slide.include_character && soul?.primaryRef && !reference) reference = await download(soul.primaryRef).catch(() => undefined);
+      const v = await visionQc({ image: bytes, reference, shotBrief: slide.shot, includeCharacter: slide.include_character, ref: { type: "post", id: post.id } });
       const verdict = visionVerdict(v, slide.include_character);
       problems = verdict.ok ? [] : verdict.problems;
     }
-    if (!problems.length) return img;
-    await recordEvent("warn", "image", "Generated image rejected by QC", { postId: post.id, index, attempt, problems });
+    if (!problems.length) {
+      return { bytes, url: asset.url, assetId: asset.assetId, providerRequestId: result.providerRequestId, provider: result.provider, model: result.model };
+    }
+    await recordEvent("warn", "image", "Generated image rejected by QC", { postId: post.id, index, attempt, problems, provider: result.provider, model: result.model });
     await recordDecision({
       agent: "quality_control",
       subjectType: "post",
       subjectId: post.id,
       action: "reject_image",
       reason: problems.join("; ").slice(0, 400),
-      output: { index, attempt, taskId: img.taskId },
+      output: { index, attempt, provider: result.provider, model: result.model, requestId: result.requestId },
     });
   }
   return undefined;
 }
 
-async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: GeneratedImage): Promise<void> {
+async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: SlideImage): Promise<void> {
   // No handle or slide counter ever (Instagram shows its own dots); text only
   // when the persona opts in, and never on a photo of her.
   const textAllowed = p.carousel.text_overlays && !slide.include_character;
@@ -202,26 +189,27 @@ async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: nu
     : { kind: "none" };
   const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors);
   const digest = sha256(jpeg);
-  const hosted = await hostImage(jpeg, `posts/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
+  const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/posts/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
   await one(
-    `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc, asset_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      ON CONFLICT (post_id, position) DO UPDATE SET prompt = EXCLUDED.prompt, overlay = EXCLUDED.overlay, generated_url = EXCLUDED.generated_url,
        public_url = EXCLUDED.public_url, storage_provider = EXCLUDED.storage_provider, width = EXCLUDED.width, height = EXCLUDED.height,
-       sha256 = EXCLUDED.sha256, qc = EXCLUDED.qc, updated_at = now()`,
+       sha256 = EXCLUDED.sha256, qc = EXCLUDED.qc, asset_id = EXCLUDED.asset_id, updated_at = now()`,
     [
       post.id,
       index,
       slide.role,
       slidePrompt(p, { format: total > 1 ? "carousel" : "single" }, slide, post.visual_state, index, total),
       JSON.stringify({ ...overlay, alt_text: slide.alt_text }),
-      img.sourceUrl,
+      img.url,
       hosted.url,
       hosted.provider,
       width,
       height,
       digest,
-      JSON.stringify({ bytes: jpeg.length, taskId: img.taskId }),
+      JSON.stringify({ bytes: jpeg.length, providerRequestId: img.providerRequestId, provider: img.provider, model: img.model }),
+      img.assetId,
     ],
   );
 }
@@ -293,7 +281,7 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
 export async function schedulePublish(postId: string, c: Controls, p: Persona, now = new Date()): Promise<Date> {
   const at = nextPublishTime(now, c, p.identity.timezone);
   await one("UPDATE posts SET scheduled_for = $2, updated_at = now() WHERE id = $1", [postId, at]);
-  await queue("publish").add(JOBS.postPublish, { postId }, { jobId: jobId("publish", postId), delay: Math.max(0, at.getTime() - now.getTime()) });
+  await queue("publish").add(JOBS.postPublish, { influencerId: influencerId(), postId }, { jobId: jobId("publish", postId), delay: Math.max(0, at.getTime() - now.getTime()) });
   return at;
 }
 

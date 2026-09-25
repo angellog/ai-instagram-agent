@@ -1,3 +1,4 @@
+import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { hasAccount, instagramClient } from "../instagram/accounts.js";
 import { recordEvent } from "../lib/events.js";
@@ -51,7 +52,7 @@ export function engagementScore(m: Metrics): number {
 
 /** `engagement.collect`: pull insights for one post at one checkpoint. */
 export async function collectEngagement(postId: string, checkpoint: string): Promise<Metrics | undefined> {
-  const post = await one<{ ig_media_id: string | null; status: string }>("SELECT ig_media_id, status FROM posts WHERE id = $1", [postId]);
+  const post = await one<{ ig_media_id: string | null; status: string }>("SELECT ig_media_id, status FROM posts WHERE id = $1 AND influencer_id = $2", [postId, influencerId()]);
   if (!post?.ig_media_id || post.status !== "published") return undefined;
   const ig = await instagramClient();
   const raw = await ig.getMediaInsights(post.ig_media_id, MEDIA_METRICS);
@@ -74,12 +75,12 @@ export async function collectEngagement(postId: string, checkpoint: string): Pro
   };
   const score = engagementScore(m);
   await one(
-    `INSERT INTO engagement_metrics (post_id, ig_media_id, checkpoint, reach, views, likes, comments, saves, shares, profile_visits, follows, total_interactions, score, raw)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+    `INSERT INTO engagement_metrics (post_id, ig_media_id, checkpoint, reach, views, likes, comments, saves, shares, profile_visits, follows, total_interactions, score, raw, influencer_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      ON CONFLICT (post_id, checkpoint) DO UPDATE SET reach = EXCLUDED.reach, views = EXCLUDED.views, likes = EXCLUDED.likes,
        comments = EXCLUDED.comments, saves = EXCLUDED.saves, shares = EXCLUDED.shares, profile_visits = EXCLUDED.profile_visits,
        follows = EXCLUDED.follows, total_interactions = EXCLUDED.total_interactions, score = EXCLUDED.score, raw = EXCLUDED.raw, collected_at = now()`,
-    [postId, post.ig_media_id, checkpoint, m.reach ?? null, m.views ?? null, m.likes ?? null, m.comments ?? null, m.saves ?? null, m.shares ?? null, m.profile_visits ?? null, m.follows ?? null, m.total_interactions ?? null, score, JSON.stringify(raw)],
+    [postId, post.ig_media_id, checkpoint, m.reach ?? null, m.views ?? null, m.likes ?? null, m.comments ?? null, m.saves ?? null, m.shares ?? null, m.profile_visits ?? null, m.follows ?? null, m.total_interactions ?? null, score, JSON.stringify(raw), influencerId()],
   );
   return m;
 }
@@ -96,11 +97,11 @@ export async function collectAccount(now = new Date()): Promise<void> {
     await recordEvent("warn", "analytics", "Account insights unavailable", { error: errorMessage(e) });
   }
   await one(
-    `INSERT INTO account_metrics (day, followers, reach, profile_views, accounts_engaged, raw)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (day) DO UPDATE SET followers = EXCLUDED.followers, reach = EXCLUDED.reach, profile_views = EXCLUDED.profile_views,
+    `INSERT INTO account_metrics (day, followers, reach, profile_views, accounts_engaged, raw, influencer_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (influencer_id, day) DO UPDATE SET followers = EXCLUDED.followers, reach = EXCLUDED.reach, profile_views = EXCLUDED.profile_views,
        accounts_engaged = EXCLUDED.accounts_engaged, raw = EXCLUDED.raw, collected_at = now()`,
-    [now.toISOString().slice(0, 10), profile.followers_count ?? null, insights.reach ?? null, insights.views ?? null, insights.accounts_engaged ?? null, JSON.stringify({ profile, insights })],
+    [now.toISOString().slice(0, 10), profile.followers_count ?? null, insights.reach ?? null, insights.views ?? null, insights.accounts_engaged ?? null, JSON.stringify({ profile, insights }), influencerId()],
   );
 }
 
@@ -128,8 +129,9 @@ export async function processAnalytics(): Promise<{ posts: number; dimensions: n
      JOIN engagement_metrics em ON em.post_id = p.id
      JOIN content_ideas ci ON ci.id = p.content_idea_id
      LEFT JOIN activities a ON a.id = ci.activity_id
-     WHERE p.status = 'published' AND em.score IS NOT NULL
+     WHERE p.influencer_id = $1 AND p.status = 'published' AND em.score IS NOT NULL
      ORDER BY p.id, em.collected_at DESC`,
+    [influencerId()],
   );
   if (!rows.length) return { posts: 0, dimensions: 0 };
   const global = rows.reduce((s, r) => s + r.score, 0) / rows.length;
@@ -155,9 +157,9 @@ export async function processAnalytics(): Promise<{ posts: number; dimensions: n
     const n = g.scores.length;
     const mean = (g.scores.reduce((s, x) => s + x, 0) + PRIOR_N * global) / (n + PRIOR_N);
     await one(
-      `INSERT INTO learnings (dimension, value, samples, mean_score, updated_at) VALUES ($1,$2,$3,$4, now())
-       ON CONFLICT (dimension, value) DO UPDATE SET samples = EXCLUDED.samples, mean_score = EXCLUDED.mean_score, updated_at = now()`,
-      [g.dimension, g.value, n, Math.round(mean * 100) / 100],
+      `INSERT INTO learnings (influencer_id, dimension, value, samples, mean_score, updated_at) VALUES ($5,$1,$2,$3,$4, now())
+       ON CONFLICT (influencer_id, dimension, value) DO UPDATE SET samples = EXCLUDED.samples, mean_score = EXCLUDED.mean_score, updated_at = now()`,
+      [g.dimension, g.value, n, Math.round(mean * 100) / 100, influencerId()],
     );
   }
 
@@ -173,7 +175,8 @@ export async function processAnalytics(): Promise<{ posts: number; dimensions: n
 /** Compact learnings block for the director prompt; empty until there is data. */
 export async function learningsForPrompt(): Promise<string> {
   const rows = await many<{ dimension: string; value: string; samples: number; mean_score: number }>(
-    "SELECT dimension, value, samples, mean_score FROM learnings WHERE samples >= 1 ORDER BY dimension, mean_score DESC",
+    "SELECT dimension, value, samples, mean_score FROM learnings WHERE influencer_id = $1 AND samples >= 1 ORDER BY dimension, mean_score DESC",
+    [influencerId()],
   );
   if (!rows.length) return "";
   const byDim = new Map<string, typeof rows>();

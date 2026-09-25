@@ -32,6 +32,8 @@ export const JOBS = {
   tokenRefresh: "token.refresh",
   memoryExpire: "memory.expire",
   reviewsExpire: "reviews.expire",
+  calendarRecap: "calendar.recap",
+  benchmarkRun: "generation.benchmark",
   sweep: "maintenance.sweep",
 } as const;
 

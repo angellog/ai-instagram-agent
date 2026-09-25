@@ -1,4 +1,5 @@
 import { getControls, isSendingDisabled } from "../config/controls.js";
+import { influencerId } from "../context.js";
 import { db, many, one } from "../db/pool.js";
 import { instagramClient } from "../instagram/accounts.js";
 import type { InstagramClient } from "../instagram/client.js";
@@ -56,7 +57,7 @@ export async function publishPost(postId: string): Promise<PublishOutcome> {
 }
 
 async function publishLocked(postId: string): Promise<PublishOutcome> {
-  const post = await one<PublishRow>("SELECT * FROM posts WHERE id = $1", [postId]);
+  const post = await one<PublishRow>("SELECT * FROM posts WHERE id = $1 AND influencer_id = $2", [postId, influencerId()]);
   if (!post) return "skipped";
   if (post.status === "published" || post.ig_media_id) return "already_published";
   if (!["approved", "publishing"].includes(post.status)) return "skipped";
@@ -168,7 +169,7 @@ async function markPublished(post: PublishRow, mediaId: string, permalink?: stri
     if (v.store) await upsertMemory("world", null, v, { type: "post", id: post.id });
   }
   for (const cp of CHECKPOINTS) {
-    await queue("analytics").add(JOBS.engagementCollect, { postId: post.id, checkpoint: cp.name }, { jobId: jobId("engagement", post.id, cp.name), delay: cp.delayMs });
+    await queue("analytics").add(JOBS.engagementCollect, { influencerId: influencerId(), postId: post.id, checkpoint: cp.name }, { jobId: jobId("engagement", post.id, cp.name), delay: cp.delayMs });
   }
   await recordDecision({
     agent: "publisher",

@@ -7,14 +7,12 @@ import { signRelay } from "../../src/ingest/webhook.js";
 import { JOBS, jobId, queue } from "../../src/queue/queues.js";
 import { startWorkers } from "../../src/queue/worker.js";
 import { buildServer } from "../../src/web/server.js";
-import { KieClient } from "../../src/kie/client.js";
-import { KieImageGenerator, setImageGenerator } from "../../src/kie/generator.js";
 import { setStorageFetch } from "../../src/storage/host.js";
 import { LLM, setLLM } from "../../src/llm/llm.js";
 import { createDevMockProvider } from "../../src/llm/devMock.js";
 import { FakeInstagram, commentPayload } from "../helpers/fakeInstagram.js";
 import { FakeKie } from "../helpers/fakeKie.js";
-import { resetState, teardown, waitFor } from "../helpers/db.js";
+import { resetState, teardown, useFakeKie, waitFor } from "../helpers/db.js";
 
 let workers: Worker[] = [];
 let app: FastifyInstance;
@@ -77,10 +75,9 @@ describe("E2E: Instagram comment → event → OpenReply → worker → memory �
 describe("E2E: daily planner → content idea → image generation → carousel → quality check → publish → engagement → analytics", () => {
   it("runs the whole content loop on the queues", async () => {
     const fk = new FakeKie();
-    setStorageFetch(fk.fetch);
-    setImageGenerator(new KieImageGenerator(new KieClient({ keys: ["k1"], fetchImpl: fk.fetch, pollDelaysMs: [1] }), "nano-banana-pro"));
+    await useFakeKie(fk);
 
-    await queue("content").add(JOBS.contentPlan, {}, { jobId: jobId("plan", "e2e") });
+    await queue("content").add(JOBS.contentPlan, { influencerId: 1 }, { jobId: jobId("plan", "e2e") });
 
     const published = await waitFor(
       () => one<{ id: string; ig_media_id: string; media_type: string }>("SELECT id, ig_media_id, media_type FROM posts WHERE status = 'published'"),

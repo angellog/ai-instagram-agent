@@ -11,7 +11,9 @@ import { personaSystemBlock } from "../persona/prompt.js";
 import type { Persona, Slot } from "../persona/schema.js";
 import { SLOTS } from "../persona/schema.js";
 import { learningsForPrompt } from "../analytics/learnings.js";
+import { calendarBrief } from "../calendar/events.js";
 import { hasAccount } from "../instagram/accounts.js";
+import { influencerId } from "../context.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { ensureDayPlan, type ActivityRow } from "./activities.js";
 import { enforceContinuity } from "./continuity.js";
@@ -83,6 +85,8 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
   const recent = await recentContent(15);
   const requests = await worldMemories(["content_request"], 5);
   const learnings = await learningsForPrompt();
+  const calendar = await calendarBrief("content", now);
+  const remembered = (await worldMemories(["calendar_recap"], 5)).map((m) => m.content);
   const schema = ideaSchema(p);
 
   const feedback: string[] = [];
@@ -94,7 +98,7 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
       maxTokens: 2500,
       temperature: 0.9,
       system: directorSystem(p, c),
-      prompt: directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, feedback }),
+      prompt: directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, feedback }),
     });
 
     if (out.decision === "wait" || !out.idea) {
@@ -128,8 +132,8 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
     );
 
     const ideaRow = await one<{ id: number }>(
-      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, repetition_score, repetition_detail, status, reject_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, repetition_score, repetition_detail, status, reject_reason, influencer_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
       [
         idea.activity_id,
         idea.format,
@@ -144,6 +148,7 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
         JSON.stringify(rep),
         rep.score >= c.repetition_threshold ? "rejected" : "accepted",
         rep.score >= c.repetition_threshold ? `too similar (${rep.score}): ${rep.reasons.join("; ")}` : null,
+        influencerId(),
       ],
     );
 
@@ -154,7 +159,7 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
       intent: idea.structure,
       action: rep.score >= c.repetition_threshold ? "reject_repetitive" : "accept",
       confidence: 1 - rep.score,
-      contextUsed: ["recent_content", "activity_plan", ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : [])],
+      contextUsed: ["recent_content", "activity_plan", ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : []), ...(calendar ? ["calendar"] : [])],
       reason: rep.score >= c.repetition_threshold ? rep.reasons.join("; ") : out.reason,
       output: { repetition: rep, continuity_adjustments: adjustments },
       latencyMs: Date.now() - started,
@@ -167,16 +172,16 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
 
     const postId = await tx(async (client) => {
       const post = await client.query<{ id: string }>(
-        `INSERT INTO posts (content_idea_id, media_type, caption, status, visual_state)
-         VALUES ($1, $2, $3, 'draft', $4) RETURNING id`,
-        [ideaRow!.id, idea.format === "carousel" ? "CAROUSEL" : "IMAGE", fitCaption(idea.caption, idea.hashtags, p), JSON.stringify(state)],
+        `INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status, visual_state)
+         VALUES ($5, $1, $2, $3, 'draft', $4) RETURNING id`,
+        [ideaRow!.id, idea.format === "carousel" ? "CAROUSEL" : "IMAGE", fitCaption(idea.caption, idea.hashtags, p), JSON.stringify(state), influencerId()],
       );
       if (activity) {
         await client.query("UPDATE activities SET decision = 'post', reason = $2 WHERE id = $1", [activity.id, `idea ${ideaRow!.id}`]);
       }
       return post.rows[0].id;
     });
-    await queue("content").add(JOBS.contentProduce, { postId }, { jobId: jobId("produce", postId) });
+    await queue("content").add(JOBS.contentProduce, { influencerId: influencerId(), postId }, { jobId: jobId("produce", postId) });
     await recordEvent("info", "content", "Content idea accepted; production queued", { ideaId: ideaRow!.id, postId, topic: idea.topic, attempt });
     return { status: "accepted", ideaId: ideaRow!.id, postId, attempts: attempt };
   }
@@ -193,11 +198,13 @@ export async function postingGate(c: Controls, p: Persona, now: Date): Promise<s
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(
-    `SELECT count(*)::int AS n FROM posts WHERE status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
+    `SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
+    [influencerId()],
   );
   if ((inFlight?.n ?? 0) > 0) return "a post is already in the pipeline";
   const today = await one<{ n: number; last: Date | null }>(
-    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE status = 'published'`,
+    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE influencer_id = $1 AND status = 'published'`,
+    [influencerId()],
   );
   if ((today?.n ?? 0) >= c.max_posts_per_day) return `max_posts_per_day (${c.max_posts_per_day}) reached`;
   if (today?.last && now.getTime() - new Date(today.last).getTime() < c.min_hours_between_posts * 3600_000) {
@@ -253,6 +260,8 @@ function directorPrompt(o: {
   recent: RecentItem[];
   requests: string[];
   learnings: string;
+  calendar?: string;
+  remembered?: string[];
   feedback: string[];
 }): string {
   const locs = o.p.visual.locations.map((l) => `${l.id}: ${l.description}`).join("\n");
@@ -271,6 +280,10 @@ function directorPrompt(o: {
         )
         .join("\n") || "- none yet (this would be the first post: make it a strong introduction of who you are)"
     }`,
+    o.calendar
+      ? `WHAT'S GOING ON (operator calendar: real events in your world; weave one in only when it fits your life naturally, never force it, never invent details beyond what is written):\n${o.calendar}`
+      : "",
+    o.remembered?.length ? `RECENT THINGS YOU LIVED THROUGH:\n${o.remembered.map((r) => `- ${r}`).join("\n")}` : "",
     o.requests.length ? `FOLLOWER REQUESTS WORTH CONSIDERING:\n${o.requests.map((r) => `- ${r}`).join("\n")}` : "",
     o.learnings ? `WHAT HAS PERFORMED (engagement learnings; explore sometimes, do not overfit):\n${o.learnings}` : "",
     `RECURRING OUTFITS: ${o.p.visual.character.recurring_clothing_preferences.join(" | ")}`,
@@ -283,5 +296,5 @@ function directorPrompt(o: {
 /** Activities still planned for today (dashboard + CLI). */
 export async function todayPlan(now = new Date()): Promise<ActivityRow[]> {
   const p = persona();
-  return many<ActivityRow>("SELECT * FROM activities WHERE day = $1 ORDER BY id", [localParts(now, p.identity.timezone).day]);
+  return many<ActivityRow>("SELECT * FROM activities WHERE influencer_id = $1 AND day = $2 ORDER BY id", [influencerId(), localParts(now, p.identity.timezone).day]);
 }

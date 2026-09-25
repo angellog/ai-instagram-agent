@@ -1,9 +1,12 @@
 import { getControls, setControls, type Controls } from "./config/controls.js";
-import { env, kieKeys } from "./config/env.js";
+import { env } from "./config/env.js";
+import { kieKeys } from "./config/settings.js";
+import { bootstrap } from "./bootstrap.js";
+import { influencerBySlug, listInfluencers, withInfluencer } from "./context.js";
 import { spendSummary } from "./cost/ledger.js";
 import { closeDb, one } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
-import { instagramClient, primaryAccount, seedAccountFromEnv } from "./instagram/accounts.js";
+import { instagramClient, primaryAccount } from "./instagram/accounts.js";
 import { KieClient } from "./kie/client.js";
 import { createDevLLM } from "./llm/devMock.js";
 import { setLLM } from "./llm/llm.js";
@@ -18,7 +21,9 @@ import { processWebhookEvent } from "./ingest/process.js";
 import { processInteraction } from "./conversation/agent.js";
 import { many } from "./db/pool.js";
 
-const HELP = `ai-instagram-agent CLI
+const HELP = `ai-instagram-agent CLI  (add --inf <slug|id> to target an influencer; default: the first one)
+
+  npm run cli -- influencers                 list influencers
 
   npm run cli -- status                      mode, account, spend, queues
   npm run cli -- persona:check [path]        validate a persona YAML
@@ -47,8 +52,30 @@ async function main(): Promise<void> {
 
   if (env().LLM_PROVIDER === "mock") setLLM(createDevLLM());
   await migrate();
-  await seedAccountFromEnv();
+  await bootstrap();
 
+  if (cmd === "influencers") {
+    console.table(await listInfluencers(["hatching", "active", "paused", "archived"]));
+    return;
+  }
+  if (cmd === "kie:credits") {
+    const k = new KieClient({ keys: await kieKeys(), baseUrl: env().KIE_BASE_URL });
+    console.log((await k.credits()).map((c, i) => `key ${i + 1}: ${Number.isNaN(c) ? "error" : c} credits`).join("\n"));
+    return;
+  }
+  const infArg = args.indexOf("--inf");
+  let target = 1;
+  if (infArg >= 0) {
+    const v = args[infArg + 1];
+    args.splice(infArg, 2);
+    const found = /^\d+$/.test(v ?? "") ? { id: Number(v) } : await influencerBySlug(v ?? "");
+    if (!found) throw new Error(`No influencer "${v}"`);
+    target = Number(found.id);
+  }
+  await withInfluencer(target, () => run(cmd, args));
+}
+
+async function run(cmd: string, args: string[]): Promise<void> {
   switch (cmd) {
     case "status": {
       const [c, s, q, a] = await Promise.all([getControls(), spendSummary(), queueCounts().catch(() => "redis unavailable"), primaryAccount()]);
@@ -59,11 +86,6 @@ async function main(): Promise<void> {
       const ig = await instagramClient();
       const [profile, quota] = await Promise.all([ig.getProfile(), ig.getPublishingLimit()]);
       console.log(JSON.stringify({ profile, quota }, null, 2));
-      break;
-    }
-    case "kie:credits": {
-      const k = new KieClient({ keys: kieKeys(), baseUrl: env().KIE_BASE_URL });
-      console.log((await k.credits()).map((c, i) => `key ${i + 1}: ${Number.isNaN(c) ? "error" : c} credits`).join("\n"));
       break;
     }
     case "controls":

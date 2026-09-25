@@ -1,3 +1,4 @@
+import { influencerId } from "../context.js";
 import { many } from "../db/pool.js";
 
 export interface VisualState {
@@ -52,11 +53,11 @@ export async function recentContent(limit = 15): Promise<RecentItem[]> {
             ci.created_at, p.published_at
      FROM content_ideas ci
      LEFT JOIN posts p ON p.content_idea_id = ci.id
-     WHERE ci.status IN ('accepted', 'produced')
+     WHERE ci.influencer_id = $2 AND ci.status IN ('accepted', 'produced')
        AND (p.id IS NULL OR p.status NOT IN ('rejected', 'failed', 'qc_failed'))
      ORDER BY coalesce(p.published_at, ci.created_at) DESC
      LIMIT $1`,
-    [limit],
+    [limit, influencerId()],
   );
   return rows.map((r) => ({
     postId: r.post_id,

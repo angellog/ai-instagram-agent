@@ -2,12 +2,13 @@ import type { Worker } from "bullmq";
 import { env } from "./config/env.js";
 import { closeDb } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
-import { seedAccountFromEnv } from "./instagram/accounts.js";
+import { bootstrap } from "./bootstrap.js";
+import { listInfluencers } from "./context.js";
+import { VERSION } from "./version.js";
 import { recordEvent } from "./lib/events.js";
 import { logger } from "./lib/logger.js";
 import { createDevLLM } from "./llm/devMock.js";
 import { setLLM } from "./llm/llm.js";
-import { personaInfo, recordPersonaVersion } from "./persona/loader.js";
 import { closeQueues } from "./queue/queues.js";
 import { startWorkers, upsertSchedulers } from "./queue/worker.js";
 import { buildServer } from "./web/server.js";
@@ -26,9 +27,7 @@ async function main(): Promise<void> {
   }
 
   await migrate();
-  const persona = personaInfo();
-  await recordPersonaVersion(persona);
-  await seedAccountFromEnv();
+  const boot = await bootstrap();
 
   let workers: Worker[] = [];
   let server: Awaited<ReturnType<typeof buildServer>> | undefined;
@@ -42,7 +41,7 @@ async function main(): Promise<void> {
     await server.listen({ port: e.PORT, host: "0.0.0.0" });
     logger.info({ port: e.PORT, url: e.PUBLIC_BASE_URL }, "web listening");
   }
-  await recordEvent("info", "boot", `Started (${e.ROLE})`, { persona: persona.persona.identity.name, personaHash: persona.hash, llm: e.LLM_PROVIDER });
+  await recordEvent("info", "boot", `Started v${VERSION} (${e.ROLE})`, { ...boot, influencers: (await listInfluencers(["active"])).length });
 
   let stopping = false;
   const shutdown = async (signal: string) => {

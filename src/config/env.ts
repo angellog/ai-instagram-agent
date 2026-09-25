@@ -111,14 +111,3 @@ export function env(): Env {
 export function resetEnvCache(): void {
   cached = undefined;
 }
-
-export function kieKeys(e: Env = env()): string[] {
-  return [e.KIE_API_KEY, e.KIE_API_KEY_2, e.KIE_API_KEY_3].filter((k): k is string => Boolean(k));
-}
-
-export function deferKeywords(e: Env = env()): string[] {
-  return (e.OPENREPLY_DEFER_KEYWORDS ?? "")
-    .split(",")
-    .map((k) => k.trim().toLowerCase())
-    .filter(Boolean);
-}

@@ -6,7 +6,8 @@ import { many, one, tx } from "../db/pool.js";
 import { primaryAccount } from "../instagram/accounts.js";
 import { storeWebhookEvent } from "../ingest/webhook.js";
 import { forgetUser } from "../memory/store.js";
-import { personaInfo, recordPersonaVersion, reloadPersona } from "../persona/loader.js";
+import { personaInfo } from "../persona/loader.js";
+import { influencerId, withInfluencer } from "../context.js";
 import { JOBS, jobId, queue, queueCounts } from "../queue/queues.js";
 import { schedulePublish } from "../content/produce.js";
 import { ago, bar, esc, layout, pill, table, usd } from "./html.js";
@@ -41,7 +42,7 @@ export async function rerunInteraction(id: number): Promise<string> {
   );
   if (!r) return "Only ignored or failed interactions can be re-run";
   await one("DELETE FROM messages WHERE interaction_id = $1 AND direction = 'out' AND status IN ('failed','rejected','blocked','dry_run')", [id]);
-  await queue("conversation").add(JOBS.conversationProcess, { interactionId: id }, { jobId: jobId("interaction", id, "rerun", Date.now()) });
+  await queue("conversation").add(JOBS.conversationProcess, { influencerId: influencerId(), interactionId: id }, { jobId: jobId("interaction", id, "rerun", Date.now()) });
   return "Re-run queued; refresh in a few seconds";
 }
 
@@ -56,7 +57,22 @@ async function page(req: Req, reply: FastifyReply, title: string, body: string) 
 const back = (reply: FastifyReply, to: string, flash: string) => reply.redirect(`${to}${to.includes("?") ? "&" : "?"}flash=${encodeURIComponent(flash)}`, 303);
 const reviewer = (req: Req) => (req.headers["x-reviewer"] as string | undefined) ?? "admin";
 
-export function registerAdmin(app: FastifyInstance): void {
+/** Influencer the console is looking at (cookie set by the switcher; default #1). */
+export function selectedInfluencer(req: FastifyRequest): number {
+  const m = /(?:^|;\s*)aia_inf=(\d+)/.exec(req.headers.cookie ?? "");
+  return m ? Number(m[1]) : 1;
+}
+
+export function registerAdmin(root: FastifyInstance): void {
+  // Every console route runs inside the selected influencer's context.
+  const wrap =
+    (h: (req: Req, reply: FastifyReply) => unknown) =>
+    (req: Req, reply: FastifyReply) =>
+      withInfluencer(selectedInfluencer(req), async () => h(req, reply));
+  const app = {
+    get: (path: string, h: (req: Req, reply: FastifyReply) => unknown) => root.get(path, wrap(h) as never),
+    post: (path: string, h: (req: Req, reply: FastifyReply) => unknown) => root.post(path, wrap(h) as never),
+  };
   // ------------------------------------------------------------ overview
   app.get("/admin", async (req: Req, reply) => {
     const [c, spend, counts, acct, pending, posts, events, conv, followers] = await Promise.all([
@@ -279,7 +295,7 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
   app.post("/admin/posts/:id/publish", async (req: Req, reply) => {
     const id = req.params.id;
     await one("UPDATE posts SET status = 'approved', last_error = NULL WHERE id = $1 AND status IN ('approved','failed') AND ig_media_id IS NULL", [id]);
-    await queue("publish").add(JOBS.postPublish, { postId: id }, { jobId: jobId("publish", id, "manual", Date.now()) });
+    await queue("publish").add(JOBS.postPublish, { influencerId: influencerId(), postId: id }, { jobId: jobId("publish", id, "manual", Date.now()) });
     return back(reply, `/admin/posts/${id}`, "Publishing queued");
   });
   // Re-run production for a failed post. Slides that already passed are kept;
@@ -292,7 +308,7 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
     );
     if (!r) return back(reply, `/admin/posts/${id}`, "Only failed posts can be retried");
     await one("UPDATE content_ideas SET status = 'accepted', updated_at = now() WHERE id = (SELECT content_idea_id FROM posts WHERE id = $1)", [id]);
-    await queue("content").add(JOBS.contentProduce, { postId: id }, { jobId: jobId("produce", id, "retry", Date.now()) });
+    await queue("content").add(JOBS.contentProduce, { influencerId: influencerId(), postId: id }, { jobId: jobId("produce", id, "retry", Date.now()) });
     return back(reply, `/admin/posts/${id}`, "Production restarted");
   });
   app.post("/admin/posts/:id/reject", async (req: Req, reply) => {
@@ -524,27 +540,17 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
     const p = info.persona;
     const body = `<h1>${esc(p.identity.name)} ${esc(p.identity.handle ?? "")}</h1>
 <div class="card"><p>${esc(p.identity.bio)}</p><p class="small"><b>Disclosure:</b> ${esc(p.identity.ai_disclosure)}</p>
-<p class="muted small">Active version ${esc(info.hash)} · edit <code>${esc(env().PERSONA_PATH)}</code> and reload; no code changes needed.</p>
-<form method="post" action="/admin/persona/reload"><button>Reload persona from file</button></form></div>
+<p class="muted small">Active version ${esc(info.hash)} · stored in the database.</p>
+</div>
 <div class="grid"><div class="card"><h2>Visual identity</h2><div class="slides">${p.visual.character.reference_images.map((u) => `<img src="${esc(u)}">`).join("")}</div>
 <p class="small">${esc(p.visual.character.appearance)} · ${esc(p.visual.character.hairstyle)}</p></div>
 <div class="card"><h2>Versions</h2>${table(["Hash", "Loaded"], versions.map((v) => [`<code>${esc(v.hash)}</code>`, ago(v.loaded_at)]))}</div></div>
 <div class="card"><h2>Source</h2><pre>${esc(info.source)}</pre></div>`;
     return page(req, reply, "Persona", body);
   });
-  app.post("/admin/persona/reload", async (_req: Req, reply) => {
-    try {
-      const p = reloadPersona();
-      await recordPersonaVersion(p);
-      return back(reply, "/admin/persona", `Reloaded ${p.persona.identity.name} (${p.hash}). Workers pick it up on their next restart.`);
-    } catch (e) {
-      return back(reply, "/admin/persona", `Persona invalid, not loaded: ${(e as Error).message}`);
-    }
-  });
-
   // ------------------------------------------------------------ actions
   app.post("/admin/actions/plan", async (_req: Req, reply) => {
-    await queue("content").add(JOBS.contentPlan, { manual: true }, { jobId: jobId("plan", "manual", Date.now()), attempts: 1 });
+    await queue("content").add(JOBS.contentPlan, { influencerId: influencerId(), manual: true }, { jobId: jobId("plan", "manual", Date.now()), attempts: 1 });
     return back(reply, "/admin", "Content planner queued");
   });
   app.post("/admin/actions/sweep", async (_req: Req, reply) => {

@@ -1,4 +1,4 @@
-import { env } from "../config/env.js";
+import { setting } from "../config/settings.js";
 import { one } from "../db/pool.js";
 import { hmacSha256Hex, sha256, signatureMatches } from "../lib/crypto.js";
 
@@ -107,9 +107,8 @@ export function normalizeWebhook(payload: unknown): NormalizedInteraction[] {
 }
 
 /** Meta signs with the Instagram app secret or the Facebook app secret depending on app type. */
-export function verifyMetaSignature(rawBody: Buffer | string, header: string | undefined): boolean {
-  const e = env();
-  const secrets = [e.INSTAGRAM_APP_SECRET, e.FACEBOOK_APP_SECRET].filter((s): s is string => Boolean(s));
+export async function verifyMetaSignature(rawBody: Buffer | string, header: string | undefined): Promise<boolean> {
+  const secrets = [await setting("INSTAGRAM_APP_SECRET"), await setting("FACEBOOK_APP_SECRET")].filter((s): s is string => Boolean(s));
   return secrets.some((s) => signatureMatches(hmacSha256Hex(s, rawBody), header));
 }
 
@@ -118,8 +117,8 @@ export function verifyMetaSignature(rawBody: Buffer | string, header: string | u
  * the raw body with the shared relay secret plus a timestamp to stop replays.
  * Header: x-openreply-signature: t=<unix>,v1=<hex(hmac(secret, t + "." + body))>
  */
-export function verifyRelaySignature(rawBody: Buffer | string, header: string | undefined, now = Date.now()): boolean {
-  const secret = env().OPENREPLY_RELAY_SECRET;
+export async function verifyRelaySignature(rawBody: Buffer | string, header: string | undefined, now = Date.now()): Promise<boolean> {
+  const secret = await setting("OPENREPLY_RELAY_SECRET");
   if (!secret || !header) return false;
   const parts = Object.fromEntries(header.split(",").map((kv) => kv.trim().split("=", 2) as [string, string]));
   const t = Number(parts.t);

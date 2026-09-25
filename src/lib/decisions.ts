@@ -1,3 +1,4 @@
+import { maybeInfluencer } from "../context.js";
 import { one } from "../db/pool.js";
 
 /**
@@ -20,8 +21,8 @@ export interface DecisionRecord {
 
 export async function recordDecision(d: DecisionRecord): Promise<number> {
   const r = await one<{ id: number }>(
-    `INSERT INTO agent_decisions (agent, subject_type, subject_id, intent, action, confidence, safety_level, context_used, reason, output, latency_ms)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+    `INSERT INTO agent_decisions (agent, subject_type, subject_id, intent, action, confidence, safety_level, context_used, reason, output, latency_ms, influencer_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [
       d.agent,
       d.subjectType,
@@ -34,6 +35,7 @@ export async function recordDecision(d: DecisionRecord): Promise<number> {
       d.reason?.slice(0, 500) ?? null,
       JSON.stringify(d.output ?? {}),
       d.latencyMs ?? null,
+      maybeInfluencer()?.id ?? null,
     ],
   );
   return r!.id;

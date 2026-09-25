@@ -14,7 +14,10 @@ import { recordEvent } from "../lib/events.js";
 import { logger } from "../lib/logger.js";
 import { JOBS, jobId, queue, queueCounts, redis } from "../queue/queues.js";
 import { localMediaPath } from "../storage/host.js";
-import { registerAdmin } from "./admin.js";
+import { registerAdmin, selectedInfluencer } from "./admin.js";
+import { setting } from "../config/settings.js";
+import { listInfluencers, withInfluencer } from "../context.js";
+import { VERSION } from "../version.js";
 
 const SESSION_COOKIE = "aia_session";
 
@@ -83,7 +86,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       checks.redis = (err as Error).message;
     }
     const ok = Object.values(checks).every((v) => v === "ok");
-    return reply.code(ok ? 200 : 503).send({ ok, checks, role: e.ROLE });
+    return reply.code(ok ? 200 : 503).send({ ok, checks, role: e.ROLE, version: VERSION });
   });
 
   app.get("/", async (_req, reply) => reply.redirect("/admin"));
@@ -91,7 +94,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   // ------------------------------------------------------------ webhooks
   app.get("/webhooks/instagram", async (req: FastifyRequest<{ Querystring: Record<string, string> }>, reply) => {
     const q = req.query;
-    if (q["hub.mode"] === "subscribe" && e.WEBHOOK_VERIFY_TOKEN && q["hub.verify_token"] && safeEqual(q["hub.verify_token"], e.WEBHOOK_VERIFY_TOKEN)) {
+    const verify = await setting("WEBHOOK_VERIFY_TOKEN");
+    if (q["hub.mode"] === "subscribe" && verify && q["hub.verify_token"] && safeEqual(q["hub.verify_token"], verify)) {
       return reply.type("text/plain").send(q["hub.challenge"] ?? "");
     }
     return reply.code(403).send({ error: "verification failed" });
@@ -99,7 +103,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.post("/webhooks/instagram", async (req, reply) => {
     const raw = rawBody(req);
-    if (!verifyMetaSignature(raw, req.headers["x-hub-signature-256"] as string | undefined)) {
+    if (!(await verifyMetaSignature(raw, req.headers["x-hub-signature-256"] as string | undefined))) {
       await recordEvent("warn", "webhook", "Meta webhook signature mismatch", { bytes: raw.length, hadHeader: Boolean(req.headers["x-hub-signature-256"]) });
       return reply.code(401).send({ error: "invalid signature" });
     }
@@ -109,7 +113,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // OpenReply owns the Meta app's single webhook URL and relays verified events here.
   app.post("/webhooks/openreply", async (req, reply) => {
     const raw = rawBody(req);
-    if (!verifyRelaySignature(raw, req.headers["x-openreply-signature"] as string | undefined)) {
+    if (!(await verifyRelaySignature(raw, req.headers["x-openreply-signature"] as string | undefined))) {
       await recordEvent("warn", "webhook", "OpenReply relay signature mismatch", { bytes: raw.length });
       return reply.code(401).send({ error: "invalid signature" });
     }
@@ -117,25 +121,32 @@ export async function buildServer(): Promise<FastifyInstance> {
   });
 
   // ------------------------------------------------------------ oauth
-  app.get("/admin/connect", async (_req, reply) => {
-    if (!e.INSTAGRAM_APP_ID || !e.INSTAGRAM_APP_SECRET) return reply.code(400).send("Set INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET first.");
-    const ts = Date.now().toString();
-    const state = `${ts}.${hmacSha256Hex(stateKey(), ts)}`;
-    return reply.redirect(InstagramClient.authorizeUrl({ appId: e.INSTAGRAM_APP_ID, redirectUri: redirectUri(), state }));
+  // "Connect Instagram" for the influencer selected in the console (or ?inf=<id>).
+  app.get("/admin/connect", async (req: FastifyRequest<{ Querystring: Record<string, string> }>, reply) => {
+    const [appId, appSecret] = [await setting("INSTAGRAM_APP_ID"), await setting("INSTAGRAM_APP_SECRET")];
+    if (!appId || !appSecret) return reply.redirect(`/admin/config?flash=${encodeURIComponent("Set the Instagram app ID and secret first")}#instagram`, 303);
+    const inf = Number(req.query.inf ?? selectedInfluencer(req));
+    if (!(await one("SELECT 1 FROM influencers WHERE id = $1 AND status <> 'archived'", [inf]))) return reply.code(400).send("Unknown influencer");
+    const payload = `${Date.now()}.${inf}`;
+    const state = `${payload}.${hmacSha256Hex(stateKey(), payload)}`;
+    return reply.redirect(InstagramClient.authorizeUrl({ appId, redirectUri: redirectUri(), state }));
   });
 
   app.get("/oauth/instagram/callback", async (req: FastifyRequest<{ Querystring: Record<string, string> }>, reply) => {
     const { code, state, error_description } = req.query;
     if (!code) return reply.code(400).send(`Instagram did not return a code: ${error_description ?? "unknown error"}`);
-    const [ts, sig] = (state ?? "").split(".");
-    if (!ts || !sig || !safeEqual(sig, hmacSha256Hex(stateKey(), ts)) || Date.now() - Number(ts) > 15 * 60_000) {
-      return reply.code(400).send("Invalid or expired OAuth state; start again from /admin/connect.");
+    const [ts, infRaw, sig] = (state ?? "").split(".");
+    if (!ts || !infRaw || !sig || !safeEqual(sig, hmacSha256Hex(stateKey(), `${ts}.${infRaw}`)) || Date.now() - Number(ts) > 15 * 60_000) {
+      return reply.code(400).send("Invalid or expired OAuth state; start again from the console.");
     }
-    const tok = await InstagramClient.exchangeCode(code, { appId: e.INSTAGRAM_APP_ID!, appSecret: e.INSTAGRAM_APP_SECRET!, redirectUri: redirectUri(), host: e.META_GRAPH_HOST });
+    const influencerId = Number(infRaw);
+    const [appId, appSecret] = [await setting("INSTAGRAM_APP_ID"), await setting("INSTAGRAM_APP_SECRET")];
+    const tok = await InstagramClient.exchangeCode(code, { appId: appId!, appSecret: appSecret!, redirectUri: redirectUri(), host: e.META_GRAPH_HOST });
     const ig = new InstagramClient({ accessToken: tok.accessToken, igUserId: tok.userId, host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION });
     const profile = await ig.getProfile();
     const igUserId = profile.user_id ?? profile.id ?? tok.userId;
     await upsertAccount({
+      influencerId,
       igUserId: String(igUserId),
       username: profile.username,
       accessToken: tok.accessToken,
@@ -143,8 +154,10 @@ export async function buildServer(): Promise<FastifyInstance> {
       makePrimary: true,
       profile: profile as unknown as Record<string, unknown>,
     });
-    await recordEvent("info", "instagram", "Instagram account connected", { username: profile.username, igUserId });
-    return reply.redirect(`/admin?flash=${encodeURIComponent(`Connected @${profile.username}`)}`, 303);
+    await recordEvent("info", "instagram", "Instagram account connected", { username: profile.username, igUserId, influencerId });
+    const hatching = await one("SELECT 1 FROM influencers WHERE id = $1 AND status = 'hatching'", [influencerId]);
+    const to = hatching ? `/admin/hatch/${influencerId}?step=instagram` : "/admin";
+    return reply.redirect(`${to}${to.includes("?") ? "&" : "?"}flash=${encodeURIComponent(`Connected @${profile.username}`)}`, 303);
   });
 
   // ------------------------------------------------------------ login
@@ -165,21 +178,30 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // ------------------------------------------------------------ JSON API
   app.get("/api/status", async () => {
-    const [c, spend, counts, acct, pending] = await Promise.all([
-      getControls(),
-      spendSummary(),
-      queueCounts(),
-      primaryAccount(),
-      one<{ n: number }>("SELECT count(*)::int AS n FROM safety_reviews WHERE status = 'pending'"),
-    ]);
-    return {
-      mode: c.mode,
-      paused: c.paused,
-      account: acct ? { igUserId: acct.ig_user_id, username: acct.username, tokenExpiresAt: acct.token_expires_at } : null,
-      pendingReviews: pending?.n ?? 0,
-      spend,
-      queues: counts,
-    };
+    const influencers = [];
+    for (const inf of await listInfluencers(["active", "paused", "hatching"])) {
+      influencers.push(
+        await withInfluencer(Number(inf.id), async () => {
+          const [c, acct, pending, spend] = await Promise.all([
+            getControls(),
+            primaryAccount(),
+            one<{ n: number }>("SELECT count(*)::int AS n FROM safety_reviews WHERE status = 'pending' AND influencer_id = $1", [inf.id]),
+            spendSummary(),
+          ]);
+          return {
+            id: Number(inf.id),
+            slug: inf.slug,
+            status: inf.status,
+            mode: c.mode,
+            paused: c.paused,
+            account: acct ? { igUserId: acct.ig_user_id, username: acct.username, tokenExpiresAt: acct.token_expires_at } : null,
+            pendingReviews: pending?.n ?? 0,
+            spend,
+          };
+        }).catch((err: Error) => ({ id: Number(inf.id), slug: inf.slug, status: inf.status, error: err.message })),
+      );
+    }
+    return { version: VERSION, influencers, platformSpend: await spendSummary("all"), queues: await queueCounts().catch(() => null) };
   });
 
   // Dev-only media host (the "local" storage provider).

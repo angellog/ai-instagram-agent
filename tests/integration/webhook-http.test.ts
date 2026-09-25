@@ -65,7 +65,7 @@ describe("health and auth", () => {
   it("serves the JSON status API", async () => {
     const r = await app.inject({ url: "/api/status" });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ mode: "autonomous", account: { igUserId: expect.any(String) } });
+    expect(r.json()).toMatchObject({ version: expect.stringMatching(/^1\./), influencers: [{ slug: "zuri", mode: "autonomous", account: { igUserId: expect.any(String) } }] });
   });
   it("renders every dashboard page", async () => {
     for (const url of ["/admin", "/admin/reviews", "/admin/posts", "/admin/content", "/admin/conversations", "/admin/people", "/admin/costs", "/admin/events", "/admin/controls", "/admin/persona"]) {
@@ -85,8 +85,8 @@ describe("health and auth", () => {
 
 describe("retry production", () => {
   it("resets a failed post to draft and queues production", async () => {
-    await one("INSERT INTO content_ideas (id, format, structure, topic, hook, status) VALUES (1, 'single', 'moment', 't', 'h', 'failed')");
-    const p = await one<{ id: string }>("INSERT INTO posts (content_idea_id, media_type, caption, status) VALUES (1, 'IMAGE', 'c', 'qc_failed') RETURNING id");
+    await one("INSERT INTO content_ideas (id, influencer_id, format, structure, topic, hook, status) VALUES (1, 1, 'single', 'moment', 't', 'h', 'failed')");
+    const p = await one<{ id: string }>("INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status) VALUES (1, 1, 'IMAGE', 'c', 'qc_failed') RETURNING id");
     const r = await app.inject({ method: "POST", url: `/admin/posts/${p!.id}/retry` });
     expect(decodeURIComponent(r.headers.location as string)).toMatch(/Production restarted/);
     expect(await one("SELECT status FROM posts WHERE id = $1", [p!.id])).toEqual({ status: "draft" });
@@ -100,7 +100,7 @@ describe("retry production", () => {
 describe("remove slide", () => {
   it("removes one slide from a draft and compacts positions; never below one image", async () => {
     const { removeSlide } = await import("../../src/web/admin.js");
-    const p = await one<{ id: string }>("INSERT INTO posts (media_type, caption, status) VALUES ('CAROUSEL', 'c', 'awaiting_review') RETURNING id");
+    const p = await one<{ id: string }>("INSERT INTO posts (influencer_id, media_type, caption, status) VALUES (1, 'CAROUSEL', 'c', 'awaiting_review') RETURNING id");
     for (const i of [0, 1, 2]) await one("INSERT INTO post_assets (post_id, position, public_url) VALUES ($1, $2, $3)", [p!.id, i, `https://x/${i}.jpg`]);
     expect(await removeSlide(p!.id, 1)).toBe("Removed slide 2; 2 left");
     expect(await many("SELECT position, public_url FROM post_assets WHERE post_id = $1 ORDER BY position", [p!.id])).toEqual([

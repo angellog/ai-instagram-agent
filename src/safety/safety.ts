@@ -1,3 +1,4 @@
+import { influencerId } from "../context.js";
 import { isSendingDisabled, type Controls } from "../config/controls.js";
 import { one } from "../db/pool.js";
 import { llm, type Moderation } from "../llm/llm.js";
@@ -76,8 +77,8 @@ export async function openReview(o: {
   status?: "pending" | "rejected";
 }): Promise<number | undefined> {
   const r = await one<{ id: number }>(
-    `INSERT INTO safety_reviews (subject_type, subject_id, level, categories, reason, proposed, status, reviewer, reviewed_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO safety_reviews (subject_type, subject_id, level, categories, reason, proposed, status, reviewer, reviewed_at, influencer_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      ON CONFLICT (subject_type, subject_id) DO UPDATE SET
        level = EXCLUDED.level, categories = EXCLUDED.categories, reason = EXCLUDED.reason,
        proposed = EXCLUDED.proposed,
@@ -93,6 +94,7 @@ export async function openReview(o: {
       o.status ?? "pending",
       o.status === "rejected" ? "system" : null,
       o.status === "rejected" ? new Date() : null,
+      influencerId(),
     ],
   );
   return r?.id;

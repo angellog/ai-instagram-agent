@@ -7,7 +7,7 @@ const c = controlsSchema.parse({ mode: "autonomous" });
 
 describe("deterministic perception", () => {
   it("skips keywords owned by OpenReply campaigns", () => {
-    expect(perceive({ text: "LINK please", kind: "comment" }, "normal", c)).toMatchObject({ skip: true, reason: expect.stringContaining("OpenReply") });
+    expect(perceive({ text: "LINK please", kind: "comment" }, "normal", c, ["link", "guide"])).toMatchObject({ skip: true, reason: expect.stringContaining("OpenReply") });
   });
   it("skips emoji-only, spam, blocked users and story mentions", () => {
     expect(perceive({ text: "🔥🔥", kind: "comment" }, "normal", c).skip).toBe(true);

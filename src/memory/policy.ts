@@ -24,6 +24,7 @@ export const TTL_DAYS: Record<string, number | null> = {
   content_request: 21,
   recent_topic: 14,
   published: null,
+  calendar_recap: 120,
 };
 
 export const MIN_CONFIDENCE = 0.6;

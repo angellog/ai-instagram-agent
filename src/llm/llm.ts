@@ -4,7 +4,8 @@ import { assertBudget, llmCostUsd, recordCost } from "../cost/ledger.js";
 import { withTimeout } from "../lib/async.js";
 import { PermanentError } from "../lib/errors.js";
 import { logger } from "../lib/logger.js";
-import { providerFromEnv } from "./providers.js";
+import { SettingsProvider, type LLMConfig } from "./providers.js";
+import { setting } from "../config/settings.js";
 import type { ChatMessage, InputImage, LLMProvider, Tier } from "./types.js";
 
 export class MalformedOutputError extends PermanentError {
@@ -115,20 +116,22 @@ export class LLM {
     const tier = o.tier ?? "smart";
     const maxTokens = o.maxTokens ?? 1200;
     const messages = toMessages(o.prompt);
-    const model = this.provider.modelFor(tier);
+    // A settings-backed provider resolves its (possibly just-changed) config first.
+    const provider = this.provider instanceof SettingsProvider ? await this.provider.active() : this.provider;
+    const model = provider.modelFor(tier);
     // ~1.6k tokens per attached image at the 768px QC size.
     const estimate = llmCostUsd(model, estimateTokens(o.system, messages) + (o.images?.length ?? 0) * 1600, maxTokens);
     await assertBudget("llm", estimate);
     const started = Date.now();
     const res = await withTimeout(
-      this.provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation }),
+      provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation }),
       this.timeoutMs,
       `llm ${o.operation}`,
     );
     const cost = llmCostUsd(res.model, res.inputTokens, res.outputTokens);
     await recordCost({
       category: "llm",
-      provider: this.provider.name,
+      provider: provider.name,
       model: res.model,
       operation: o.operation,
       units: { input_tokens: res.inputTokens, output_tokens: res.outputTokens },
@@ -192,9 +195,22 @@ export function llm(): LLM {
   if (!instance) {
     const e = env();
     if (e.LLM_PROVIDER === "mock") throw new Error("LLM_PROVIDER=mock: call setLLM(createDevLLM()) at boot");
-    instance = new LLM(providerFromEnv(e), e.LLM_TIMEOUT_MS + 30_000);
+    instance = new LLM(new SettingsProvider(llmConfig), e.LLM_TIMEOUT_MS + 30_000);
   }
   return instance;
+}
+
+/** LLM config: Config page (app_settings) first, then environment. */
+export async function llmConfig(): Promise<LLMConfig> {
+  const e = env();
+  return {
+    provider: (await setting("LLM_PROVIDER")) ?? e.LLM_PROVIDER,
+    apiKey: await setting("LLM_API_KEY"),
+    baseURL: await setting("LLM_BASE_URL"),
+    model: (await setting("LLM_MODEL")) ?? e.LLM_MODEL,
+    fastModel: (await setting("LLM_FAST_MODEL")) ?? e.LLM_FAST_MODEL,
+    timeoutMs: e.LLM_TIMEOUT_MS,
+  };
 }
 
 export function setLLM(l: LLM | undefined): void {

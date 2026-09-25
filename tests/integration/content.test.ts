@@ -5,8 +5,6 @@ import { planContent } from "../../src/content/director.js";
 import { producePost } from "../../src/content/produce.js";
 import { publishPost } from "../../src/content/publish.js";
 import { setControls } from "../../src/config/controls.js";
-import { KieClient } from "../../src/kie/client.js";
-import { KieImageGenerator, setImageGenerator } from "../../src/kie/generator.js";
 import { setStorageFetch } from "../../src/storage/host.js";
 import { setLLM, LLM } from "../../src/llm/llm.js";
 import { createDevMockProvider } from "../../src/llm/devMock.js";
@@ -14,7 +12,7 @@ import { queue } from "../../src/queue/queues.js";
 import { collectEngagement, processAnalytics, learningsForPrompt } from "../../src/analytics/learnings.js";
 import { FakeInstagram } from "../helpers/fakeInstagram.js";
 import { FakeKie } from "../helpers/fakeKie.js";
-import { resetState, teardown } from "../helpers/db.js";
+import { resetState, teardown, useFakeKie } from "../helpers/db.js";
 
 let fake: FakeInstagram;
 beforeEach(async () => {
@@ -88,17 +86,25 @@ describe("content planning", () => {
 describe("production with kie.ai", () => {
   it("generates each slide through kie, records credits, composes and hosts", async () => {
     const fk = new FakeKie();
-    setStorageFetch(fk.fetch);
-    setImageGenerator(new KieImageGenerator(new KieClient({ keys: ["k1"], fetchImpl: fk.fetch, pollDelaysMs: [1] }), "nano-banana-pro"));
+    await useFakeKie(fk);
     const postId = await planAndProduce();
-    const jobs = await many<{ status: string; task_id: string; credits: number }>("SELECT status, task_id, credits FROM generation_jobs WHERE post_id = $1", [postId]);
+    const jobs = await many<{ status: string; task_id: string; credits: number; provider: string }>(
+      "SELECT status, provider_request_id AS task_id, credits, provider FROM generation_attempts WHERE post_id = $1",
+      [postId],
+    );
     const slides = (await many("SELECT 1 FROM post_assets WHERE post_id = $1", [postId])).length;
     expect(jobs).toHaveLength(slides);
-    expect(jobs.every((j) => j.status === "success" && j.task_id.startsWith("task_") && j.credits === 18)).toBe(true);
-    // Persona reference goes into every character shot; the cover is the environment reference for later slides.
-    const { persona } = await import("../../src/persona/loader.js");
-    expect(fk.createCalls[0].input.image_input).toEqual(persona().visual.character.reference_images);
-    expect(fk.createCalls[1].input.image_input.at(-1)).toMatch(/files\.fake-kie\.test/);
+    expect(jobs.every((j) => j.provider === "kie" && j.status === "success" && j.task_id.startsWith("task_") && j.credits === 18)).toBe(true);
+    // Every slide is a durable, influencer-owned asset linked to its generation request.
+    const assets = await many<{ influencer_id: number }>("SELECT a.influencer_id FROM post_assets pa JOIN assets a ON a.id = pa.asset_id WHERE pa.post_id = $1", [postId]);
+    expect(assets).toHaveLength(slides);
+    // The soul's identity references go into every character shot; the cover is the environment reference for later slides.
+    const { activeSoul } = await import("../../src/souls/souls.js");
+    const soul = await activeSoul(1);
+    expect(soul!.soul.soul_id).toMatch(/^soul_zuri/);
+    expect(fk.createCalls[0].input.image_input).toEqual(soul!.identityRefs);
+    // …as our durable, influencer-scoped copy, never the provider's expiring URL.
+    expect(fk.createCalls[1].input.image_input.at(-1)).toMatch(/\/influencers\/zuri\/gen\//);
     expect(fk.createCalls[0].input).toMatchObject({ aspect_ratio: "4:5", output_format: "jpg" });
     const cost = await one<{ usd: number }>("SELECT sum(cost_usd)::float AS usd FROM cost_ledger WHERE category = 'image' AND ref_id = $1", [postId]);
     expect(cost!.usd).toBeCloseTo(slides * 18 * 0.005, 6);
@@ -107,18 +113,17 @@ describe("production with kie.ai", () => {
   it("retries a failed kie task with a fresh one and continues", async () => {
     const fk = new FakeKie();
     fk.failNextTasks = 1;
-    setStorageFetch(fk.fetch);
-    setImageGenerator(new KieImageGenerator(new KieClient({ keys: ["k1"], fetchImpl: fk.fetch, pollDelaysMs: [1] }), "nano-banana-pro"));
+    await useFakeKie(fk);
     const postId = await planAndProduce();
     expect(await one("SELECT status FROM posts WHERE id = $1", [postId])).toEqual({ status: "approved" });
-    const first = await many<{ status: string; attempt: number }>("SELECT status, attempt FROM generation_jobs WHERE post_id = $1 AND position = 0 ORDER BY id", [postId]);
-    expect(first).toEqual([{ status: "failed", attempt: 1 }, { status: "success", attempt: 2 }]);
+    const first = await many<{ status: string; error_class: string | null }>("SELECT status, error_class FROM generation_attempts WHERE post_id = $1 AND position = 0 ORDER BY id", [postId]);
+    // content_policy never falls back to another provider; production retries with a fresh request instead.
+    expect(first).toEqual([{ status: "failed", error_class: "content_policy" }, { status: "success", error_class: null }]);
   });
 
   it("stops production when the image budget is exhausted", async () => {
     const fk = new FakeKie();
-    setStorageFetch(fk.fetch);
-    setImageGenerator(new KieImageGenerator(new KieClient({ keys: ["k1"], fetchImpl: fk.fetch, pollDelaysMs: [1] }), "nano-banana-pro"));
+    await useFakeKie(fk);
     await setControls({ daily_image_budget_usd: 0.01 });
     const plan = await planContent();
     expect(await producePost((plan as { postId: string }).postId)).toBe("failed");

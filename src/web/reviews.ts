@@ -1,4 +1,5 @@
 import { getControls } from "../config/controls.js";
+import { withInfluencer } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { sendApprovedReply } from "../conversation/agent.js";
 import { schedulePublish } from "../content/produce.js";
@@ -19,12 +20,15 @@ export interface ReviewRow {
   reviewer: string | null;
   reviewed_at: Date | null;
   created_at: Date;
+  influencer_id: number;
 }
 
-export function listReviews(status: ReviewRow["status"] | "all" = "pending", limit = 100): Promise<ReviewRow[]> {
+/** Reviews for one influencer, or every influencer when `influencer` is "all". */
+export function listReviews(status: ReviewRow["status"] | "all" = "pending", limit = 100, influencer: number | "all" = "all"): Promise<ReviewRow[]> {
   return many<ReviewRow>(
-    `SELECT * FROM safety_reviews WHERE ($1 = 'all' OR status = $1) ORDER BY created_at DESC LIMIT $2`,
-    [status, limit],
+    `SELECT * FROM safety_reviews WHERE ($1 = 'all' OR status = $1) AND ($3::bigint IS NULL OR influencer_id = $3)
+     ORDER BY created_at DESC LIMIT $2`,
+    [status, limit, influencer === "all" ? null : influencer],
   );
 }
 
@@ -38,6 +42,11 @@ export async function approveReview(id: number, reviewer: string, editedText?: s
   if (!r) return { ok: false, message: "review not found" };
   if (r.status !== "pending") return { ok: false, message: `review is ${r.status}` };
   if (r.level === "red") return { ok: false, message: "RED items are never automated; handle them manually in Instagram" };
+  // Everything below (sending, scheduling, persona windows) belongs to the review's influencer.
+  return withInfluencer(Number(r.influencer_id), () => approveInContext(r, id, reviewer, editedText));
+}
+
+async function approveInContext(r: ReviewRow, id: number, reviewer: string, editedText?: string): Promise<{ ok: boolean; message: string }> {
 
   if (r.subject_type === "reply") {
     const messageId = Number(r.subject_id.replace(/^message-/, ""));
@@ -49,7 +58,7 @@ export async function approveReview(id: number, reviewer: string, editedText?: s
     return { ok: true, message: res.status === "sent" ? "Reply sent" : "Recorded (dry run: nothing sent)" };
   }
 
-  const post = await one<{ id: string; status: string; caption: string }>("SELECT id, status, caption FROM posts WHERE id = $1", [r.subject_id]);
+  const post = await one<{ id: string; status: string; caption: string }>("SELECT id, status, caption FROM posts WHERE id = $1 AND influencer_id = $2", [r.subject_id, r.influencer_id]);
   if (!post) return { ok: false, message: "post not found" };
   if (!["awaiting_review", "dry_run"].includes(post.status)) return { ok: false, message: `post is ${post.status}` };
   if (editedText?.trim()) {
@@ -79,7 +88,9 @@ export async function rejectReview(id: number, reviewer: string, note?: string):
       note ?? "rejected by reviewer",
     ]);
   }
-  await recordDecision({ agent: "human_reviewer", subjectType: r.subject_type === "post" ? "post" : "interaction", subjectId: r.subject_id, action: "reject", reason: note ?? reviewer });
+  await withInfluencer(Number(r.influencer_id), () =>
+    recordDecision({ agent: "human_reviewer", subjectType: r.subject_type === "post" ? "post" : "interaction", subjectId: r.subject_id, action: "reject", reason: note ?? reviewer }),
+  );
   return { ok: true, message: "Rejected" };
 }
 
@@ -101,6 +112,6 @@ export async function expireReviews(): Promise<number> {
     await one("UPDATE safety_reviews SET status = 'expired', reviewed_at = now(), reviewer = 'system' WHERE id = $1", [r.id]);
     await one("UPDATE messages SET status = 'rejected', error = 'review expired (messaging window closed)' WHERE id = $1 AND status = 'pending_review'", [r.message_id]);
   }
-  if (rows.length) await recordEvent("info", "reviews", "Expired stale reply reviews", { count: rows.length });
+  if (rows.length) await recordEvent("info", "reviews", "Expired stale reply reviews", { count: rows.length }); // platform-wide sweep
   return rows.length;
 }
