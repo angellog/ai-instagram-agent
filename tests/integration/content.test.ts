@@ -96,7 +96,8 @@ describe("production with kie.ai", () => {
     expect(jobs).toHaveLength(slides);
     expect(jobs.every((j) => j.status === "success" && j.task_id.startsWith("task_") && j.credits === 18)).toBe(true);
     // Persona reference goes into every character shot; the cover is the environment reference for later slides.
-    expect(fk.createCalls[0].input.image_input).toEqual([expect.stringContaining("cloudfront")]);
+    const { persona } = await import("../../src/persona/loader.js");
+    expect(fk.createCalls[0].input.image_input).toEqual(persona().visual.character.reference_images);
     expect(fk.createCalls[1].input.image_input.at(-1)).toMatch(/files\.fake-kie\.test/);
     expect(fk.createCalls[0].input).toMatchObject({ aspect_ratio: "4:5", output_format: "jpg" });
     const cost = await one<{ usd: number }>("SELECT sum(cost_usd)::float AS usd FROM cost_ledger WHERE category = 'image' AND ref_id = $1", [postId]);
