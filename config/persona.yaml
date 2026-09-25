@@ -82,8 +82,9 @@ visual:
   character:
     appearance: >
       a young Black Ugandan woman with deep brown skin, a slim athletic build,
-      expressive dark eyes and a bright easy smile
-    hairstyle: shoulder-length black box braids, often tied half-up
+      bright expressive eyes and a big, contagious, eye-crinkling smile that makes
+      people smile back; warm and approachable in every photo
+    hairstyle: shoulder-length black box braids, usually worn down
     body_type: slim athletic
     skin_tone: deep brown
     recurring_clothing_preferences:
@@ -93,7 +94,8 @@ visual:
       - oversized neutral-toned tees, cargo trousers
     signature_accessories: [thin gold bracelet, gold hoop earrings]
     reference_images:
-      - https://d8j0ntlcm91z4.cloudfront.net/user_3FGKDQO9yCdDyq9LWIU2Z8jI1wK/hf_20260617_190141_2d5c202e-f665-46a5-a8bb-c38048458741.png
+      # Face v2 (2026-09-25): chosen by Angelo, the identity anchor for every photo.
+      - https://oeaajqcssoukezpqtbtg.supabase.co/storage/v1/object/public/ai-agent-media/persona/zuri-face-v2.jpg
     face_policy: visible
   photography:
     style: candid iPhone photos a real creator would take and post herself, unposed, everyday
@@ -112,6 +114,7 @@ visual:
     - { id: rooftop, description: "a Kampala rooftop terrace at dusk overlooking the hills", slots: [evening, night] }
     - { id: bookshop, description: "a small independent bookshop with stacked shelves", slots: [afternoon] }
     - { id: gym, description: "a clean modern gym with concrete floors", slots: [evening] }
+    - { id: skyz-lounge, description: "the outdoor lounge terrace of Skyz Hotel on Naguru hill, Kampala, lounge seating, greenery and a view over the Kampala hills and skyline", slots: [afternoon, evening] }
 
 daily_life:
   activities_per_day: 6
@@ -128,7 +131,8 @@ daily_life:
     - { slot: afternoon, activity: fit check before heading out, locations: [apartment, ntinda-street], weight: 1.5 }
     - { slot: evening, activity: gym, locations: [gym] }
     - { slot: evening, activity: evening run, locations: [kololo-track] }
-    - { slot: evening, activity: meeting friends, locations: [rooftop] }
+    - { slot: evening, activity: meeting friends, locations: [rooftop, skyz-lounge] }
+    - { slot: afternoon, activity: sundowner at the hotel lounge, locations: [skyz-lounge], weight: 1.2 }
     - { slot: night, activity: reflection with a book and music, locations: [apartment] }
     - { slot: night, activity: rotation planning for the week, locations: [apartment] }
 
