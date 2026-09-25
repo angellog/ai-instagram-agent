@@ -18,7 +18,7 @@ _Updated 2026-09-24._
 | 10 | Autonomous operation (schedulers, sweeper, controls) | ✅ built · ⏸ live in `human_approval` | failures.test, live worker logs |
 
 ## Tests
-`npm test` → **141 passed** (13 files): 93 unit, 46 integration (real Postgres + Redis, including 9 failure-mode tests), 2 end-to-end flows through real BullMQ workers. OpenReply relay: 10 new tests, 163 total passing there.
+`npm test` → **148 passed** (13 files): 95 unit, 46 integration (real Postgres + Redis, including 9 failure-mode tests), 2 end-to-end flows through real BullMQ workers. OpenReply relay: 10 new tests, 163 total passing there.
 
 Brief §23 coverage: memory extraction, intent classification, repetition detection, content planning, safety classification, API adapters (unit) · event→worker, worker→LLM/DB/KIE/publishing API (integration) · Instagram API failure, LLM timeout, KIE failure, duplicate webhook, duplicate publishing, DB failure, Redis failure, malformed LLM output (failure) · both E2E chains.
 
@@ -29,7 +29,9 @@ Brief §23 coverage: memory extraction, intent classification, repetition detect
 - [x] Credentials on Railway (`scripts/set-railway-secrets.sh`)
 - [x] angellog/openreply#1 merged
 - [x] Railway GitHub App installed for this repo (push to `main` deploys)
-- [ ] Set `AGENT_RELAY_URL`, `AGENT_RELAY_SECRET`, `AGENT_RELAY_ACCOUNT_IDS` on OpenReply (Vercel + Railway worker), values in `output/openreply-relay.env`
+- [x] Relay variables on OpenReply (Vercel + Railway worker); @zurikarale subscribed to `comments` + `messages`
+- [x] First post published 2026-09-25: https://www.instagram.com/p/DdsTKMDmkFm/
+- [ ] Profile photo, name, bio and highlights set in the Instagram app (kit in `output/profile/`)
 - [ ] 24h in `dry_run`, then `human_approval`, then `autonomous`
 
 ## Known limitations
