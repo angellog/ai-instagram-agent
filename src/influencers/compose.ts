@@ -55,6 +55,7 @@ with exactly the same top-level keys and nesting as the TEMPLATE. Rules:
 - Keep it specific and lived-in: real neighbourhoods, habits, routines; 6-12 daily activities across early_morning/morning/midday/afternoon/evening/night slots with location ids that exist under visual.locations.
 - identity.ai_disclosure must plainly say this is an AI creator with AI-generated photos.
 - visual.character.reference_images must be an empty list [] (faces are chosen in the next step).
+- visual.character.wardrobe must list 12-16 distinct, specific outfits (colours, fabrics, cuts) that suit the climate and niche, including 2-3 activewear outfits; no brand logos. The daily outfit rotates through this list.
 - visual.character.appearance must describe a consistent, photographable look (face, skin tone, hair, build) without naming a real person.
 - carousel.text_overlays: false. Use the IANA timezone of the home city.
 - No hashtags about AI. No medical, political or financial advice in behaviour.`;

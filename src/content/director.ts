@@ -12,6 +12,7 @@ import type { Persona, Slot } from "../persona/schema.js";
 import { SLOTS } from "../persona/schema.js";
 import { learningsForPrompt } from "../analytics/learnings.js";
 import { calendarBrief } from "../calendar/events.js";
+import { enforceOutfit, planOutfits, type OutfitPlan } from "./wardrobe.js";
 import { hasAccount } from "../instagram/accounts.js";
 import { influencerId } from "../context.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
@@ -87,6 +88,7 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
   const learnings = await learningsForPrompt();
   const calendar = await calendarBrief("content", now);
   const remembered = (await worldMemories(["calendar_recap"], 5)).map((m) => m.content);
+  const outfits = planOutfits(p, day, recent);
   const schema = ideaSchema(p);
 
   const feedback: string[] = [];
@@ -98,7 +100,7 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
       maxTokens: 2500,
       temperature: 0.9,
       system: directorSystem(p, c),
-      prompt: directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, feedback }),
+      prompt: directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, feedback }),
     });
 
     if (out.decision === "wait" || !out.idea) {
@@ -113,11 +115,12 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
     if (idea.activity_id && !activity) idea.activity_id = null;
 
+    const worn = enforceOutfit(idea.outfit, activity?.activity, outfits);
     const { state, adjustments } = enforceContinuity(
       {
         location_id: idea.location_id,
         time_of_day: idea.time_of_day,
-        outfit: idea.outfit,
+        outfit: worn.outfit,
         sneakers: idea.sneakers,
         compositions: idea.slides.map((s) => s.composition),
         activity: activity?.activity ?? null,
@@ -125,6 +128,10 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
       { localDay: day, slot, activity: activity?.activity, hairstyle: p.visual.character.hairstyle },
       recent,
     );
+    if (worn.adjustment) {
+      adjustments.unshift(worn.adjustment);
+      state.continuity_adjustments = adjustments;
+    }
 
     const rep = repetitionScore(
       { topic: idea.topic, hook: idea.hook, caption: idea.caption, structure: idea.structure, format: idea.format, visual: state },
@@ -263,6 +270,7 @@ function directorPrompt(o: {
   learnings: string;
   calendar?: string;
   remembered?: string[];
+  outfits?: OutfitPlan;
   feedback: string[];
 }): string {
   const locs = o.p.visual.locations.map((l) => `${l.id}: ${l.description}`).join("\n");
@@ -287,7 +295,11 @@ function directorPrompt(o: {
     o.remembered?.length ? `RECENT THINGS YOU LIVED THROUGH:\n${o.remembered.map((r) => `- ${r}`).join("\n")}` : "",
     o.requests.length ? `FOLLOWER REQUESTS WORTH CONSIDERING:\n${o.requests.map((r) => `- ${r}`).join("\n")}` : "",
     o.learnings ? `WHAT HAS PERFORMED (engagement learnings; explore sometimes, do not overfit):\n${o.learnings}` : "",
-    `RECURRING OUTFITS: ${o.p.visual.character.recurring_clothing_preferences.join(" | ")}`,
+    o.outfits
+      ? `TODAY'S OUTFIT (wardrobe rotation, ${o.outfits.reason}): "${o.outfits.everyday}". For a workout/sport post: "${o.outfits.sport}". Use these exact outfits.${
+          o.outfits.avoid.length ? `\nWORN RECENTLY, DO NOT REPEAT: ${[...new Set(o.outfits.avoid.map((w) => `"${w.outfit}" (${w.day})`))].join("; ")}` : ""
+        }`
+      : `RECURRING OUTFITS: ${o.p.visual.character.recurring_clothing_preferences.join(" | ")}`,
     o.feedback.length ? `FEEDBACK ON PREVIOUS ATTEMPTS:\n${o.feedback.join("\n")}` : "",
   ]
     .filter(Boolean)

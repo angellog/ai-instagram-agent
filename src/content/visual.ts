@@ -38,7 +38,8 @@ export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide
 
   if (slide.include_character) {
     lines.push(
-      `Photograph of the same person shown in the identity reference image(s): keep the face, skin tone, body and proportions identical to the reference.`,
+      `Photograph of the same person shown in the identity reference image(s): keep the face, skin tone, hair, body and proportions identical to the reference.`,
+      `Use the reference ONLY for who the person is. Ignore the clothing, background and lighting in the reference photo; dress them exactly as described below.`,
       `Appearance: ${ch.appearance.trim()}. Hair: ${ch.hairstyle}. Skin tone: ${ch.skin_tone}. Build: ${ch.body_type}.`,
       `Wearing ${state.outfit ?? ch.recurring_clothing_preferences[0]}${state.sneakers ? `, with ${state.sneakers} on their feet` : ""}.${
         ch.signature_accessories.length ? ` Accessories: ${ch.signature_accessories.join(", ")}.` : ""

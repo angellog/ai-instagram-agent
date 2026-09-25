@@ -78,6 +78,19 @@ export function createDevMockProvider(): MockProvider {
     })
     .on("memory.summarize", () => "Friendly follower who talks sneakers.")
     .on("config.test", () => "OK")
+    .on("profile.kit", () => ({
+      display_name: "Zuri | Sneakers & Kampala",
+      usernames: ["zuri.kicks", "zuri_rotation", "Zuri Kampala!"],
+      bios: [
+        { style: "clean", text: "Kampala sneaker & street-style diaries 👟\nRotations, fit checks, city days\nAI creator by FeetBit" },
+        { style: "playful", text: "Collecting pairs faster than excuses 👟✨ Kampala days, clean fits, strong coffee" },
+        { style: "community", text: "Your daily sneaker fix from Kampala 👟\nTell me your grail in the comments 👇\n🤖 AI creator" },
+      ],
+      category: "Digital creator",
+      link_idea: "FeetBit store page or a link-in-bio with the latest drops",
+      highlights: ["Rotation", "Fit checks", "Kampala", "Drops", "Ask Zuri", "A really long highlight name"],
+      first_story: "A poll: which pair should I wear tomorrow?",
+    }))
     .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
     .on("persona.compose", (r) => devPersona(lastUser(r)))
     .on("image.validate", () => ({

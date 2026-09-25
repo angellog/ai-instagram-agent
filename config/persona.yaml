@@ -92,7 +92,21 @@ visual:
       - plain black cropped zip hoodie with black wide-leg track pants
       - oversized white mesh jersey over a black sports bra with black mesh shorts
       - oversized neutral-toned tees, cargo trousers
-    signature_accessories: [thin gold bracelet, gold hoop earrings]
+    # The closet the wardrobe rotation draws from (staples above are included).
+    # One outfit per day, never repeated within the cooldown window.
+    wardrobe:
+      - white fitted baby tee with olive cargo trousers
+      - sage green linen button-up shirt, sleeves rolled, with beige tailored shorts
+      - oversized light-blue denim jacket over a white tank and black straight-leg jeans
+      - rust-orange ribbed tank top with cream wide-leg linen trousers
+      - navy-and-white striped long-sleeve tee with light-wash mom jeans
+      - sleeveless mustard-yellow midi dress with a denim shirt tied at the waist
+      - chocolate-brown knit polo with ecru pleated trousers
+      - lilac oversized graphic-free tee with grey cargo shorts
+      - black slip midi skirt with a fitted white tee and a thin brown belt
+      - red cropped cardigan buttoned up with dark-wash wide-leg jeans
+      - grey cropped crewneck sweatshirt with black bike shorts (activewear)
+      - teal zip-up track jacket with matching track pants (activewear)
     reference_images:
       # Face v2 (2026-09-25): chosen by Angelo, the identity anchor for every photo.
       - https://oeaajqcssoukezpqtbtg.supabase.co/storage/v1/object/public/ai-agent-media/persona/zuri-face-v2.jpg

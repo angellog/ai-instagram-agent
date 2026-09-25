@@ -90,6 +90,7 @@ describe("health and auth", () => {
       "/admin/costs",
       "/admin/events",
       "/admin/hatch",
+      "/admin/profile",
     ]) {
       const r = await app.inject({ url });
       expect(r.statusCode, url).toBe(200);

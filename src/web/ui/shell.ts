@@ -45,6 +45,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     "Identity",
     [
       ["persona", "/admin/persona", "Persona & soul", "user"],
+      ["profile", "/admin/profile", "Profile kit", "instagram"],
       ["controls", "/admin/controls", "Controls", "sliders"],
     ],
   ],
@@ -105,6 +106,9 @@ const APP_JS = String.raw`
     Array.prototype.forEach.call(inp.files||[],function(file){var img=new Image();var url=URL.createObjectURL(file);img.onload=function(){var max=1600,s=Math.min(1,max/Math.max(img.width,img.height));var c=d.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);var data=c.toDataURL("image/jpeg",0.88);ta.value=(ta.value.trim()?ta.value.trim()+"\n":"")+data;URL.revokeObjectURL(url);
       if(prev){var t=d.createElement("img");t.src=data;t.alt="";prev.append(t)}toast("Added "+file.name)};img.onerror=function(){toast("Could not read "+file.name,"bad")};img.src=url})})});
+  // copy-to-clipboard buttons
+  d.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-copy]");if(!b)return;var el=d.getElementById(b.dataset.copy);if(!el)return;
+    navigator.clipboard.writeText(el.textContent).then(function(){toast("Copied")},function(){toast("Copy failed: select and copy manually","bad")})});
   // reveal/hide for secret inputs
   d.querySelectorAll("[data-reveal]").forEach(function(b){b.onclick=function(){var i=d.getElementById(b.dataset.reveal);if(!i)return;i.type=i.type==="password"?"text":"password";b.setAttribute("aria-pressed",i.type==="text")}});
 })();`;

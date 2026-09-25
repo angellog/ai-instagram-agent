@@ -3,6 +3,25 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.4: Wardrobe rotation + Profile kit
+
+**Wardrobe rotation** (fixes "same all-black fit two days running")
+- Root cause: the persona listed only 4 outfits, one of which matched the face reference photo. The director kept choosing it and the image model copied the reference's clothes. Repeats were only a soft 0.12 penalty.
+- `visual.character.wardrobe` is the closet: Zuri now has 16 outfits, and hatched personas get 12–16.
+- One outfit is planned per local day. It is deterministic, kept all day for continuity, and never repeats one worn within the cooldown window (up to 6 days).
+- Workouts get activewear.
+- The director may still choose freely, but repeats and wrong-kind outfits are rotated out, and the change is logged in continuity adjustments.
+- Image prompts now say the reference is for identity only and its clothing, background and light should be ignored.
+
+**Profile kit** (Instagram's API can't edit name, bio or photo)
+- A new Hatch step, Profile, comes right after the soul face is chosen. There is also a Profile kit page for existing influencers.
+- The text is written from the persona:
+  - a searchable Name (≤30 characters)
+  - three bios (≤150 characters, each states it's an AI creator)
+  - handle ideas, category, link idea, highlight names (≤15 characters) and a first-story idea
+  - copy buttons and live character counts
+- Profile picture: a free face-weighted crop of the soul face, or a designed headshot (one generation). It is previewed at circle and avatar sizes and can be downloaded.
+
 ## v1.0.3: Hatch an influencer (with the v1.0.1 and v1.0.2 work)
 
 The three releases shipped as one commit because the new console underpins all of them.

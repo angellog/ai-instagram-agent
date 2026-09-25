@@ -14,10 +14,12 @@ import { JOBS, jobId, queue } from "../../queue/queues.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
 import { newSoulVersion, trainHiggsfieldSoul } from "../../souls/manage.js";
 import { activeSoul, nextSoulId } from "../../souls/souls.js";
+import { composeProfileText, generateProfilePicture, profilePictureFromSoul } from "../../influencers/profile.js";
+import { PROFILE_CSS, profileKitBody } from "./profile.js";
 import { attempt, consoleRouter, render, reviewer, selectCookie, type Req } from "../console.js";
 import { action, button, card, empty, esc, field, header, icon, input, link, select, steps, textarea } from "../ui/kit.js";
 
-const STEPS = ["Brief", "Persona", "Soul", "Instagram", "Launch"];
+const STEPS = ["Brief", "Persona", "Soul", "Profile", "Instagram", "Launch"];
 const TIMEZONES = [
   "Africa/Kampala",
   "Africa/Nairobi",
@@ -33,7 +35,7 @@ const TIMEZONES = [
   "Australia/Sydney",
 ];
 
-type Step = "brief" | "persona" | "soul" | "instagram" | "launch";
+type Step = "brief" | "persona" | "soul" | "profile" | "instagram" | "launch";
 
 function readBrief(b: Record<string, string | undefined>): HatchBrief {
   const t = (k: string) => (b[k] ?? "").trim() || undefined;
@@ -74,7 +76,7 @@ function briefForm(b: Partial<HatchBrief> = {}, to = "/admin/hatch"): string {
 </form>`;
 }
 
-const stepIndex = (s: Step) => ["brief", "persona", "soul", "instagram", "launch"].indexOf(s);
+const stepIndex = (s: Step) => ["brief", "persona", "soul", "profile", "instagram", "launch"].indexOf(s);
 
 async function readiness(inf: InfluencerRow) {
   const [soul, acct, llmKey, providers] = await Promise.all([
@@ -105,7 +107,7 @@ export function registerHatch(app: FastifyInstance): void {
     async (req: Req, reply) => {
       const inProgress = await many<{ id: number; name: string }>("SELECT id, name FROM influencers WHERE status = 'hatching' ORDER BY id DESC");
       const body = `${header("Hatch an influencer", {
-        sub: "Five steps from an idea to a live account building an audience: brief → persona → soul (face + Soul ID) → Instagram → launch. Nothing posts until you launch, and it starts in human-approval mode.",
+        sub: "Six steps from an idea to a live account building an audience: brief → persona → soul (face + Soul ID) → profile kit → Instagram → launch. Nothing posts until you launch, and it starts in human-approval mode.",
       })}
 ${steps(STEPS, 0)}
 ${inProgress.length ? card(`<ul class="list">${inProgress.map((i) => `<li>${icon("egg", 16)}<b>${esc(i.name)}</b><span class="right">${link("Continue", `/admin/hatch/${i.id}`, { small: true })}</span></li>`).join("")}</ul>`, { title: "In progress" }) : ""}
@@ -150,7 +152,7 @@ ${card(briefForm(), { title: "The brief" })}`;
       const hasPersona = Boolean(inf.persona_yaml.trim());
       const ready = await readiness(inf);
       const wanted = (req.query.step as Step | undefined) ?? state.step ?? (hasPersona ? "persona" : "brief");
-      const step: Step = !hasPersona ? "brief" : (wanted === "instagram" || wanted === "launch") && !ready.soul ? "soul" : wanted;
+      const step: Step = !hasPersona ? "brief" : (wanted === "profile" || wanted === "instagram" || wanted === "launch") && !ready.soul ? "soul" : wanted;
       let content = "";
       let head = "";
 
@@ -204,10 +206,14 @@ ${card(
        ? `<label class="row small" style="margin-bottom:12px"><input type="checkbox" name="train_hf" value="1"> Also train a Higgsfield Soul ID (best consistency; uses Higgsfield credits, ~5 min)</label>`
        : `<p class="help">${icon("info", 14)} Add a Higgsfield key in Config to also train a provider-side Soul ID.</p>`
    }
-   <div class="row">${button(ready.soul ? "Replace soul & continue" : "Create soul & continue", { variant: "primary", icon: "arrowRight" })}${ready.soul ? link("Keep current soul", `/admin/hatch/${id}?step=instagram`, { variant: "ghost" }) : ""}</div>`,
+   <div class="row">${button(ready.soul ? "Replace soul & continue" : "Create soul & continue", { variant: "primary", icon: "arrowRight" })}${ready.soul ? link("Keep current soul", `/admin/hatch/${id}?step=profile`, { variant: "ghost" }) : ""}</div>`,
   { title: "2 · Name the soul" },
 )}
 </div></div></form>`;
+      } else if (step === "profile") {
+        head = PROFILE_CSS;
+        content = `${await withInfluencer(id, () => profileKitBody(`/admin/hatch/${id}/profile`))}
+<div class="row">${link("Continue to Instagram", `/admin/hatch/${id}?step=instagram`, { variant: "primary", icon: "arrowRight" })}<span class="meta">Set the profile up in the Instagram app while you create the account, then attach it here.</span></div>`;
       } else if (step === "instagram") {
         const appId = await setting("INSTAGRAM_APP_ID");
         content = `${ready.acct ? `<div class="callout ok">${icon("check")}<p>Attached <b>@${esc(ready.acct.username ?? ready.acct.ig_user_id)}</b>. ${link("Continue to launch", `/admin/hatch/${id}?step=launch`, { small: true, variant: "primary" })}</p></div>` : ""}
@@ -261,8 +267,8 @@ ${card(
         actions: action(`/admin/influencers/${id}/status`, "Discard", { variant: "danger", small: true, fields: { status: "archived" }, confirm: `Discard ${inf.name}? It is archived, not deleted.` }),
       })}
 ${steps(STEPS, stepIndex(step))}
-<nav class="row small" aria-label="Wizard steps" style="margin:-8px 0 16px">${(["persona", "soul", "instagram", "launch"] as Step[])
-        .filter((s) => hasPersona && (s === "persona" || s === "soul" || ready.soul))
+<nav class="row small" aria-label="Wizard steps" style="margin:-8px 0 16px">${(["persona", "soul", "profile", "instagram", "launch"] as Step[])
+        .filter((s) => hasPersona && (s === "persona" || s === "soul" || Boolean(ready.soul)))
         .map((s) => (s === step ? `<b>${esc(s)}</b>` : `<a href="/admin/hatch/${id}?step=${s}">${esc(s)}</a>`))
         .join(" · ")}</nav>
 ${content}`;
@@ -329,11 +335,35 @@ ${content}`;
             extra = `; Higgsfield training not started: ${errorMessage(e)}`;
           }
         }
-        await setHatchState(id, { step: "instagram" });
-        return { message: `Soul ${soul.soul_id} created${extra}`, to: `/admin/hatch/${id}?step=instagram` };
+        // Right after the face is chosen: the profile kit (text + a face-crop picture) so it's ready while the account is created.
+        await withInfluencer(id, async () => {
+          await profilePictureFromSoul().catch((e) => (extra += `; profile picture not made: ${errorMessage(e)}`));
+          await composeProfileText().catch((e) => (extra += `; profile text not written: ${errorMessage(e)}`));
+        });
+        await setHatchState(id, { step: "profile" });
+        return { message: `Soul ${soul.soul_id} created${extra}`, to: `/admin/hatch/${id}?step=profile` };
       }),
     { platform: true },
   );
+  for (const [path, fn, msg] of [
+    ["text", composeProfileText, "Profile text written"],
+    ["picture/crop", profilePictureFromSoul, "Profile picture cropped from the soul face"],
+    ["picture/generate", generateProfilePicture, "New profile headshot designed"],
+  ] as const) {
+    r.post(
+      `/admin/hatch/:id/profile/${path}`,
+      async (req: Req, reply) =>
+        attempt(req, reply, `/admin/hatch/${req.params.id}?step=profile`, async () => {
+          const id = Number(req.params.id);
+          await load(id);
+          await withInfluencer(id, async () => {
+            await fn();
+          });
+          return msg;
+        }),
+      { platform: true },
+    );
+  }
   r.post(
     "/admin/hatch/:id/instagram",
     async (req: Req, reply) =>

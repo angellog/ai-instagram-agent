@@ -39,6 +39,8 @@ export const personaSchema = z.object({
       body_type: z.string(),
       skin_tone: z.string(),
       recurring_clothing_preferences: z.array(z.string()).min(1),
+      // The full closet the wardrobe rotation draws from (staples above are included).
+      wardrobe: z.array(z.string()).default([]),
       signature_accessories: z.array(z.string()).default([]),
       // Public URLs of approved reference images. Sent to the image model on
       // every generation to hold facial and body identity.

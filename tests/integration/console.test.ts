@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { setting } from "../../src/config/settings.js";
+import { setControls } from "../../src/config/controls.js";
 import { withInfluencer } from "../../src/context.js";
 import { many, one } from "../../src/db/pool.js";
 import { runBenchmark } from "../../src/generation/benchmark.js";
@@ -121,7 +122,14 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     const soulPage = await app.inject({ url: `/admin/hatch/${id}?step=soul`, headers: { cookie } });
     expect(soulPage.body).toContain("Face option 1");
     const soul = await form(`/admin/hatch/${id}/soul`, { faces: [state.faces[1].url], soul_id: "soul_nova_prime" }, cookie);
-    expect(flash(soul)).toBe("Soul soul_nova_prime created");
+    expect(flash(soul)).toMatch(/^Soul soul_nova_prime created/);
+    expect(String(soul.headers.location)).toContain(`/admin/hatch/${id}?step=profile`);
+    // The profile kit is prepared right after the face is chosen: paste-ready text within Instagram's limits.
+    const kit = (await one<{ profile_kit: { text: { bios: Array<{ text: string }>; display_name: string } } }>("SELECT profile_kit FROM influencers WHERE id = $1", [id]))!.profile_kit;
+    expect(kit.text.display_name.length).toBeLessThanOrEqual(30);
+    expect(kit.text.bios.every((b) => [...b.text].length <= 150 && /\bAI\b/i.test(b.text))).toBe(true);
+    const profilePage = await app.inject({ url: `/admin/hatch/${id}?step=profile`, headers: { cookie } });
+    expect(profilePage.body).toContain("data-copy");
     expect(await one("SELECT soul_id, status FROM souls WHERE influencer_id = $1", [id])).toEqual({ soul_id: "soul_nova_prime", status: "active" });
     expect(await one("SELECT avatar_url FROM influencers WHERE id = $1", [id])).toEqual({ avatar_url: state.faces[1].url });
 
@@ -149,6 +157,7 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     expect(home.statusCode).toBe(200);
     expect(home.body).toContain("<title>Overview · Nova</title>");
     // …and the planner works in her context.
+    await setControls({ posting_window_start_hour: 0, posting_window_end_hour: 24 }, "test", id); // independent of the wall clock
     const planned = (await withInfluencer(id, async () => (await import("../../src/content/director.js")).planContent())) as { status: string; reason?: string };
     expect(planned, JSON.stringify(planned)).toMatchObject({ status: "accepted" });
   });
@@ -208,6 +217,26 @@ describe("Generation Control Center", () => {
     expect(await one("SELECT scores_source FROM generation_models WHERE id = $1", [m.id])).toEqual({ scores_source: "benchmark" });
     const page = await app.inject({ url: "/admin/generation/benchmarks" });
     expect(page.body).toContain("Leaderboard");
+    setStorageFetch(fetch);
+  });
+});
+
+describe("Profile kit", () => {
+  it("writes paste-ready profile text and makes a circle-safe profile picture from the soul", async () => {
+    const face = await sharp({ create: { width: 900, height: 1200, channels: 3, background: { r: 90, g: 60, b: 40 } } }).jpeg().toBuffer();
+    setStorageFetch(async () => new Response(new Uint8Array(face), { status: 200, headers: { "content-type": "image/jpeg" } }));
+    expect(flash(await form("/admin/profile/text", {}))).toBe("Profile text written");
+    expect(flash(await form("/admin/profile/picture/crop", {}))).toMatch(/cropped/);
+    expect(flash(await form("/admin/profile/picture/generate", {}))).toMatch(/designed/);
+    const kit = (await one<{ profile_kit: { text: { usernames: string[]; highlights: string[]; bios: Array<{ text: string }> }; pictures: Array<{ url: string; kind: string }> } }>("SELECT profile_kit FROM influencers WHERE id = 1"))!.profile_kit;
+    expect(kit.text.usernames.every((u) => /^[a-z0-9._]{3,30}$/.test(u))).toBe(true);
+    expect(kit.text.highlights.every((h) => [...h].length <= 15)).toBe(true);
+    expect(kit.text.bios.every((b) => [...b.text].length <= 150 && /\bAI\b/i.test(b.text))).toBe(true);
+    expect(kit.pictures.map((p) => p.kind)).toEqual(["generated", "crop"]);
+    expect(kit.pictures[1].url).toContain("/influencers/zuri/profile/pp-crop-");
+    const page = await app.inject({ url: "/admin/profile" });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("pp-circle");
     setStorageFetch(fetch);
   });
 });
