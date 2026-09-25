@@ -28,7 +28,7 @@ afterAll(async () => {
 
 const post = (url: string, body: Record<string, string> = {}) =>
   app.inject({ method: "POST", url, payload: new URLSearchParams(body).toString(), headers: { "content-type": "application/x-www-form-urlencoded" } });
-const flash = (r: { headers: Record<string, unknown> }) => decodeURIComponent(String(r.headers.location ?? "")).replace(/^.*flash=/, "");
+const flash = (r: { headers: Record<string, unknown> }) => decodeURIComponent(String(r.headers.location ?? "").split("#")[0]).replace(/^.*flash=/, "");
 
 async function draft(): Promise<string> {
   const plan = (await planContent()) as { postId: string };

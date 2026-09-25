@@ -31,7 +31,7 @@ const form = (url: string, body: Record<string, string | string[]>, cookie = "")
 };
 const json = (url: string, body: unknown, cookie = "") =>
   app.inject({ method: "POST", url, payload: JSON.stringify(body), headers: { "content-type": "application/json", accept: "application/json", ...(cookie ? { cookie } : {}) } });
-const flash = (r: { headers: Record<string, unknown> }) => decodeURIComponent(String(r.headers.location ?? "")).replace(/^.*flash=/, "");
+const flash = (r: { headers: Record<string, unknown> }) => decodeURIComponent(String(r.headers.location ?? "").split("#")[0]).replace(/^.*flash=/, "");
 const cookieOf = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat((r.headers["set-cookie"] as string | string[]) ?? [])[0] ?? "").split(";")[0];
 
 describe("Config page", () => {
