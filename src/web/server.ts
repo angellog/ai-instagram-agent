@@ -172,7 +172,7 @@ button{background:#c8410e;border:0;color:#fff;font-weight:600;cursor:pointer}inp
   });
   app.post("/admin/login", async (req: FastifyRequest<{ Body: Record<string, string> }>, reply) => {
     const token = env().ADMIN_TOKEN;
-    const given = req.body?.token ?? "";
+    const given = String(req.body?.token ?? "").trim(); // pasted tokens often carry a stray space or newline
     if (!token || !safeEqual(given, token)) return reply.code(401).type("text/html").send(`Wrong token. <a href="/admin/login">Try again</a>`);
     const secure = env().PUBLIC_BASE_URL.startsWith("https://") ? "; Secure" : "";
     reply.header("set-cookie", `${SESSION_COOKIE}=${sessionValue(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}${secure}`);
