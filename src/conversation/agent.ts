@@ -185,12 +185,22 @@ export async function processInteraction(interactionId: number): Promise<Convers
   let action = decision.action;
   let text = truncate(decision.response.trim(), p.communication_style.max_reply_chars);
 
-  // Not every comment deserves a reply (brief §28).
-  if ((action === "reply" || action === "ask_clarifying") && decision.reply_value === "low") action = "ignore";
-  if (action === "reply" && decision.reply_value === "worthwhile" && !sampled(it.id, c.optional_reply_rate) && it.kind !== "dm") {
+  // Not every comment deserves a reply (brief §28), but a question put to her
+  // always does: sampling only thins out optional warmth, never answers.
+  const directQuestion = perception.is_question || decision.action === "ask_clarifying";
+  let override: string | undefined;
+  if ((action === "reply" || action === "ask_clarifying") && decision.reply_value === "low" && !directQuestion) {
     action = "ignore";
+    override = "low reply value";
   }
-  if ((action === "reply" || action === "ask_clarifying" || action === "escalate") && !text) action = action === "escalate" ? "escalate" : "ignore";
+  if (action === "reply" && decision.reply_value === "worthwhile" && !directQuestion && it.kind !== "dm" && !sampled(it.id, c.optional_reply_rate)) {
+    action = "ignore";
+    override = `optional reply not sampled (rate ${c.optional_reply_rate})`;
+  }
+  if ((action === "reply" || action === "ask_clarifying") && !text) {
+    action = "ignore";
+    override = "model produced no reply text";
+  }
 
   const decisionBase = {
     agent: "conversation_agent",
@@ -213,7 +223,13 @@ export async function processInteraction(interactionId: number): Promise<Convers
   };
 
   if (action === "ignore") {
-    await recordDecision({ ...decisionBase, action: "ignore", reason: decision.reason, latencyMs: Date.now() - started });
+    // When code overrode the model, say so: the model's own reason argued for replying.
+    await recordDecision({
+      ...decisionBase,
+      action: "ignore",
+      reason: override ? `${override} (model: ${decision.action}/${decision.reply_value}: ${decision.reason})` : decision.reason,
+      latencyMs: Date.now() - started,
+    });
     await enqueueMemory(it.id, true);
     return finish("ignored", "ignored");
   }

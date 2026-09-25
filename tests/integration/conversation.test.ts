@@ -158,3 +158,36 @@ describe("conversation agent", () => {
     expect(ops.map((o) => o.operation)).toEqual(expect.arrayContaining(["conversation.classify", "conversation.decide", "safety.moderate"]));
   });
 });
+
+describe("direct questions", () => {
+  it("are never dropped by optional-reply sampling", async () => {
+    await setControls({ optional_reply_rate: 0 });
+    setLLM(new LLM(createDevMockProvider()
+      .on("conversation.classify", () => ({ intent: "question_about_persona", confidence: 0.9, sentiment: "positive", language: "en", is_question: true, needs_memory: false, needs_business_info: false }))
+      .on("conversation.decide", () => ({ action: "reply", channel: "public", reply_value: "worthwhile", response: "A little spot near Kololo!", used_memory_ids: [], used_knowledge_ids: [], workflow: "none", content_request_topic: null, confidence: 0.8, reason: "Direct question deserves an answer." }))));
+    const id = await ingest(commentPayload({ commentId: "q1", text: "Which gym is that?" }));
+    expect(await processInteraction(id)).toBe("replied");
+  });
+
+  it("records when code overrides the model", async () => {
+    await setControls({ optional_reply_rate: 0 });
+    setLLM(new LLM(createDevMockProvider()
+      .on("conversation.classify", () => ({ intent: "compliment", confidence: 0.9, sentiment: "positive", language: "en", is_question: false, needs_memory: false, needs_business_info: false }))
+      .on("conversation.decide", () => ({ action: "reply", channel: "public", reply_value: "worthwhile", response: "Thank you!", used_memory_ids: [], used_knowledge_ids: [], workflow: "none", content_request_topic: null, confidence: 0.8, reason: "Kind words." }))));
+    const id = await ingest(commentPayload({ commentId: "q2", text: "love this fit" }));
+    expect(await processInteraction(id)).toBe("ignored");
+    const d = await one<{ reason: string }>("SELECT reason FROM agent_decisions WHERE subject_id = $1", [String(id)]);
+    expect(d!.reason).toMatch(/^optional reply not sampled \(rate 0\) \(model: reply\/worthwhile: Kind words\.\)/);
+  });
+
+  it("can be re-run after being ignored, but never once a reply exists", async () => {
+    const { rerunInteraction } = await import("../../src/web/admin.js");
+    const id = await ingest(commentPayload({ commentId: "q3", text: "🔥🔥" }));
+    expect(await processInteraction(id)).toBe("ignored");
+    expect(await rerunInteraction(id)).toMatch(/queued/);
+    expect(await one("SELECT status FROM interactions WHERE id = $1", [id])).toEqual({ status: "pending" });
+    const id2 = await ingest(commentPayload({ commentId: "q4", text: "what are you reading this week?" }));
+    await processInteraction(id2);
+    expect(await rerunInteraction(id2)).toMatch(/already exists|Only ignored/);
+  });
+});

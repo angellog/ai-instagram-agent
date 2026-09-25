@@ -32,6 +32,19 @@ export async function removeSlide(postId: string, position: number): Promise<str
   });
 }
 
+export async function rerunInteraction(id: number): Promise<string> {
+  const sent = await one("SELECT 1 FROM messages WHERE interaction_id = $1 AND direction = 'out' AND status IN ('sent','sending','pending_review')", [id]);
+  if (sent) return "A reply already exists for this interaction";
+  const r = await one<{ id: number }>(
+    "UPDATE interactions SET status = 'pending', last_error = NULL, updated_at = now() WHERE id = $1 AND status IN ('ignored','failed') RETURNING id",
+    [id],
+  );
+  if (!r) return "Only ignored or failed interactions can be re-run";
+  await one("DELETE FROM messages WHERE interaction_id = $1 AND direction = 'out' AND status IN ('failed','rejected','blocked','dry_run')", [id]);
+  await queue("conversation").add(JOBS.conversationProcess, { interactionId: id }, { jobId: jobId("interaction", id, "rerun", Date.now()) });
+  return "Re-run queued; refresh in a few seconds";
+}
+
 type Req = FastifyRequest<{ Params: Record<string, string>; Querystring: Record<string, string>; Body: Record<string, string> }>;
 
 async function page(req: Req, reply: FastifyReply, title: string, body: string) {
@@ -357,10 +370,21 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
           esc(r.text),
           `${esc(r.intent ?? "")} ${esc(r.action ?? "")}<div class="muted small">${esc(r.reason ?? "")}</div>`,
           r.reply ? `${esc(r.reply)} ${pill(r.reply_status)}` : "—",
-          pill(r.status),
+          `${pill(r.status)}${
+            ["ignored", "failed"].includes(r.status) && !r.reply
+              ? `<form class="inline" method="post" action="/admin/interactions/${r.id}/rerun"><button class="small">Re-run</button></form>`
+              : ""
+          }`,
         ]),
       )}</div>`,
     );
+  });
+
+  // Process an interaction again (e.g. after a policy fix). Only when nothing
+  // was sent for it, so a re-run can never produce a second reply.
+  app.post("/admin/interactions/:id/rerun", async (req: Req, reply) => {
+    const r = await rerunInteraction(Number(req.params.id));
+    return back(reply, "/admin/conversations", r);
   });
 
   // ------------------------------------------------------------ people / memory
