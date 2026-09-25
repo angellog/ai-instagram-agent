@@ -82,3 +82,17 @@ describe("health and auth", () => {
     expect(decodeURIComponent(bad.headers.location as string)).toMatch(/Not saved/);
   });
 });
+
+describe("retry production", () => {
+  it("resets a failed post to draft and queues production", async () => {
+    await one("INSERT INTO content_ideas (id, format, structure, topic, hook, status) VALUES (1, 'single', 'moment', 't', 'h', 'failed')");
+    const p = await one<{ id: string }>("INSERT INTO posts (content_idea_id, media_type, caption, status) VALUES (1, 'IMAGE', 'c', 'qc_failed') RETURNING id");
+    const r = await app.inject({ method: "POST", url: `/admin/posts/${p!.id}/retry` });
+    expect(decodeURIComponent(r.headers.location as string)).toMatch(/Production restarted/);
+    expect(await one("SELECT status FROM posts WHERE id = $1", [p!.id])).toEqual({ status: "draft" });
+    expect(await one("SELECT status FROM content_ideas WHERE id = 1")).toEqual({ status: "accepted" });
+    expect((await queue("content").getJobs(["waiting"])).map((j) => j.name)).toContain("content.produce");
+    const again = await app.inject({ method: "POST", url: `/admin/posts/${p!.id}/retry` });
+    expect(decodeURIComponent(again.headers.location as string)).toMatch(/Only failed posts/);
+  });
+});

@@ -78,9 +78,9 @@ export async function visionQc(o: {
       `Image 1 is the candidate.${images.length > 1 ? " Image 2 is the character reference." : ""}`,
       `Brief: ${o.shotBrief}`,
       o.includeCharacter
-        ? "It should show exactly one woman who is clearly the same person as the reference (face, skin tone, build)."
+        ? "It should show one woman who is the same person as the reference. Judge identity only from what is visible: if her face is small, turned or partly hidden (phone, mirror, hair), answer character_consistent 'yes' unless she is clearly a different person (different skin tone, face structure or hair)."
         : "This is a detail/product/environment shot. Her hands, arms, legs or feet partly in frame are FINE and natural; only a visible face or a second person counts as extra_people.",
-      "Set acceptable=false only for an anatomy problem, garbled text/logos, an extra person, identity mismatch, or an image that clearly misses the brief's subject. Small differences in props, counts or framing are fine; a real phone photo is never perfect.",
+      "Only these are real problems: anatomy errors, garbled text/logos, an extra person, a clearly different person, or the wrong subject entirely. Pose, props, exact framing or a missing detail from the brief are NOT problems; a real phone photo is never exactly as planned. List only real problems in issues.",
     ].join("\n"),
   });
 }
@@ -91,6 +91,8 @@ export function visionVerdict(v: VisionQc, includeCharacter: boolean): { ok: boo
   if (v.garbled_text_or_logos) problems.push("garbled text or logos");
   if (v.extra_people) problems.push("extra people");
   if (includeCharacter && v.character_consistent === "no") problems.push("character does not match reference");
-  const ok = !v.anatomy_issues && !v.garbled_text_or_logos && !v.extra_people && !(includeCharacter && v.character_consistent === "no") && (v.acceptable || v.issues.length === 0);
-  return { ok, problems: [...new Set(problems)] };
+  // Hard failures only. `acceptable`/`matches_brief` are advisory: a photo that
+  // strays from the planned pose or props is still a good photo.
+  const ok = !v.anatomy_issues && !v.garbled_text_or_logos && !v.extra_people && !(includeCharacter && v.character_consistent === "no");
+  return { ok, problems: ok ? [] : [...new Set(problems)] };
 }

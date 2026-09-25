@@ -158,8 +158,8 @@ export function registerAdmin(app: FastifyInstance): void {
         [id],
       ),
       many<Record<string, any>>("SELECT * FROM engagement_metrics WHERE post_id = $1 ORDER BY collected_at", [id]),
-      many<{ position: number; status: string; model: string; credits: number | null; error: string | null; attempt: number }>(
-        "SELECT position, status, model, credits, error, attempt FROM generation_jobs WHERE post_id = $1 ORDER BY id",
+      many<{ position: number; status: string; model: string; credits: number | null; error: string | null; attempt: number; result_urls: string[] }>(
+        "SELECT position, status, model, credits, error, attempt, result_urls FROM generation_jobs WHERE post_id = $1 ORDER BY id",
         [id],
       ),
       one<{ usd: number }>("SELECT coalesce(sum(cost_usd),0)::float AS usd FROM cost_ledger WHERE ref_type = 'post' AND ref_id = $1", [id]),
@@ -170,6 +170,9 @@ export function registerAdmin(app: FastifyInstance): void {
         : "",
       ["approved", "failed"].includes(p.status) && assets.length
         ? `<form class="inline" method="post" action="/admin/posts/${id}/publish"><button>Publish now</button></form>`
+        : "",
+      ["qc_failed", "failed"].includes(p.status) && !p.ig_media_id
+        ? `<form class="inline" method="post" action="/admin/posts/${id}/retry"><button>Retry production</button></form>`
         : "",
       !["published", "rejected"].includes(p.status) ? `<form class="inline" method="post" action="/admin/posts/${id}/reject"><button class="danger">Reject</button></form>` : "",
     ].join(" ");
@@ -185,8 +188,16 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
       "Collected 24h, 72h and 7d after publishing.",
     )}</div>
 <div class="card"><h2>Image generation</h2>${table(
-      ["Slide", "Attempt", "Status", "Model", "Credits", "Error"],
-      jobs.map((j) => [String(j.position + 1), String(j.attempt), pill(j.status), esc(j.model), String(j.credits ?? "—"), esc(j.error ?? "")]),
+      ["Slide", "Attempt", "Status", "Model", "Credits", "Image", "Error"],
+      jobs.map((j) => [
+        String(j.position + 1),
+        String(j.attempt),
+        pill(j.status),
+        esc(j.model),
+        String(j.credits ?? "—"),
+        j.result_urls?.[0]?.startsWith("http") ? `<a href="${esc(j.result_urls[0])}" target="_blank">view</a>` : "—",
+        esc(j.error ?? ""),
+      ]),
     )}</div></div>
 <div class="card"><h2>Decision trail</h2>${table(
       ["Agent", "Action", "Safety", "Reason", "When"],
@@ -217,6 +228,19 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
     await one("UPDATE posts SET status = 'approved', last_error = NULL WHERE id = $1 AND status IN ('approved','failed') AND ig_media_id IS NULL", [id]);
     await queue("publish").add(JOBS.postPublish, { postId: id }, { jobId: jobId("publish", id, "manual", Date.now()) });
     return back(reply, `/admin/posts/${id}`, "Publishing queued");
+  });
+  // Re-run production for a failed post. Slides that already passed are kept;
+  // only missing slides are generated again.
+  app.post("/admin/posts/:id/retry", async (req: Req, reply) => {
+    const id = req.params.id;
+    const r = await one<{ id: string }>(
+      "UPDATE posts SET status = 'draft', last_error = NULL, updated_at = now() WHERE id = $1 AND status IN ('qc_failed','failed') AND ig_media_id IS NULL RETURNING id",
+      [id],
+    );
+    if (!r) return back(reply, `/admin/posts/${id}`, "Only failed posts can be retried");
+    await one("UPDATE content_ideas SET status = 'accepted', updated_at = now() WHERE id = (SELECT content_idea_id FROM posts WHERE id = $1)", [id]);
+    await queue("content").add(JOBS.contentProduce, { postId: id }, { jobId: jobId("produce", id, "retry", Date.now()) });
+    return back(reply, `/admin/posts/${id}`, "Production restarted");
   });
   app.post("/admin/posts/:id/reject", async (req: Req, reply) => {
     const id = req.params.id;

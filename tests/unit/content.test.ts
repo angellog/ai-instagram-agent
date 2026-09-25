@@ -139,6 +139,11 @@ describe("vision QC verdict", () => {
     const { visionVerdict } = await import("../../src/content/qc.js");
     expect(visionVerdict(base, false).ok).toBe(true);
   });
+  it("does not fail a good photo for pose or prop differences from the brief", async () => {
+    const { visionVerdict } = await import("../../src/content/qc.js");
+    const r = visionVerdict({ ...base, acceptable: false, matches_brief: false, character_consistent: "yes", issues: ["phone not visible in mirror"] }, true);
+    expect(r).toEqual({ ok: true, problems: [] });
+  });
   it("rejects anatomy problems, garbled text, extra people and identity drift", async () => {
     const { visionVerdict } = await import("../../src/content/qc.js");
     expect(visionVerdict({ ...base, anatomy_issues: true }, false).ok).toBe(false);
