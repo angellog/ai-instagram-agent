@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { controlsSchema, getControls, setControls, type Controls } from "../config/controls.js";
 import { env } from "../config/env.js";
 import { costByOperation, costReport, spendSummary } from "../cost/ledger.js";
-import { many, one } from "../db/pool.js";
+import { many, one, tx } from "../db/pool.js";
 import { primaryAccount } from "../instagram/accounts.js";
 import { storeWebhookEvent } from "../ingest/webhook.js";
 import { forgetUser } from "../memory/store.js";
@@ -11,6 +11,26 @@ import { JOBS, jobId, queue, queueCounts } from "../queue/queues.js";
 import { schedulePublish } from "../content/produce.js";
 import { ago, bar, esc, layout, pill, table, usd } from "./html.js";
 import { approveReview, listReviews, rejectReview } from "./reviews.js";
+
+/** Post states in which the operator may still edit slides. */
+const EDITABLE = ["awaiting_review", "dry_run", "qc_failed"];
+
+export async function removeSlide(postId: string, position: number): Promise<string> {
+  return tx(async (c) => {
+    const post = (await c.query<{ status: string }>("SELECT status FROM posts WHERE id = $1 FOR UPDATE", [postId])).rows[0];
+    if (!post) return "Post not found";
+    if (!EDITABLE.includes(post.status)) return `Slides can't be changed while the post is ${post.status}`;
+    const n = (await c.query<{ n: number }>("SELECT count(*)::int AS n FROM post_assets WHERE post_id = $1", [postId])).rows[0].n;
+    if (n <= 1) return "A post needs at least one image";
+    const del = await c.query("DELETE FROM post_assets WHERE post_id = $1 AND position = $2", [postId, position]);
+    if (!del.rowCount) return "No such slide";
+    // Shift later slides down (via negative positions to respect the unique index).
+    await c.query("UPDATE post_assets SET position = -position - 1 WHERE post_id = $1 AND position > $2", [postId, position]);
+    await c.query("UPDATE post_assets SET position = -position - 2 WHERE post_id = $1 AND position < 0", [postId]);
+    if (n - 1 === 1) await c.query("UPDATE posts SET media_type = 'IMAGE', updated_at = now() WHERE id = $1", [postId]);
+    return `Removed slide ${position + 1}; ${n - 1} left`;
+  });
+}
 
 type Req = FastifyRequest<{ Params: Record<string, string>; Querystring: Record<string, string>; Body: Record<string, string> }>;
 
@@ -180,7 +200,19 @@ export function registerAdmin(app: FastifyInstance): void {
 <div class="card"><div class="row">${pill(p.status)} ${pill(p.safety_level)} <span class="muted">${esc(p.format ?? "")} / ${esc(p.structure ?? "")} · repetition ${p.repetition_score ?? "—"} · cost ${usd(costs?.usd)}</span></div>
 <div class="row" style="margin-top:8px">${actions}${p.permalink ? `<a class="btn" href="${esc(p.permalink)}" target="_blank">Open on Instagram</a>` : ""}</div>
 ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}</p>` : ""}</div>
-<div class="card"><h2>Slides</h2><div class="slides">${assets.map((a) => (a.public_url ? `<img src="${esc(a.public_url)}" title="${esc(a.overlay?.alt_text ?? "")}">` : "")).join("") || `<span class="muted">Not generated yet</span>`}</div></div>
+<div class="card"><h2>Slides</h2><div class="slides">${
+      assets
+        .map((a) =>
+          a.public_url
+            ? `<div><img src="${esc(a.public_url)}" title="${esc(a.overlay?.alt_text ?? "")}">${
+                EDITABLE.includes(p.status) && assets.length > 1
+                  ? `<form method="post" action="/admin/posts/${id}/slides/${a.position}/remove" onsubmit="return confirm('Remove slide ${a.position + 1}?')"><button class="danger small">Remove slide ${a.position + 1}</button></form>`
+                  : ""
+              }</div>`
+            : "",
+        )
+        .join("") || `<span class="muted">Not generated yet</span>`
+    }</div></div>
 <div class="card"><h2>Caption</h2><pre>${esc(p.caption)}</pre><p class="small muted">Hook: ${esc(p.hook ?? "")}</p></div>
 <div class="grid"><div class="card"><h2>Engagement</h2>${table(
       ["Checkpoint", "Reach", "Likes", "Comments", "Saves", "Shares", "Follows", "Score"],
@@ -207,6 +239,14 @@ ${p.last_error ? `<p class="small" style="color:var(--bad)">${esc(p.last_error)}
       .map((a) => `<details><summary>Slide ${a.position + 1} prompt</summary><pre>${esc(a.prompt ?? "")}</pre></details>`)
       .join("")}${p.repetition_detail ? `<details><summary>Repetition detail</summary><pre>${esc(JSON.stringify(p.repetition_detail, null, 2))}</pre></details>` : ""}</div>`;
     return page(req, reply, "Post", body);
+  });
+
+  // Drop one slide from a draft before it is approved; positions are compacted.
+  app.post("/admin/posts/:id/slides/:pos/remove", async (req: Req, reply) => {
+    const id = req.params.id;
+    const pos = Number(req.params.pos);
+    const r = await removeSlide(id, pos);
+    return back(reply, `/admin/posts/${id}`, r);
   });
 
   app.post("/admin/posts/:id/approve", async (req: Req, reply) => {
