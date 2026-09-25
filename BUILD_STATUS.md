@@ -18,18 +18,19 @@ _Updated 2026-09-24._
 | 10 | Autonomous operation (schedulers, sweeper, controls) | ✅ built · ⏸ live in `human_approval` | failures.test, live worker logs |
 
 ## Tests
-`npm test` → **138 passed** (12 files): 90 unit, 46 integration (real Postgres + Redis, including 9 failure-mode tests), 2 end-to-end flows through real BullMQ workers. OpenReply relay: 10 new tests, 163 total passing there.
+`npm test` → **141 passed** (13 files): 93 unit, 46 integration (real Postgres + Redis, including 9 failure-mode tests), 2 end-to-end flows through real BullMQ workers. OpenReply relay: 10 new tests, 163 total passing there.
 
 Brief §23 coverage: memory extraction, intent classification, repetition detection, content planning, safety classification, API adapters (unit) · event→worker, worker→LLM/DB/KIE/publishing API (integration) · Instagram API failure, LLM timeout, KIE failure, duplicate webhook, duplicate publishing, DB failure, Redis failure, malformed LLM output (failure) · both E2E chains.
 
-## Blocked on the operator (cannot be done by the build)
+## Operator steps
 
-0. **Anthropic credits**: the key from telegram-agents is out of credit (live check 2026-09-25: "credit balance is too low"). Top it up, or set another key / an OpenAI-compatible provider.
-
-1. **Persona Instagram account**: create/choose the Business account for Zuri, make it public, turn on the in-app "AI-generated profile" label, then connect it (docs/deployment/RAILWAY.md).
-2. **Credentials to Railway**: `scripts/set-railway-secrets.sh --from-feetbit` (LLM, kie, Supabase, imgbb) and the Instagram/Meta values.
-3. **Merge angellog/openreply#1** and set the three `AGENT_RELAY_*` variables on OpenReply (Vercel + worker).
-4. **Railway GitHub App access** to `angellog/ai-instagram-agent` for push-to-deploy (until then `railway up`).
+- [x] Claude key with credit (2026-09-25; live DM test passed)
+- [x] Persona account connected: @zurikarale, IG user id 17841427470541858
+- [x] Credentials on Railway (`scripts/set-railway-secrets.sh`)
+- [x] angellog/openreply#1 merged
+- [x] Railway GitHub App installed for this repo (push to `main` deploys)
+- [ ] Set `AGENT_RELAY_URL`, `AGENT_RELAY_SECRET`, `AGENT_RELAY_ACCOUNT_IDS` on OpenReply (Vercel + Railway worker), values in `output/openreply-relay.env`
+- [ ] 24h in `dry_run`, then `human_approval`, then `autonomous`
 
 ## Known limitations
 - Story mentions are recorded but not answered (no reply endpoint for mentions).
