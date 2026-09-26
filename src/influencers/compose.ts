@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { PermanentError } from "../lib/errors.js";
 import { llm } from "../llm/llm.js";
 import { parsePersona } from "../persona/loader.js";
+import { SLOTS } from "../persona/schema.js";
 
 /**
  * Hatch step 1: turn a short operator brief into a complete, validated persona
@@ -53,9 +54,12 @@ export function briefText(b: HatchBrief): string {
     .join("\n");
 }
 
+const WEEKDAYS = "monday, tuesday, wednesday, thursday, friday, saturday, sunday";
+
 const SYSTEM = `You design believable AI Instagram creator personas. Output ONLY a YAML document (no code fences, no commentary)
 with exactly the same top-level keys and nesting as the TEMPLATE. Rules:
-- Keep it specific and lived-in: real neighbourhoods, habits, routines; 6-12 daily activities across early_morning/morning/midday/afternoon/evening/night slots with location ids that exist under visual.locations.
+- Keep it specific and lived-in: real neighbourhoods, habits, routines; 6-12 daily activities with location ids that exist under visual.locations.
+- Time slots (daily_life.activities[].slot and visual.locations[].slots) must be EXACTLY one of: ${SLOTS.join(", ")}. Weekday names are lowercase: ${WEEKDAYS}.
 - identity.ai_disclosure must plainly say this is an AI creator with AI-generated photos.
 - visual.character.reference_images must be an empty list [] (faces are chosen in the next step).
 - visual.character.wardrobe: 6-10 complete signature outfits. visual.character.closet: SEPARATES that remix like a real closet (any top works with any bottom): 10-12 tops, 7-9 bottoms, 3-4 layers, 4-5 one_pieces (dresses/jumpsuits; skip if not their style), 3-4 activewear sets. Specific colours, fabrics and cuts, mostly versatile neutrals plus a few colour pops; no brand logos.

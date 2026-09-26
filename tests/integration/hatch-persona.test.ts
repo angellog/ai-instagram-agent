@@ -50,6 +50,9 @@ describe("Hatch: persona is written in the background", () => {
     expect(call.timeoutMs).toBe(COMPOSE_TIMEOUT_MS);
     expect(call.maxTokens).toBeGreaterThanOrEqual(10_000); // room for the whole closet
     expect(call.messages[0].content).toContain("Languages: English,Runyankore, Luganda");
+    // The instructions name only slots the schema accepts (they used to ask for "early_morning"/"midday").
+    expect(call.system).toContain("EXACTLY one of: morning, late_morning, lunch, afternoon, evening, night");
+    expect(call.system).not.toMatch(/early_morning|midday/);
     expect(await state(inf.id)).toMatchObject({ persona_status: "done", step: "persona" });
     // Costs and events belong to the new influencer, not whoever is selected.
     expect(await many("SELECT DISTINCT influencer_id::int AS i FROM cost_ledger WHERE operation = 'persona.compose'")).toEqual([{ i: Number(inf.id) }]);

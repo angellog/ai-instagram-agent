@@ -3,6 +3,20 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.10: Hatch persona drafts pass validation
+
+**Fixed:** with v1.0.9 the persona job ran to completion (about 2.5 minutes, no timeout), but Kemigisha's draft was rejected twice: `daily_life.activities.5.slot: Invalid option`.
+- **Cause:** the compose instructions asked for `early_morning/morning/midday/afternoon/evening/night` time slots, but the schema only accepts `morning, late_morning, lunch, afternoon, evening, night`. The model did as told, and the repair round repeated the same mistake.
+- **Now:**
+  - The instructions list the exact slots and lowercase weekday names, generated from the schema so the two can't drift apart again.
+  - The persona parser forgives common near-misses and stores the canonical form:
+    - `early_morning` → morning
+    - `midday`/`noon` → lunch
+    - `late_night` → night
+    - `Sun`/`Sundays` → sunday
+  - This also covers hand edits on the Persona step. Unknown values are still rejected with a readable path.
+- Tests: 261.
+
 ## v1.0.9: Hatching no longer times out
 
 **Fixed:** hatching failed with `llm persona.compose timed out after 90000ms` (seen hatching Kemigisha Cynthiana).
