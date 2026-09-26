@@ -47,7 +47,10 @@ describe("trends and news awareness", () => {
     expect(requested).toContain("https://sneakernews.com/feed/");
     expect(requested).toHaveLength(15);
     expect(r.kept).toBeGreaterThan(0);
-    const b = await one<{ items: Array<{ title: string }> }>("SELECT items FROM trend_briefs ORDER BY id DESC LIMIT 1");
+    const b = await one<{ items: Array<{ title: string; source: string }> }>("SELECT items FROM trend_briefs ORDER BY id DESC LIMIT 1");
+    const perLabel: Record<string, number> = {};
+    for (const i of b!.items) perLabel[i.source.split(" · ")[0]] = (perLabel[i.source.split(" · ")[0]] ?? 0) + 1;
+    expect(Math.max(...Object.values(perLabel))).toBeLessThanOrEqual(2);
     const titles = b!.items.map((i) => i.title).join(" | ");
     expect(titles).not.toMatch(/President|killed/);
     expect(await many("SELECT 1 FROM trend_items")).not.toHaveLength(0);

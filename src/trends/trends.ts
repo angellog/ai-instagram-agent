@@ -127,7 +127,15 @@ export async function refreshTrends(): Promise<{ headlines: number; kept: number
   const items: BriefItem[] = out.items
     .map((it) => ({ h: candidates[it.index - 1], it }))
     .filter((x): x is { h: Headline; it: (typeof out.items)[number] } => Boolean(x.h) && !BLOCKED.test(x.it.note))
-    .map(({ h, it }) => ({ title: h.title, link: h.link, source: h.source, note: it.note.slice(0, 140), use: it.use }));
+    .map(({ h, it }) => ({ title: h.title, link: h.link, source: h.source, note: it.note.slice(0, 140), use: it.use }))
+    // The model doesn't always respect "at most 2 per tag"; enforce it so every source gets a voice.
+    .filter(
+      (
+        (count) => (i: BriefItem) =>
+          (count[i.source.split(" · ")[0]] = (count[i.source.split(" · ")[0]] ?? 0) + 1) <= 2
+      )({} as Record<string, number>),
+    )
+    .slice(0, p.trends.max_items);
   await one("INSERT INTO trend_briefs (influencer_id, items, skipped) VALUES ($1, $2, $3)", [influencerId(), JSON.stringify(items), fresh.length - items.length]);
   await recordEvent("info", "trends", `Trends refreshed: ${items.length} kept of ${fresh.length}`, { errors: errors.length ? errors : undefined });
   return { headlines: fresh.length, kept: items.length, errors };
