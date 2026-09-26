@@ -12,7 +12,7 @@ import { env } from "../config/env.js";
  *                 image.generate (flow children)        slow, costly
  *   publish       post.publish                          strictly serial
  *   analytics     engagement.collect, analytics.process, account.collect
- *   maintenance   token.refresh, memory.expire, reviews.expire
+ *   maintenance   token.refresh, memory.expire, reviews.expire, hatch.persona
  */
 export const QUEUES = ["events", "conversation", "content", "publish", "analytics", "maintenance"] as const;
 export type QueueName = (typeof QUEUES)[number];
@@ -35,6 +35,7 @@ export const JOBS = {
   calendarRecap: "calendar.recap",
   benchmarkRun: "generation.benchmark",
   hatchFaces: "hatch.faces",
+  hatchPersona: "hatch.persona",
   contentCreate: "content.create",
   profileSync: "instagram.profile_sync",
   trendsRefresh: "trends.refresh",

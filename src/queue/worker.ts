@@ -1,9 +1,9 @@
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "../config/env.js";
-import { currentInfluencer, listInfluencers, loadInfluencer, withInfluencer } from "../context.js";
+import { currentInfluencer, listInfluencers, loadInfluencer, withInfluencer, withInfluencerLoose } from "../context.js";
 import { recapCalendar } from "../calendar/recap.js";
 import { runBenchmark } from "../generation/benchmark.js";
-import { generateFaceCandidates } from "../influencers/hatch.js";
+import { composePersonaForHatch, generateFaceCandidates } from "../influencers/hatch.js";
 import { runCreate } from "../content/create.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
@@ -84,6 +84,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.trendsRefresh]: (j) => (j.data?.influencerId ? scoped(() => refreshTrends())(j) : forEachActiveInfluencer("trends", () => refreshTrends())),
   [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
   [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
+  // A hatching influencer has no persona yet: loose context, so costs and events are still theirs.
+  [JOBS.hatchPersona]: (j) => withInfluencerLoose(ownerOf(j), () => composePersonaForHatch(ownerOf(j), String(j.data.batch ?? ""))),
   [JOBS.benchmarkRun]: scoped((j) => runBenchmark((j.data.modelIds as number[]).map(Number), Number(j.data.maxUsd ?? 2), String(j.data.tag ?? Date.now()))),
   // Platform-wide maintenance.
   [JOBS.tokenRefresh]: () => refreshExpiringTokens(),
@@ -109,6 +111,7 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.contentProduce]: 45 * 60_000,
   [JOBS.benchmarkRun]: 60 * 60_000,
   [JOBS.hatchFaces]: 20 * 60_000,
+  [JOBS.hatchPersona]: 12 * 60_000, // compose + one repair, 5 min each at most
   [JOBS.contentCreate]: 45 * 60_000,
   [JOBS.postPublish]: 15 * 60_000,
 };

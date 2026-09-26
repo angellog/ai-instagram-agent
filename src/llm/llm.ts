@@ -24,6 +24,8 @@ export interface CallOptions {
   operation: string;
   ref?: { type: string; id: string };
   images?: InputImage[];
+  /** Overrides the default per-call time limit (long outputs such as a whole persona). */
+  timeoutMs?: number;
 }
 
 export const moderationSchema = z.object({
@@ -124,8 +126,8 @@ export class LLM {
     await assertBudget("llm", estimate);
     const started = Date.now();
     const res = await withTimeout(
-      provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation }),
-      this.timeoutMs,
+      provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation, timeoutMs: o.timeoutMs }),
+      o.timeoutMs ?? this.timeoutMs,
       `llm ${o.operation}`,
     );
     const cost = llmCostUsd(res.model, res.inputTokens, res.outputTokens);

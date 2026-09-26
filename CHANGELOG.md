@@ -3,6 +3,26 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.9: Hatching no longer times out
+
+**Fixed:** hatching failed with `llm persona.compose timed out after 90000ms` (seen hatching Kemigisha Cynthiana).
+- **Cause:**
+  - A full persona (life, closet, occasions, weekends and news sources) is about 4–5k tokens for the model to write, which now takes Sonnet 5 longer than the 90-second per-call limit.
+  - It also ran inside the browser request, so the page hung for the whole time.
+  - The 6,000-token output cap was close to truncating the larger v1.0.8 personas.
+- **Now:**
+  - "Compose persona" saves the brief and queues a `hatch.persona` background job (maintenance queue) at once.
+  - The wizard shows "Writing <name>'s persona…" with a timer and refreshes itself.
+  - When the job finishes, the page lands on the Persona step.
+- **Limits:**
+  - The compose call has its own 5-minute limit and a 12k-token budget.
+  - Any LLM call can now set its own `timeoutMs`, which is honoured by the Anthropic and OpenAI-compatible providers.
+- **Failures and retries:**
+  - A failed or lost job (for example after a worker restart; treated as lost after 12 minutes) shows the reason, keeps the brief filled in, and offers a retry.
+  - Double taps and older requests are ignored.
+- An incomplete brief is refused before an influencer is created, and the refusal shows as an error toast.
+- Tests: 258 (was 253), including a regression test for this exact case.
+
 ## v1.0.8: Closet remixing, occasion wear, weekends, trends and news
 
 **Closet of separates** (`visual.character.closet`)

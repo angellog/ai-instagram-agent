@@ -45,6 +45,13 @@ describe("structured output", () => {
     await expect(new LLM(p, 50).generate({ operation: "t", system: "s", prompt: "p" })).rejects.toBeInstanceOf(TimeoutError);
   });
 
+  it("a per-call timeout overrides the default and reaches the provider", async () => {
+    const p = new MockProvider(() => new Promise((r) => setTimeout(() => r("done"), 120)));
+    await expect(new LLM(p, 50).generate({ operation: "slow", system: "s", prompt: "p" })).rejects.toBeInstanceOf(TimeoutError);
+    expect(await new LLM(p, 50).generate({ operation: "slow", system: "s", prompt: "p", timeoutMs: 1000 })).toBe("done");
+    expect(p.calls.at(-1)?.timeoutMs).toBe(1000);
+  });
+
   it("records token cost for every call", async () => {
     const { many } = await import("../../src/db/pool.js");
     await new LLM(new MockProvider(() => "hello")).generate({ operation: "cost.test", system: "s", prompt: "p" });

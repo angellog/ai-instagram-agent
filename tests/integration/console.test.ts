@@ -95,13 +95,23 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     const created = await form("/admin/hatch", { name: "Nova", niche: "running and street food in Nairobi", city: "Nairobi, Kenya", appearance: "dark skin, short natural hair, athletic, big smile" });
     expect(created.statusCode).toBe(303);
     const cookie = cookieOf(created);
+    // The request returns at once; the persona is written by a background job while the page shows progress.
+    const pending = (await one<{ id: number; slug: string; status: string; persona_yaml: string }>("SELECT id, slug, status, persona_yaml FROM influencers WHERE name = 'Nova'"))!;
+    expect(pending).toMatchObject({ slug: "nova", status: "hatching", persona_yaml: "" });
+    expect(String(created.headers.location)).toContain(`/admin/hatch/${pending.id}?flash=`);
+    const waiting = await app.inject({ url: `/admin/hatch/${pending.id}`, headers: { cookie: `aia_inf=${pending.id}` } });
+    expect(waiting.body).toMatch(/Writing Nova(&#39;|')s persona/);
+    expect(waiting.body).toContain('http-equiv="refresh"');
+    const pjob = (await queue("maintenance").getJobs(["waiting"])).find((j) => j.name === JOBS.hatchPersona)!;
+    expect(pjob.data.influencerId).toBe(Number(pending.id));
+    expect(await HANDLERS[JOBS.hatchPersona]({ name: JOBS.hatchPersona, data: pjob.data } as unknown as Job)).toMatchObject({ status: "done", name: "Nova" });
     const inf = (await one<{ id: number; slug: string; status: string; persona_yaml: string }>("SELECT id, slug, status, persona_yaml FROM influencers WHERE name = 'Nova'"))!;
-    expect(inf).toMatchObject({ slug: "nova", status: "hatching" });
     expect(inf.persona_yaml).toMatch(/name: Nova/);
     expect(cookie).toBe(`aia_inf=${inf.id}`);
     const id = Number(inf.id);
-    expect(String(created.headers.location)).toContain(`/admin/hatch/${id}?step=persona`);
-    expect((await app.inject({ url: `/admin/hatch/${id}?step=persona`, headers: { cookie } })).statusCode).toBe(200);
+    const ready = await app.inject({ url: `/admin/hatch/${id}`, headers: { cookie } });
+    expect(ready.body).toContain("Save &amp; continue"); // lands on the persona step once written
+    expect(ready.body).not.toContain('http-equiv="refresh"');
 
     // 2. persona saved (validated)
     const broken = await form(`/admin/hatch/${id}/persona`, { persona: "identity: [" }, cookie);

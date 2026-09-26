@@ -32,7 +32,7 @@ export class AnthropicProvider implements LLMProvider {
         messages: withImagesAnthropic(req),
         ...(withTemperature && req.temperature !== undefined ? { temperature: req.temperature } : {}),
         ...(req.jsonSchema ? { output_config: { format: zodOutputFormat(req.jsonSchema.schema as never) } } : {}),
-      });
+      }, req.timeoutMs ? { timeout: req.timeoutMs } : undefined);
     try {
       let res: Anthropic.Message;
       try {
@@ -124,7 +124,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         json_schema: { name: req.jsonSchema.name, schema: z.toJSONSchema(req.jsonSchema.schema), strict: false },
       };
     }
-    const ctrl = AbortSignal.timeout(this.cfg.timeoutMs);
+    const ctrl = AbortSignal.timeout(req.timeoutMs ?? this.cfg.timeoutMs);
     let res: Response;
     try {
       res = await this.fetchImpl(`${this.cfg.baseURL.replace(/\/$/, "")}/chat/completions`, {

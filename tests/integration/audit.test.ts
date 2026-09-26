@@ -1,3 +1,4 @@
+import type { Job } from "bullmq";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEvent } from "../../src/calendar/events.js";
@@ -5,6 +6,8 @@ import { getControls, setControls } from "../../src/config/controls.js";
 import { withInfluencer } from "../../src/context.js";
 import { many, one } from "../../src/db/pool.js";
 import { listModels, savePolicy } from "../../src/generation/registry.js";
+import { JOBS, queue } from "../../src/queue/queues.js";
+import { HANDLERS } from "../../src/queue/worker.js";
 import { buildServer } from "../../src/web/server.js";
 import { resetState, teardown } from "../helpers/db.js";
 
@@ -26,8 +29,10 @@ describe("audit regressions", () => {
   it("hatching bills the new influencer, not the one selected in the sidebar", async () => {
     await setControls({ daily_budget_usd: 0, daily_llm_budget_usd: 0 }, "test", 1); // Zuri is out of budget
     const r = await post("/admin/hatch", { name: "Tala", niche: "surf and food", city: "Zanzibar" }, { cookie: "aia_inf=1" });
-    expect(loc(r)).toContain("step=persona");
     const tala = (await one<{ id: number }>("SELECT id FROM influencers WHERE name = 'Tala'"))!;
+    expect(loc(r)).toContain(`/admin/hatch/${tala.id}`);
+    const job = (await queue("maintenance").getJobs(["waiting"])).find((j) => j.name === JOBS.hatchPersona)!;
+    await HANDLERS[JOBS.hatchPersona]({ name: JOBS.hatchPersona, data: job.data } as unknown as Job);
     const costs = await many<{ influencer_id: number }>("SELECT DISTINCT influencer_id::int FROM cost_ledger WHERE operation = 'persona.compose'");
     expect(costs).toEqual([{ influencer_id: Number(tala.id) }]);
     const zuriEvents = await many("SELECT 1 FROM system_events WHERE influencer_id = 1 AND message LIKE '%Tala%'");

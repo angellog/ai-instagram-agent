@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { getControls, setControls } from "../../config/controls.js";
 import { setting } from "../../config/settings.js";
-import { withInfluencer, withInfluencerLoose } from "../../context.js";
+import { withInfluencer } from "../../context.js";
 import { many } from "../../db/pool.js";
 import { adapters } from "../../generation/adapters/index.js";
-import { composePersona, type HatchBrief } from "../../influencers/compose.js";
-import type { FaceCandidate } from "../../influencers/hatch.js";
+import { assertBrief, type HatchBrief } from "../../influencers/compose.js";
+import { personaJobActive, type FaceCandidate, type PersonaJobState } from "../../influencers/hatch.js";
 import { attachInstagram, createInfluencer, getInfluencer, setHatchState, setStatus, updatePersona, type InfluencerRow } from "../../influencers/manage.js";
 import { primaryAccount } from "../../instagram/accounts.js";
 import { errorMessage, PermanentError } from "../../lib/errors.js";
@@ -77,8 +77,25 @@ function briefForm(b: Partial<HatchBrief> = {}, to = "/admin/hatch"): string {
     help: "Optional. Adds respectful occasion outfits (church, Jumu'ah, Eid, ceremonies) to their closet for the right days.",
   })}
   <datalist id="tz">${TIMEZONES.map((t) => `<option value="${t}">`).join("")}</datalist>
-  ${button("Compose persona", { variant: "primary", icon: "wand" })} <span class="meta">Takes about 30 seconds.</span>
+  ${button("Compose persona", { variant: "primary", icon: "wand" })} <span class="meta">Takes 1–3 minutes in the background. You can leave the page.</span>
 </form>`;
+}
+
+/** Save the brief and queue the persona job; the wizard page shows its progress. */
+async function queueCompose(id: number, brief: HatchBrief): Promise<void> {
+  assertBrief(brief);
+  const batch = String(Date.now());
+  await setHatchState(id, { brief, persona_status: "queued", persona_error: null, persona_batch: batch, persona_queued_at: new Date().toISOString() });
+  await queue("maintenance").add(JOBS.hatchPersona, { influencerId: id, batch }, { jobId: jobId("persona", id, batch), attempts: 1 });
+}
+
+function writingCard(name: string, s: PersonaJobState): string {
+  const since = Date.parse(s.persona_queued_at ?? "");
+  const secs = Number.isFinite(since) ? Math.max(0, Math.round((Date.now() - since) / 1000)) : 0;
+  return card(
+    `<div class="empty">${icon("refresh", 28)}<b>Writing ${esc(name)}'s persona…</b><p>${s.persona_status === "queued" ? "Waiting for the worker." : "The model is writing their life, closet, weekends and news sources."} ${secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} so far. ` : ""}Usually 1–3 minutes. This page refreshes on its own.</p></div>`,
+    { title: "Persona" },
+  );
 }
 
 /** A number from a form field, or the fallback when it's empty or not a number. */
@@ -134,18 +151,17 @@ ${card(briefForm(), { title: "The brief" })}`;
       const brief = readBrief(req.body ?? {});
       let inf: InfluencerRow;
       try {
+        assertBrief(brief);
         inf = await createInfluencer({ name: brief.name, hatchState: { brief } });
       } catch (e) {
-        return reply.redirect(`/admin/hatch?flash=${encodeURIComponent(`Not saved: ${errorMessage(e)}`)}`, 303);
+        return reply.redirect(`/admin/hatch?flash=${encodeURIComponent(`Not saved: ${errorMessage(e)}`)}&tone=bad`, 303);
       }
       reply.header("set-cookie", selectCookie(Number(inf.id)));
       try {
-        const composed = await withInfluencerLoose(Number(inf.id), () => composePersona(brief));
-        await withInfluencerLoose(Number(inf.id), () => updatePersona(Number(inf.id), composed.yaml, "", reviewer(req)));
-        await setHatchState(Number(inf.id), { step: "persona" });
-        return reply.redirect(`/admin/hatch/${inf.id}?step=persona&flash=${encodeURIComponent(`Persona drafted for ${composed.name}`)}`, 303);
+        await queueCompose(Number(inf.id), brief);
+        return reply.redirect(`/admin/hatch/${inf.id}?flash=${encodeURIComponent(`Writing ${inf.name}'s persona…`)}`, 303);
       } catch (e) {
-        return reply.redirect(`/admin/hatch/${inf.id}?step=brief&flash=${encodeURIComponent(`Not saved: persona draft failed: ${errorMessage(e)}`)}`, 303);
+        return reply.redirect(`/admin/hatch/${inf.id}?flash=${encodeURIComponent(`Persona not started: ${errorMessage(e)}`)}&tone=bad`, 303);
       }
     },
     { platform: true },
@@ -159,7 +175,10 @@ ${card(briefForm(), { title: "The brief" })}`;
       const inf = Number.isInteger(id) ? await getInfluencer(id) : undefined;
       if (!inf) return reply.redirect("/admin/hatch", 303);
       if (inf.status !== "hatching") return reply.redirect(`/admin?flash=${encodeURIComponent(`${inf.name} is already ${inf.status}`)}`, 303);
-      const state = inf.hatch_state as { brief?: HatchBrief; step?: Step; faces?: FaceCandidate[]; faces_status?: string; faces_error?: string | null };
+      const state = inf.hatch_state as PersonaJobState & { brief?: HatchBrief; step?: Step; faces?: FaceCandidate[]; faces_status?: string; faces_error?: string | null };
+      const writing = personaJobActive(state);
+      const writeFailed = state.persona_status === "failed" || ((state.persona_status === "queued" || state.persona_status === "running") && !writing);
+      const writeError = state.persona_status === "failed" ? (state.persona_error ?? "unknown error") : "the job stopped without finishing (the worker restarted)";
       const hasPersona = Boolean(inf.persona_yaml.trim());
       const ready = await readiness(inf);
       const STEP_KEYS: Step[] = ["brief", "persona", "soul", "profile", "instagram", "launch"];
@@ -170,8 +189,11 @@ ${card(briefForm(), { title: "The brief" })}`;
       let content = "";
       let head = "";
 
-      if (step === "brief") {
-        content = card(briefForm(state.brief ?? { name: inf.name }, `/admin/hatch/${id}/compose`), { title: "The brief" });
+      if (step === "brief" && writing) {
+        head = `<meta http-equiv="refresh" content="5">`;
+        content = writingCard(inf.name, state);
+      } else if (step === "brief") {
+        content = `${writeFailed ? `<div class="callout bad">${icon("alert")}<p>The persona draft failed: ${esc(writeError)}. Your brief is saved below; try again.</p></div>` : ""}${card(briefForm(state.brief ?? { name: inf.name }, `/admin/hatch/${id}/compose`), { title: "The brief" })}`;
       } else if (step === "persona") {
         let summary: string;
         try {
@@ -180,10 +202,14 @@ ${card(briefForm(), { title: "The brief" })}`;
         } catch (e) {
           summary = `<div class="callout bad">${icon("alert")}<p>${esc(errorMessage(e))}</p></div>`;
         }
+        if (writing) head = `<meta http-equiv="refresh" content="5">`;
+        const recompose = writing
+          ? writingCard(inf.name, state).replace("Persona</", "Re-composing</")
+          : `${writeFailed ? `<div class="callout bad">${icon("alert")}<p>Re-compose failed: ${esc(writeError)}. The current persona is unchanged.</p></div>` : ""}${card(briefForm(state.brief ?? { name: inf.name }, `/admin/hatch/${id}/compose`), { title: "Re-compose from a new brief" })}`;
         content = `<div class="grid-2">${card(
           `<form method="post" action="/admin/hatch/${id}/persona">${field("Persona YAML", textarea("persona", inf.persona_yaml, { rows: 30, mono: true }), { help: "Edit anything. It is validated when you continue." })}${button("Save & continue", { variant: "primary", icon: "arrowRight" })}</form>`,
           { title: "Persona" },
-        )}<div>${card(summary, { title: "At a glance" })}${card(briefForm(state.brief ?? { name: inf.name }, `/admin/hatch/${id}/compose`), { title: "Re-compose from a new brief" })}</div></div>`;
+        )}<div>${card(summary, { title: "At a glance" })}${recompose}</div></div>`;
       } else if (step === "soul") {
         const faces = state.faces ?? [];
         const running = state.faces_status === "running" || state.faces_status === "queued";
@@ -297,12 +323,10 @@ ${content}`;
     async (req: Req, reply) =>
       attempt(req, reply, `/admin/hatch/${req.params.id}?step=persona`, async () => {
         const id = Number(req.params.id);
-        await load(id);
-        const brief = readBrief(req.body ?? {});
-        const composed = await composePersona(brief);
-        await updatePersona(id, composed.yaml, undefined, reviewer(req));
-        await setHatchState(id, { brief, step: "persona" });
-        return `Persona drafted for ${composed.name}`;
+        const inf = await load(id);
+        if (personaJobActive(inf.hatch_state as PersonaJobState)) return { message: "Already writing the persona; hang on", to: `/admin/hatch/${id}` };
+        await queueCompose(id, readBrief(req.body ?? {}));
+        return { message: `Writing ${inf.name}'s persona…`, to: inf.persona_yaml.trim() ? `/admin/hatch/${id}?step=persona` : `/admin/hatch/${id}` };
       }),
     { platform: true, influencerParam: "id" },
   );

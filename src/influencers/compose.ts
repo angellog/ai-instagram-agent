@@ -67,11 +67,23 @@ with exactly the same top-level keys and nesting as the TEMPLATE. Rules:
 - carousel.text_overlays: false. Use the IANA timezone of the home city.
 - No hashtags about AI. No medical, political or financial advice in behaviour.`;
 
-export async function composePersona(b: HatchBrief): Promise<{ yaml: string; name: string }> {
+/**
+ * A whole persona is ~4-5k output tokens: well past the 90s default per-call
+ * limit on the smart model. It runs as a background job, so give it room.
+ */
+export const COMPOSE_TIMEOUT_MS = 5 * 60_000;
+const COMPOSE_MAX_TOKENS = 12_000;
+
+/** The brief's required fields, checked before any work is queued. */
+export function assertBrief(b: HatchBrief): void {
   if (!b.name.trim() || !b.niche.trim() || !b.city.trim()) throw new PermanentError("name, niche and city are required");
+}
+
+export async function composePersona(b: HatchBrief): Promise<{ yaml: string; name: string }> {
+  assertBrief(b);
   const tpl = template();
   const prompt = `TEMPLATE (structure and level of detail to match; the content is a different person):\n${tpl}\n\nBRIEF:\n${briefText(b)}\n\nWrite the new persona YAML now.`;
-  let text = await llm().generate({ operation: "persona.compose", tier: "smart", maxTokens: 6000, system: SYSTEM, prompt });
+  let text = await llm().generate({ operation: "persona.compose", tier: "smart", maxTokens: COMPOSE_MAX_TOKENS, timeoutMs: COMPOSE_TIMEOUT_MS, system: SYSTEM, prompt });
   for (let attempt = 0; attempt < 2; attempt++) {
     const yaml = clean(text);
     try {
@@ -83,7 +95,8 @@ export async function composePersona(b: HatchBrief): Promise<{ yaml: string; nam
       text = await llm().generate({
         operation: "persona.compose.repair",
         tier: "smart",
-        maxTokens: 6000,
+        maxTokens: COMPOSE_MAX_TOKENS,
+        timeoutMs: COMPOSE_TIMEOUT_MS,
         system: SYSTEM,
         prompt: [
           { role: "user", content: prompt },

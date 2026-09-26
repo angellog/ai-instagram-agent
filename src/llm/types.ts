@@ -27,6 +27,8 @@ export interface CompletionRequest {
   jsonSchema?: { schema: z.ZodType; name: string };
   /** Free-form label for logs, cost ledger and the mock provider's routing. */
   operation: string;
+  /** Per-request time limit; the provider default applies when absent. */
+  timeoutMs?: number;
 }
 
 export interface CompletionResult {
