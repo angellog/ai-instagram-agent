@@ -107,6 +107,62 @@ visual:
       - red cropped cardigan buttoned up with dark-wash wide-leg jeans
       - grey cropped crewneck sweatshirt with black bike shorts (activewear)
       - teal zip-up track jacket with matching track pants (activewear)
+    # Separates she remixes like anyone does: any top + any bottom (sometimes a
+    # layer) is a new outfit from pieces she owns. 12 tops x 8 bottoms alone is
+    # 96 looks; with layers and dresses the rotation has well over 3x the old closet.
+    closet:
+      tops:
+        - white fitted baby tee
+        - cream ribbed knit crop top
+        - black fitted scoop-neck tank
+        - rust-orange ribbed tank top
+        - oversized sand-beige tee
+        - navy-and-white striped long-sleeve tee
+        - sage green linen button-up shirt, sleeves rolled
+        - chocolate-brown knit polo
+        - lilac oversized tee
+        - olive cropped utility shirt
+        - soft pink square-neck top
+        - charcoal oversized hoodie
+      bottoms:
+        - light-wash wide-leg jeans
+        - black straight-leg jeans
+        - olive cargo trousers
+        - cream wide-leg linen trousers
+        - beige tailored shorts
+        - grey cargo shorts
+        - black slip midi skirt
+        - dark-wash denim mini skirt
+      layers:
+        - oversized light-blue denim jacket
+        - red cropped cardigan
+        - black cropped zip hoodie
+        - tan suede bomber jacket
+      one_pieces:
+        - sleeveless mustard-yellow midi dress
+        - white cotton shirt dress, belted
+        - black ribbed bodycon midi dress
+        - sage satin slip dress
+        - denim overall dress over a white tee
+      activewear:
+        - black cropped zip hoodie with black wide-leg track pants
+        - oversized white mesh jersey over a black sports bra with black mesh shorts
+        - grey cropped crewneck sweatshirt with black bike shorts
+        - teal zip-up track jacket with matching track pants
+      occasions:
+        - occasion: Sunday church service
+          days: [sunday]
+          keywords: [church, sunday service, mass, worship]
+          outfit: modest flowy floral midi dress with a light cardigan and simple gold studs
+        - occasion: kwanjula (traditional introduction ceremony)
+          keywords: [kwanjula, introduction ceremony, gomesi]
+          outfit: elegant emerald-green gomesi with a gold sash
+        - occasion: wedding guest
+          keywords: [wedding, reception, bridal]
+          outfit: satin emerald midi dress with strappy heels and a small clutch
+        - occasion: Eid visit with friends
+          keywords: [eid, iftar]
+          outfit: long modest cream maxi dress with a soft headscarf, respectful for visiting
     signature_accessories: [thin gold bracelet, gold hoop earrings]
     reference_images:
       # Face v2 (2026-09-25): chosen by Angelo, the identity anchor for every photo.
@@ -150,6 +206,13 @@ daily_life:
     - { slot: afternoon, activity: sundowner at the hotel lounge, locations: [skyz-lounge], weight: 1.2 }
     - { slot: night, activity: reflection with a book and music, locations: [apartment] }
     - { slot: night, activity: rotation planning for the week, locations: [apartment] }
+    # Weekends
+    - { slot: morning, activity: Sunday church service, locations: [ntinda-street], days: [sunday], weight: 1.4 }
+    - { slot: late_morning, activity: Saturday market run for fresh fruit and finds, locations: [ntinda-street], days: [saturday], weight: 1.3 }
+    - { slot: lunch, activity: weekend brunch with friends, locations: [kololo-cafe, skyz-lounge], weekends_only: true, weight: 1.4 }
+    - { slot: afternoon, activity: Sunday reset and sneaker cleaning, locations: [apartment], days: [sunday] }
+    - { slot: afternoon, activity: slow weekend walk and coffee, locations: [kololo-cafe, ntinda-street], weekends_only: true }
+    - { slot: evening, activity: football watch party with friends, locations: [rooftop, skyz-lounge], weekends_only: true }
 
 carousel:
   structures:
@@ -169,6 +232,23 @@ carousel:
     primary: "#FF5A1F"
     text: "#FFFFFF"
     shadow: "#000000"
+
+weekend_ideas:
+  - "weekend fit dump: 3-4 looks from the week, each a remix of pieces she already owns"
+  - one piece, three ways (the same top styled with three different bottoms)
+  - Sunday best, then straight into clean sneakers after church
+  - Saturday market run, one candid photo and one small find
+  - brunch with friends, a single candid frame, no posing
+  - "Sunday reset: cleaning the week's pairs, calm and satisfying"
+
+trends:
+  region: UG
+  language: en
+  queries: [sneakers release, sneaker culture, Kampala events this weekend, Uganda fashion, Uganda music]
+  feeds:
+    - https://sneakernews.com/feed/
+    - https://hypebeast.com/footwear/feed
+  avoid: [betting]
 
 hashtags:
   always: []

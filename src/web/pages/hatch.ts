@@ -51,6 +51,7 @@ function readBrief(b: Record<string, string | undefined>): HatchBrief {
     appearance: t("appearance"),
     brand: t("brand"),
     language: t("language"),
+    faith: t("faith"),
   };
 }
 
@@ -72,6 +73,9 @@ function briefForm(b: Partial<HatchBrief> = {}, to = "/admin/hatch"): string {
     ${field("Affiliated brand", input("brand", b.brand ?? "", { placeholder: "optional, e.g. FeetBit" }))}
     ${field("Languages", input("language", b.language ?? "", { placeholder: "English, some Swahili" }))}
   </div>
+  ${field("Faith and occasions", input("faith", b.faith ?? "", { placeholder: "e.g. Muslim: Jumu'ah and Eid · Christian: Sunday church · weddings, kwanjula" }), {
+    help: "Optional. Adds respectful occasion outfits (church, Jumu'ah, Eid, ceremonies) to their closet for the right days.",
+  })}
   <datalist id="tz">${TIMEZONES.map((t) => `<option value="${t}">`).join("")}</datalist>
   ${button("Compose persona", { variant: "primary", icon: "wand" })} <span class="meta">Takes about 30 seconds.</span>
 </form>`;

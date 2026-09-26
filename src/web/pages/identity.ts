@@ -5,7 +5,10 @@ import { currentInfluencer, influencerId } from "../../context.js";
 import { many, one } from "../../db/pool.js";
 import { attachInstagram, updatePersona } from "../../influencers/manage.js";
 import { instagramClient, primaryAccount } from "../../instagram/accounts.js";
-import { personaInfo } from "../../persona/loader.js";
+import { persona, personaInfo } from "../../persona/loader.js";
+import { outfits, planOutfits } from "../../content/wardrobe.js";
+import { recentContent } from "../../content/history.js";
+import { localParts } from "../../lib/time.js";
 import { bindHiggsfieldSoul, newSoulVersion, refreshHiggsfieldSoul, trainHiggsfieldSoul } from "../../souls/manage.js";
 import { activeSoul, listSouls } from "../../souls/souls.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
@@ -26,6 +29,30 @@ const HELP: Partial<Record<keyof Controls, string>> = {
   optional_reply_rate: "0–1. Chance of answering comments that don't strictly need a reply.",
   repetition_threshold: "0–1. Higher = stricter about repeating past posts.",
 };
+
+/** Closet size and today's planned look, so the operator can see the rotation at work. */
+async function wardrobeCard(): Promise<string> {
+  const p = persona();
+  const all = outfits(p);
+  const c = p.visual.character.closet;
+  const plan = planOutfits(p, localParts(new Date(), p.identity.timezone).day, await recentContent(30));
+  const counts = [
+    ["Looks", all.length],
+    ["Tops", c.tops.length],
+    ["Bottoms", c.bottoms.length],
+    ["Layers", c.layers.length],
+    ["Dresses", c.one_pieces.length],
+    ["Occasions", c.occasions.length],
+  ];
+  return card(
+    `<div class="stats" style="grid-template-columns:repeat(3,1fr)">${counts.map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join("")}</div>
+     <dl class="kv"><dt>Today</dt><dd>${esc(plan.everyday)}</dd><dt>Workout</dt><dd>${esc(plan.sport)}</dd>${
+       plan.remix ? `<dt>Remix</dt><dd>${esc(plan.remix.piece)}, last with a different look on ${esc(plan.remix.day)}</dd>` : ""
+     }${plan.occasions.map((o) => `<dt>${esc(o.occasion)}</dt><dd>${esc(o.outfit)}</dd>`).join("")}</dl>
+     <p class="help" style="margin-top:10px">Any top with any bottom (sometimes a layer) is a new look from pieces they own. The exact look can't repeat for ${Math.min(21, Math.max(1, all.length - 2))} days, and a piece rests 2 days. Edit the closet in the persona below.</p>`,
+    { title: "Wardrobe", id: "wardrobe" },
+  );
+}
 
 export function registerIdentity(app: FastifyInstance): void {
   const r = consoleRouter(app);
@@ -87,6 +114,7 @@ ${card(
   </form>`,
   { title: "New soul version" },
 )}
+${await wardrobeCard()}
 ${card(
   souls.length
     ? table(

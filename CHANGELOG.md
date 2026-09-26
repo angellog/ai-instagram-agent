@@ -3,6 +3,32 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.8: Closet remixing, occasion wear, weekends, trends and news
+
+**Closet of separates** (`visual.character.closet`)
+- Tops, bottoms, layers, one-pieces and activewear. Any top with any bottom (sometimes plus a layer) is a new outfit made from pieces the influencer owns: the real-life remix trick.
+- Zuri goes from 16 fixed outfits to 522 possible looks.
+- Rotation rules:
+  - The exact look can't repeat for up to 21 days, and a single piece rests 2 days before reappearing in a new combination.
+  - Picks are weighted by kind (mostly plain top + bottom, sometimes layered, a dress, or a saved outfit).
+  - When a piece comes back with something new, the director is told it's a remix, as a styling angle.
+- **Occasion wear** per influencer (church, Jumu'ah, Eid, kwanjula, wedding guest…). It triggers on its weekday or when the activity, topic or a calendar event mentions it.
+- Zuri has Sunday church, kwanjula gomesi, wedding guest and an Eid visit. New influencers get occasions matching the faith and culture given in the Hatch brief's new "Faith and occasions" field.
+
+**Weekends**
+- Activities can be `weekends_only` or limited to specific `days` (Sunday church, Saturday market run, weekend brunch, football watch party).
+- `weekend_ideas` plus an "it's the weekend" brief go to the director on Saturdays and Sundays.
+
+**Trends and news**
+- Per-influencer `trends`: Google News searches for their region, plus RSS/Atom feeds (Zuri: sneaker releases, Kampala events, Uganda fashion and music, Sneaker News, Hypebeast Footwear).
+- Collected every 6 hours. Hard filter on politics, crime and tragedy, then the model keeps at most 6 items this creator would genuinely know, with a one-line note each.
+- The brief goes to the director and to replies (never adding facts beyond the headline).
+- New Trends & news page: brief, sources, raw headlines, Refresh now, and Add to calendar.
+
+**Also**
+- A Wardrobe card on Persona & soul shows closet size and today's planned look, workout outfit, remix and occasion wear.
+- The composer writes closets, occasions, weekend activities, weekend ideas and news sources for new influencers.
+
 ## v1.0.7: Simple, readable captions
 
 - Captions were paragraphs narrating the photo (the rooftop, the coffee, the sky, the "rotation"), with the same tics ("Rotation check", "Some days…", "like it owes me") and a question almost every time.

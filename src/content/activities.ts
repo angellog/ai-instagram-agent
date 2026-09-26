@@ -43,7 +43,10 @@ export function planActivities(
 ): Array<{ slot: Slot; activity: string; location: string | null; postable: boolean }> {
   const rand = rng(`${p.identity.name}:${day}`);
   const isWeekend = weekday === 0 || weekday === 6;
-  const pool = p.daily_life.activities.filter((a) => !(a.weekdays_only && isWeekend));
+  const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][weekday];
+  const pool = p.daily_life.activities.filter(
+    (a) => !(a.weekdays_only && isWeekend) && !(a.weekends_only && !isWeekend) && (!a.days?.length || a.days.includes(dayName as (typeof a.days)[number])),
+  );
   const n = Math.min(p.daily_life.activities_per_day, pool.length);
 
   const chosen: typeof pool = [];

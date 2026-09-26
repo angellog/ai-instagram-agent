@@ -11,7 +11,8 @@ import { personaSystemBlock } from "../persona/prompt.js";
 import type { Persona, Slot } from "../persona/schema.js";
 import { SLOTS } from "../persona/schema.js";
 import { learningsForPrompt } from "../analytics/learnings.js";
-import { calendarBrief } from "../calendar/events.js";
+import { calendarBrief, listEvents } from "../calendar/events.js";
+import { trendsForPrompt } from "../trends/trends.js";
 import { enforceOutfit, planOutfits, type OutfitPlan } from "./wardrobe.js";
 import { hasAccount } from "../instagram/accounts.js";
 import { influencerId } from "../context.js";
@@ -93,7 +94,10 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
   const learnings = await learningsForPrompt();
   const calendar = await calendarBrief("content", now);
   const remembered = (await worldMemories(["calendar_recap"], 5)).map((m) => m.content);
-  const outfits = planOutfits(p, day, recent);
+  const todayEvents = (await listEvents(new Date(now.getTime() - 12 * 3600_000), new Date(now.getTime() + 12 * 3600_000))).map((e) => `${e.title} ${e.description ?? ""}`);
+  const outfits = planOutfits(p, day, recent, { events: todayEvents });
+  const weekend = [0, 6].includes(localParts(now, p.identity.timezone).weekday);
+  const trends = await trendsForPrompt("content");
   const schema = ideaSchema(p);
 
   const feedback: string[] = [];
@@ -106,7 +110,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       temperature: 0.9,
       system: directorSystem(p, c),
       prompt:
-        directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, feedback }) +
+        directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, feedback }) +
         (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : ""),
     });
 
@@ -127,7 +131,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
     if (idea.activity_id && !activity) idea.activity_id = null;
 
-    const worn = enforceOutfit(idea.outfit, activity?.activity, outfits);
+    const worn = enforceOutfit(idea.outfit, activity?.activity, outfits, `${idea.topic} ${idea.hook}`);
     const { state, adjustments } = enforceContinuity(
       {
         location_id: idea.location_id,
@@ -304,6 +308,8 @@ function directorPrompt(o: {
   calendar?: string;
   remembered?: string[];
   outfits?: OutfitPlan;
+  weekend?: boolean;
+  trends?: string;
   feedback: string[];
 }): string {
   const locs = o.p.visual.locations.map((l) => `${l.id}: ${l.description}`).join("\n");
@@ -336,9 +342,21 @@ function directorPrompt(o: {
     o.learnings ? `WHAT HAS PERFORMED (engagement learnings; explore sometimes, do not overfit):\n${o.learnings}` : "",
     o.outfits
       ? `TODAY'S OUTFIT (wardrobe rotation, ${o.outfits.reason}): "${o.outfits.everyday}". For a workout/sport post: "${o.outfits.sport}". Use these exact outfits.${
-          o.outfits.avoid.length ? `\nWORN RECENTLY, DO NOT REPEAT: ${[...new Set(o.outfits.avoid.map((w) => `"${w.outfit}" (${w.day})`))].join("; ")}` : ""
-        }`
+          o.outfits.remix ? `\nREMIX: "${o.outfits.remix.piece}" was last worn on ${o.outfits.remix.day} with a different outfit; styling one piece a new way is a relatable angle when it fits.` : ""
+        }${
+          o.outfits.occasions.length
+            ? `\nOCCASION WEAR TODAY (use for a post about it): ${o.outfits.occasions.map((oc) => `${oc.occasion}: "${oc.outfit}"`).join("; ")}`
+            : ""
+        }${o.outfits.avoid.length ? `\nWORN RECENTLY, DO NOT REPEAT: ${[...new Set(o.outfits.avoid.map((w) => `"${w.outfit}" (${w.day})`))].slice(0, 12).join("; ")}` : ""}`
       : `RECURRING OUTFITS: ${o.p.visual.character.recurring_clothing_preferences.join(" | ")}`,
+    o.weekend
+      ? `IT'S THE WEEKEND: weekend energy beats work-week routine (slower mornings, outings, friends, markets, resets).${
+          o.p.weekend_ideas.length ? ` Weekend ideas for this creator:\n${o.p.weekend_ideas.map((w) => `- ${w}`).join("\n")}` : ""
+        }`
+      : "",
+    o.trends
+      ? `TRENDS AND NEWS THIS WEEK (real headlines from this creator's feeds; reference one only when it fits their life naturally; never add details beyond the headline):\n${o.trends}`
+      : "",
     o.feedback.length ? `FEEDBACK ON PREVIOUS ATTEMPTS:\n${o.feedback.join("\n")}` : "",
   ]
     .filter(Boolean)

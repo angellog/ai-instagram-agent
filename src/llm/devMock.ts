@@ -78,6 +78,10 @@ export function createDevMockProvider(): MockProvider {
     })
     .on("memory.summarize", () => "Friendly follower who talks sneakers.")
     .on("config.test", () => "OK")
+    .on("trends.brief", (r) => {
+      const n = (lastUser(r).match(/^\d+\./gm) ?? []).length;
+      return { items: Array.from({ length: Math.min(n, 3) }, (_, i) => ({ index: i + 1, note: "Sneaker and street-style news this creator would talk about", use: i === 0 ? "post" : "conversation" })) };
+    })
     .on("profile.kit", () => ({
       display_name: "Zuri | Sneakers & Kampala",
       usernames: ["zuri.kicks", "zuri_rotation", "Zuri Kampala!"],

@@ -37,6 +37,7 @@ export const JOBS = {
   hatchFaces: "hatch.faces",
   contentCreate: "content.create",
   profileSync: "instagram.profile_sync",
+  trendsRefresh: "trends.refresh",
   sweep: "maintenance.sweep",
 } as const;
 

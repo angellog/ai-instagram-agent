@@ -6,6 +6,7 @@ import { runBenchmark } from "../generation/benchmark.js";
 import { generateFaceCandidates } from "../influencers/hatch.js";
 import { runCreate } from "../content/create.js";
 import { syncProfile } from "../instagram/profileSync.js";
+import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
 import { processWebhookEvent } from "../ingest/process.js";
 import { processInteraction } from "../conversation/agent.js";
@@ -80,6 +81,7 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.memoryExpire]: () => forEachActiveInfluencer("memory expiry", expireMemories),
   [JOBS.calendarRecap]: () => forEachActiveInfluencer("calendar recap", () => recapCalendar()),
   [JOBS.contentCreate]: scoped((j) => runCreate(String(j.data.runId))),
+  [JOBS.trendsRefresh]: (j) => (j.data?.influencerId ? scoped(() => refreshTrends())(j) : forEachActiveInfluencer("trends", () => refreshTrends())),
   [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
   [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
   [JOBS.benchmarkRun]: scoped((j) => runBenchmark((j.data.modelIds as number[]).map(Number), Number(j.data.maxUsd ?? 2), String(j.data.tag ?? Date.now()))),
@@ -230,6 +232,7 @@ export async function upsertSchedulers(): Promise<void> {
     ["maintenance", "memory-expire", { pattern: "40 2 * * *" }, JOBS.memoryExpire],
     ["maintenance", "calendar-recap", { pattern: "15 * * * *" }, JOBS.calendarRecap],
     ["analytics", "profile-sync", { pattern: "35 * * * *" }, JOBS.profileSync],
+    ["analytics", "trends-refresh", { pattern: "5 5,11,17,23 * * *" }, JOBS.trendsRefresh],
     ["maintenance", "reviews-expire", { pattern: "5 * * * *" }, JOBS.reviewsExpire],
     ["maintenance", "sweep", { every: 10 * 60_000 }, JOBS.sweep],
   ];

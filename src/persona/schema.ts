@@ -41,6 +41,28 @@ export const personaSchema = z.object({
       recurring_clothing_preferences: z.array(z.string()).min(1),
       // The full closet the wardrobe rotation draws from (staples above are included).
       wardrobe: z.array(z.string()).default([]),
+      // Separates the rotation mixes and matches like a real person: any top with
+      // any bottom (optionally a layer) is a new outfit made from pieces they own.
+      closet: z
+        .object({
+          tops: z.array(z.string()).default([]),
+          bottoms: z.array(z.string()).default([]),
+          layers: z.array(z.string()).default([]),
+          one_pieces: z.array(z.string()).default([]),
+          activewear: z.array(z.string()).default([]),
+          // Occasion wear, per this influencer's life and faith (church, Jumu'ah, Eid, weddings…).
+          occasions: z
+            .array(
+              z.object({
+                occasion: z.string(),
+                outfit: z.string(),
+                keywords: z.array(z.string()).default([]),
+                days: z.array(z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])).default([]),
+              }),
+            )
+            .default([]),
+        })
+        .default({ tops: [], bottoms: [], layers: [], one_pieces: [], activewear: [], occasions: [] }),
       signature_accessories: z.array(z.string()).default([]),
       // Public URLs of approved reference images. Sent to the image model on
       // every generation to hold facial and body identity.
@@ -68,6 +90,9 @@ export const personaSchema = z.object({
           postable: z.boolean().default(true),
           weight: z.number().positive().default(1),
           weekdays_only: z.boolean().default(false),
+          weekends_only: z.boolean().default(false),
+          // Only on these weekdays (e.g. church on sunday, market on saturday). Empty = any day.
+          days: z.array(z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])).default([]),
         }),
       )
       .min(3),
@@ -87,6 +112,18 @@ export const personaSchema = z.object({
       shadow: z.string().default("#000000"),
     }),
   }),
+  // Post ideas that only make sense on a Saturday or Sunday.
+  weekend_ideas: z.array(z.string()).default([]),
+  // What this influencer keeps up with: news searches (Google News) and RSS/Atom feeds.
+  trends: z
+    .object({
+      queries: z.array(z.string()).default([]),
+      feeds: z.array(z.string().url()).default([]),
+      region: z.string().default("US"),
+      language: z.string().default("en"),
+      avoid: z.array(z.string()).default([]),
+    })
+    .default({ queries: [], feeds: [], region: "US", language: "en", avoid: [] }),
   hashtags: z.object({
     always: z.array(z.string()).default([]),
     pool: z.array(z.string()).default([]),

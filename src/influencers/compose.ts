@@ -24,6 +24,8 @@ export interface HatchBrief {
   appearance?: string;
   brand?: string;
   language?: string;
+  /** Faith and occasions to dress for (church, Jumu'ah, Eid, kwanjula…). Optional. */
+  faith?: string;
 }
 
 function template(): string {
@@ -45,6 +47,7 @@ export function briefText(b: HatchBrief): string {
     b.appearance ? `Look: ${b.appearance}` : "",
     b.brand ? `Affiliated brand / business: ${b.brand}` : "Affiliation: independent creator",
     b.language ? `Languages: ${b.language}` : "",
+    b.faith ? `Faith and occasions to dress for: ${b.faith}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -55,7 +58,11 @@ with exactly the same top-level keys and nesting as the TEMPLATE. Rules:
 - Keep it specific and lived-in: real neighbourhoods, habits, routines; 6-12 daily activities across early_morning/morning/midday/afternoon/evening/night slots with location ids that exist under visual.locations.
 - identity.ai_disclosure must plainly say this is an AI creator with AI-generated photos.
 - visual.character.reference_images must be an empty list [] (faces are chosen in the next step).
-- visual.character.wardrobe must list 12-16 distinct, specific outfits (colours, fabrics, cuts) that suit the climate and niche, including 2-3 activewear outfits; no brand logos. The daily outfit rotates through this list.
+- visual.character.wardrobe: 6-10 complete signature outfits. visual.character.closet: SEPARATES that remix like a real closet (any top works with any bottom): 10-12 tops, 7-9 bottoms, 3-4 layers, 4-5 one_pieces (dresses/jumpsuits; skip if not their style), 3-4 activewear sets. Specific colours, fabrics and cuts, mostly versatile neutrals plus a few colour pops; no brand logos.
+- visual.character.closet.occasions: 2-4 occasion outfits that fit THIS person's faith and culture from the brief (e.g. Sunday church dress with days [sunday] and keywords [church]; Jumu'ah kanzu/abaya with days [friday]; Eid outfit with keywords [eid]; a kwanjula gomesi or kanzu; wedding guest). Respectful and modest where the occasion calls for it. If the brief gives no faith, include only cultural or wedding occasions.
+- daily_life: include 4-6 weekend activities using weekends_only: true or days: [saturday]/[sunday] (outings, markets, brunch, worship if it fits the faith, resets).
+- weekend_ideas: 5-6 weekend post ideas in this creator's voice, including a "remix" idea (one piece styled several ways).
+- trends: region = the ISO country code of the home city, language "en", 4-6 news search queries about the niche and the city/country's culture and events, and 1-2 well-known RSS feeds for the niche if you are sure of their URLs (otherwise none), avoid: [] (plus anything the brief says to avoid).
 - visual.character.appearance must describe a consistent, photographable look (face, skin tone, hair, build) without naming a real person.
 - carousel.text_overlays: false. Use the IANA timezone of the home city.
 - No hashtags about AI. No medical, political or financial advice in behaviour.`;

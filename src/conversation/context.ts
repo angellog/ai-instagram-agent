@@ -2,6 +2,7 @@ import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { instagramClient } from "../instagram/accounts.js";
 import { calendarBrief } from "../calendar/events.js";
+import { trendsForPrompt } from "../trends/trends.js";
 import { relationshipMemories, worldMemories, type MemoryRow } from "../memory/store.js";
 import { retrieveKnowledge, type KnowledgeEntry } from "./knowledge.js";
 
@@ -134,7 +135,7 @@ export async function buildContext(it: InteractionRow, user: UserRow, conversati
   const recentOwnPosts = (await worldMemories(["published"], 5)).map((m) => ({ topic: m.content, published_at: m.updated_at }));
   if (recentOwnPosts.length) contextUsed.push("recent_activity");
 
-  const calendar = await calendarBrief("conversation");
+  const calendar = [await calendarBrief("conversation"), await trendsForPrompt("conversation")].filter(Boolean).join("\n");
   if (calendar) contextUsed.push("calendar");
 
   return { user, conversationId, history, memories, post, knowledge, recentOwnPosts, calendar, contextUsed };

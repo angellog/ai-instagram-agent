@@ -11,7 +11,8 @@ const post = (day: string, outfit: string): RecentItem =>
 describe("wardrobe rotation", () => {
   it("draws from staples plus the closet", () => {
     expect(wardrobe(p).length).toBeGreaterThanOrEqual(14);
-    expect(cooldownDays(16)).toBe(6);
+    expect(cooldownDays(16)).toBe(14);
+    expect(cooldownDays(500)).toBe(21);
     expect(cooldownDays(3)).toBe(1);
   });
 
