@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { createEvent, deleteEvent, EVENT_KINDS, listEvents, updateEvent, USE_FOR, type CalendarEvent, type EventInput } from "../../calendar/events.js";
+import { createEvent, deleteEvent, EVENT_KINDS, listEvents, updateEvent, type CalendarEvent, type EventInput } from "../../calendar/events.js";
 import { currentInfluencer, influencerId } from "../../context.js";
+import { zonedToUtc } from "../../content/schedule.js";
 import { many } from "../../db/pool.js";
 import { errorMessage } from "../../lib/errors.js";
 import { attempt, consoleRouter, render, type Req } from "../console.js";
-import { button, card, empty, esc, field, header, icon, input, link, pill, select, textarea } from "../ui/kit.js";
+import { button, card, empty, esc, field, header, icon, input, select, textarea } from "../ui/kit.js";
 
 const FC = "https://cdn.jsdelivr.net/npm/fullcalendar@7.1.0";
 
@@ -111,7 +112,10 @@ export function registerCalendar(app: FastifyInstance): void {
   // No-JS fallbacks (quick add, outcome) that redirect back.
   r.post("/admin/calendar/add", async (req: Req, reply) =>
     attempt(req, reply, "/admin/calendar", async () => {
-      const e = await createEvent(toInput(req.body as Record<string, unknown>) as EventInput);
+      const body = { ...(req.body as Record<string, unknown>) };
+      const d = String(body.starts_at ?? "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) body.starts_at = zonedToUtc(`${d}T00:00`, currentInfluencer().persona.identity.timezone).toISOString();
+      const e = await createEvent(toInput(body) as EventInput);
       return `Added “${e.title}”`;
     }),
   );
@@ -125,11 +129,12 @@ export function registerCalendar(app: FastifyInstance): void {
   // ------------------------------------------------------------ page
   r.get("/admin/calendar", async (req: Req, reply) => {
     const inf = currentInfluencer();
+    const tz = inf.persona.identity.timezone;
     const now = new Date();
     const [upcoming, needOutcome, memories] = await Promise.all([
       listEvents(now, new Date(now.getTime() + 21 * 86400_000)),
       many<CalendarEvent>(
-        `SELECT * FROM calendar_events WHERE (influencer_id IS NULL OR influencer_id = $1) AND coalesce(ends_at, starts_at) < now()
+        `SELECT * FROM calendar_events WHERE (influencer_id IS NULL OR influencer_id = $1) AND coalesce(ends_at, starts_at + CASE WHEN all_day THEN interval '1 day' ELSE interval '0' END) < now()
            AND starts_at > now() - interval '30 days' AND (outcome IS NULL OR outcome = '') ORDER BY starts_at DESC LIMIT 8`,
         [influencerId()],
       ),
@@ -142,7 +147,7 @@ export function registerCalendar(app: FastifyInstance): void {
       ["conversation", "Conversations only"],
       ["context", "Background context"],
     ];
-    const today = now.toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(now);
     const body = `${header("Calendar", {
       sub: `Current affairs and life events for ${esc(inf.name)}. Upcoming events give the agent something to post and talk about; once something has happened, write what happened and it becomes a memory.`,
       actions: `<button type="button" class="btn primary" id="cal-new">${icon("plus", 16)}<span>Add event</span></button>`,
@@ -155,7 +160,7 @@ ${card(
     ? `<ul class="list">${needOutcome
         .map(
           (e) =>
-            `<li><div style="flex:1"><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}${e.influencer_id === null ? " · shared" : ""}</div>
+            `<li><div style="flex:1"><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: tz })}${e.influencer_id === null ? " · shared" : ""}</div>
             <form method="post" action="/admin/calendar/${e.id}/outcome" style="margin-top:8px">${textarea("outcome", "", { rows: 2, attrs: `aria-label="What happened at ${esc(e.title)}" placeholder="What happened? (becomes a memory)"` })}<div style="margin-top:6px">${button("Save", { small: true })}</div></form></div></li>`,
         )
         .join("")}</ul>`
@@ -168,7 +173,7 @@ ${card(
         .slice(0, 8)
         .map(
           (e) =>
-            `<li><span style="width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:${KIND_COLOR[e.kind]}"></span><div><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · ${esc(e.kind)} · ${esc(e.use_for)}${e.importance === 3 ? " · major" : ""}</div></div></li>`,
+            `<li><span style="width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:${KIND_COLOR[e.kind]}"></span><div><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: tz })} · ${esc(e.kind)} · ${esc(e.use_for)}${e.importance === 3 ? " · major" : ""}</div></div></li>`,
         )
         .join("")}</ul>`
     : empty("Nothing coming up", "Add holidays, launches, matches, concerts, trips…"),
@@ -250,9 +255,6 @@ ${card(
   cal.render();
 })();
 </script>`;
-    void pill;
-    void link;
-    void USE_FOR;
     return render(req, reply, { title: "Calendar", active: "calendar", body, head, scripts });
   });
 }

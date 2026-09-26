@@ -65,10 +65,27 @@ export async function buildServer(): Promise<FastifyInstance> {
     if (reply.statusCode >= 500) logger.error({ url: req.url, status: reply.statusCode }, "request failed");
   });
 
+  // Malformed ids in console URLs are "not found", never a database error.
+  app.addHook("preHandler", async (req, reply) => {
+    const path = req.url.split("?")[0];
+    const uuidRoute = /^\/admin\/(?:posts|create|generation\/requests)\/([^/]+)/.exec(path) ?? /^\/admin\/api\/create\/([^/]+)/.exec(path);
+    if (uuidRoute && !/^[0-9a-f-]{36}$/i.test(uuidRoute[1])) return reply.code(404).send("not found");
+    const numRoute = /^\/admin\/(?:reviews|people|interactions|influencers|hatch|api\/calendar|calendar|generation\/models)\/([^/]+)/.exec(path);
+    if (numRoute && !/^\d{1,12}$/.test(numRoute[1]) && !["add"].includes(numRoute[1])) return reply.code(404).send("not found");
+  });
+
   app.setErrorHandler(async (err, req, reply) => {
     logger.error({ err, url: req.url }, "unhandled route error");
     await recordEvent("error", "web", "Unhandled route error", { url: req.url.split("?")[0], error: (err as Error).message });
-    return reply.code(500).send({ error: "internal error" });
+    // A console form that hits an unexpected error (e.g. Redis briefly down) goes back with a readable message.
+    const path = req.url.split("?")[0];
+    const wantsJson = String(req.headers.accept ?? "").includes("application/json");
+    if (req.method === "POST" && path.startsWith("/admin") && !wantsJson) {
+      const back = String(req.headers.referer ?? "").replace(/^https?:\/\/[^/]+/, "").split("?")[0].split("#")[0];
+      const to = back.startsWith("/admin") ? back : "/admin";
+      return reply.redirect(`${to}?flash=${encodeURIComponent(`Something went wrong: ${(err as Error).message}`.slice(0, 300))}&tone=bad`, 303);
+    }
+    return reply.code(500).send({ ok: false, error: "internal error" });
   });
 
   // ---------------------------------------------------------------- health

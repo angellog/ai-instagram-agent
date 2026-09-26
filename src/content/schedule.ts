@@ -66,6 +66,7 @@ export async function operatorPublish(postId: string, when: "now" | Date, review
   if (c.mode === "development") return { ok: false, message: "Development mode makes no external writes; switch mode in Controls" };
 
   const now = new Date();
+  if (when !== "now" && when.getTime() < now.getTime() - 60_000) return { ok: false, message: "That time has already passed: pick a future time, or use Post now" };
   const at = when === "now" || when.getTime() <= now.getTime() + 60_000 ? now : when;
   if (at.getTime() > now.getTime() + MAX_AHEAD_DAYS * 86_400_000) return { ok: false, message: `Schedule within ${MAX_AHEAD_DAYS} days` };
 

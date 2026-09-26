@@ -26,7 +26,7 @@ export const CSS = String.raw`
   --brand:#ff6a33;--brand-soft:#2a1710;--primary:#ff6a33;--primary-ink:#1b0b04;--primary-hover:#ff8455;--focus:#7aa2ff;
   --ok:#5fd38b;--ok-bg:#0f2a1a;--warn:#f3c056;--warn-bg:#2d2208;--bad:#ff8a8a;--bad-bg:#351314;--info:#8fb0ff;--info-bg:#131e3b;
   --shadow:0 1px 2px rgb(0 0 0/.4);--shadow-lg:0 16px 40px rgb(0 0 0/.55);color-scheme:dark;}}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+*{box-sizing:border-box}[hidden]{display:none!important}html{-webkit-text-size-adjust:100%}
 body{margin:0;font:15px/1.55 var(--font);background:var(--bg);color:var(--ink);font-feature-settings:"tnum" 1}
 a{color:inherit}main :where(a){color:var(--info);text-decoration-thickness:1px;text-underline-offset:2px}
 main :where(a.btn,a.kpi,.thumbs a,.tabs a){color:inherit;text-decoration:none}
@@ -35,7 +35,7 @@ main :where(a.btn,a.kpi,.thumbs a,.tabs a){color:inherit;text-decoration:none}
 .i{flex:none;vertical-align:-3px}
 code,.mono,pre,kbd{font-family:var(--mono);font-size:.86em}
 /* ---------------------------------------------------------------- shell */
-.app{display:grid;grid-template-columns:var(--sidebar) 1fr;min-height:100dvh}
+.app{display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);min-height:100dvh}.col{min-width:0}main{min-width:0}
 .side{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:var(--s4) var(--s3)}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;font-weight:700;letter-spacing:-.01em}
 .brand .mark{width:28px;height:28px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff}
@@ -132,6 +132,7 @@ details summary{cursor:pointer;color:var(--ink-2)}
 .callout.warn{background:var(--warn-bg);color:var(--warn)}.callout.ok{background:var(--ok-bg);color:var(--ok)}.callout.bad{background:var(--bad-bg);color:var(--bad)}
 .callout p{margin:0}.callout a{color:inherit}
 .kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0;font-size:14px}.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 12px;text-align:center}.stats div{background:var(--surface-2);border-radius:10px;padding:8px 4px;display:grid}.stats b{font-size:18px;font-variant-numeric:tabular-nums}.stats span{font-size:12px;color:var(--muted)}
 .secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 .src{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:6px;background:var(--surface-2);color:var(--muted)}
 .src.app{background:var(--ok-bg);color:var(--ok)}.src.env{background:var(--info-bg);color:var(--info)}
@@ -148,12 +149,15 @@ dialog .dh{padding:18px 20px 0;font-weight:700;font-size:17px;flex:none}.dialog-
 /* ---------------------------------------------------------------- responsive */
 @media (max-width:1100px){.grid-2{grid-template-columns:1fr}}
 @media (max-width:1023px){
-  .app{grid-template-columns:1fr}
+  .app{grid-template-columns:minmax(0,1fr)}
   .side{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);z-index:50;transform:translateX(-102%);transition:transform var(--t) var(--ease);box-shadow:var(--shadow-lg)}
   body.nav-open .side{transform:none}body.nav-open .scrim{display:block;position:fixed;inset:0;background:rgb(10 12 16/.4);z-index:40}
   .menu-btn{display:inline-grid}.top{padding:8px 12px}main{padding:16px}
 }
-@media (max-width:640px){.ph h1{font-size:22px}.slides img{height:260px}.kpi-v{font-size:22px}th,td{padding:8px 6px}.card-b{padding:12px 14px 16px}.card-h{padding:12px 14px 0}.tw{margin:0 -14px;padding:0 14px}}
+@media (max-width:640px){.top .crumb{display:none}.top{gap:6px}.top .pill{font-size:11px;padding:2px 7px}.top .btn.sm span{display:none}.top .btn.sm{padding:4px 8px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi{padding:12px}.kpi-h{font-size:11.5px}
+  .banner{padding:8px 16px;font-size:13px}.ph-actions{width:100%}.grid{grid-template-columns:minmax(0,1fr)}
+  .cr-card{padding:16px}.ph h1{font-size:22px}.slides img{height:260px}.kpi-v{font-size:22px}th,td{padding:8px 6px}.card-b{padding:12px 14px 16px}.card-h{padding:12px 14px 0}.tw{margin:0 -14px;padding:0 14px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.side,.top,.toasts{display:none}.app{display:block}}
 `;

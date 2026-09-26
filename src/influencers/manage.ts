@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { invalidateInfluencer, parseKnowledge, slugify } from "../context.js";
+import { invalidateInfluencer, parseKnowledge, slugify, withInfluencerLoose } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { upsertAccount } from "../instagram/accounts.js";
 import { InstagramClient } from "../instagram/client.js";
@@ -45,7 +45,7 @@ export async function createInfluencer(o: { name: string; personaYaml?: string; 
     [await freeSlug(name), name, o.personaYaml ?? "", o.knowledgeYaml ?? "", JSON.stringify(o.hatchState ?? {})],
   );
   if (o.personaYaml) await recordPersonaVersion(Number(r!.id), o.personaYaml);
-  await recordEvent("info", "influencers", `Hatching ${name}`, { influencerId: r!.id, slug: r!.slug });
+  await withInfluencerLoose(Number(r!.id), () => recordEvent("info", "influencers", `Hatching ${name}`, { influencerId: r!.id, slug: r!.slug }));
   return r!;
 }
 
@@ -53,9 +53,13 @@ export async function getInfluencer(id: number): Promise<InfluencerRow | undefin
   return one<InfluencerRow>("SELECT * FROM influencers WHERE id = $1", [id]);
 }
 
-export async function allInfluencers(): Promise<Array<InfluencerRow & { username: string | null; followers: number | null; soul_id: string | null }>> {
+export async function allInfluencers(): Promise<
+  Array<InfluencerRow & { username: string | null; followers: number | null; follows: number | null; media: number | null; synced_at: Date | null; soul_id: string | null }>
+> {
   return many(
-    `SELECT i.*, a.username, (SELECT followers FROM account_metrics m WHERE m.influencer_id = i.id ORDER BY day DESC LIMIT 1) AS followers,
+    `SELECT i.*, a.username,
+            coalesce((a.profile->>'followers_count')::int, (SELECT followers FROM account_metrics m WHERE m.influencer_id = i.id ORDER BY day DESC LIMIT 1)) AS followers,
+            (a.profile->>'follows_count')::int AS follows, (a.profile->>'media_count')::int AS media, a.updated_at AS synced_at,
             (SELECT soul_id FROM souls s WHERE s.influencer_id = i.id AND s.status = 'active') AS soul_id
      FROM influencers i LEFT JOIN ig_accounts a ON a.influencer_id = i.id AND a.is_primary
      ORDER BY CASE i.status WHEN 'active' THEN 0 WHEN 'hatching' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END, i.id`,
@@ -142,5 +146,12 @@ export async function attachInstagram(
     subscribed = Boolean((await ig.subscribeWebhooks(["comments", "messages"])).success);
   }
   await recordEvent("info", "instagram", `Attached @${profile.username}`, { influencerId, igUserId, subscribed });
+  if (profile.followers_count !== undefined) {
+    await one(
+      `INSERT INTO account_metrics (influencer_id, day, followers, raw) VALUES ($1, now()::date, $2, '{}')
+       ON CONFLICT (influencer_id, day) DO UPDATE SET followers = EXCLUDED.followers, collected_at = now()`,
+      [influencerId, profile.followers_count],
+    );
+  }
   return { username: profile.username ?? igUserId, igUserId, subscribed, accountType: profile.account_type ? String(profile.account_type) : undefined };
 }

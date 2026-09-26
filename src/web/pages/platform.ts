@@ -3,7 +3,8 @@ import sharp from "sharp";
 import { getControls, PLATFORM, setControls } from "../../config/controls.js";
 import { env } from "../../config/env.js";
 import { clearSetting, setSetting, settingsView, SETTINGS, type SettingGroup, type SettingView } from "../../config/settings.js";
-import { influencerId, maybeInfluencer } from "../../context.js";
+import { maybeInfluencer, withInfluencer } from "../../context.js";
+import { syncProfile } from "../../instagram/profileSync.js";
 import { costByOperation, costReport, spendSummary } from "../../cost/ledger.js";
 import { many, one } from "../../db/pool.js";
 import { adapters } from "../../generation/adapters/index.js";
@@ -54,12 +55,21 @@ ${
         .map((i) =>
           card(
             `<div class="row" style="margin-bottom:10px">${avatar(i.avatar_url, i.name, 48)}<div><b style="font-size:17px">${esc(i.name)}</b><div class="meta">${i.username ? `@${esc(i.username)}` : "no Instagram yet"} · <code>${esc(i.slug)}</code></div></div><span class="right">${status(i.status)}</span></div>
-            <dl class="kv"><dt>Soul</dt><dd>${i.soul_id ? `<code>${esc(i.soul_id)}</code>` : '<span class="muted">none</span>'}</dd><dt>Followers</dt><dd>${i.followers ?? "—"}</dd><dt>Since</dt><dd>${ago(i.hatched_at ?? i.created_at)}</dd></dl>
+            <div class="stats">${[
+              ["Followers", i.followers],
+              ["Following", i.follows],
+              ["Posts", i.media],
+            ]
+              .map(([l, v]) => `<div><b>${v === null || v === undefined ? "—" : Number(v).toLocaleString("en")}</b><span>${l}</span></div>`)
+              .join("")}</div>
+            <dl class="kv"><dt>Soul</dt><dd>${i.soul_id ? `<code>${esc(i.soul_id)}</code>` : '<span class="muted">none</span>'}</dd><dt>Since</dt><dd>${ago(i.hatched_at ?? i.created_at)}</dd>${
+              i.username ? `<dt>Synced</dt><dd>${ago(i.synced_at)}</dd>` : ""
+            }</dl>
             <div class="row" style="margin-top:12px">${
               i.status === "hatching"
                 ? link("Continue hatching", `/admin/hatch/${i.id}`, { variant: "primary", small: true })
                 : `<form method="post" action="/admin/switch"><input type="hidden" name="id" value="${i.id}">${button("Open", { small: true, icon: "arrowRight" })}</form>`
-            }${i.status === "active" ? action(`/admin/influencers/${i.id}/status`, "Pause", { small: true, fields: { status: "paused" }, icon: "pause" }) : ""}${
+            }${i.username && i.status !== "hatching" ? action(`/admin/influencers/${i.id}/sync`, "Refresh", { small: true, icon: "refresh", variant: "ghost" }) : ""}${i.status === "active" ? action(`/admin/influencers/${i.id}/status`, "Pause", { small: true, fields: { status: "paused" }, icon: "pause" }) : ""}${
               i.status === "paused" ? action(`/admin/influencers/${i.id}/status`, "Resume", { small: true, fields: { status: "active" }, icon: "play", variant: "primary" }) : ""
             }${i.status !== "archived" ? action(`/admin/influencers/${i.id}/status`, "Archive", { small: true, variant: "danger", fields: { status: "archived" }, confirm: `Archive ${i.name}? Scheduling stops and webhooks for its account are ignored. Data is kept.` }) : action(`/admin/influencers/${i.id}/status`, "Restore", { small: true, fields: { status: "paused" } })}</div>`,
           ),
@@ -81,7 +91,17 @@ ${
         await syncInfluencerSchedulers().catch(() => undefined);
         return `Status set to ${s}`;
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
+  );
+
+  r.post(
+    "/admin/influencers/:id/sync",
+    async (req: Req, reply) =>
+      attempt(req, reply, "/admin/influencers", async () => {
+        const n = await withInfluencer(Number(req.params.id), () => syncProfile());
+        return n ? `@${n.username}: ${n.followers ?? "?"} followers, ${n.media ?? "?"} posts` : "No Instagram account attached";
+      }),
+    { platform: true, influencerParam: "id" },
   );
 
   // Influencer switcher (sidebar): remember the choice, return to the same page.
@@ -245,11 +265,13 @@ ${card(table(["Day", "LLM", "Images"], daily.map((d) => [esc(d.day), usd(d.llm),
     "/admin/costs/platform",
     async (req: Req, reply) =>
       attempt(req, reply, "/admin/costs#platform", async () => {
-        await setControls(
-          { platform_daily_budget_usd: Number(req.body?.platform_daily_budget_usd), platform_monthly_budget_usd: Number(req.body?.platform_monthly_budget_usd) },
-          reviewer(req),
-          PLATFORM,
-        );
+        const num = (k: string) => {
+          const t = String(req.body?.[k] ?? "").trim();
+          const v = Number(t);
+          if (!t || !Number.isFinite(v) || v < 0) throw new Error(`${k.replace(/_/g, " ")} must be a number of dollars`);
+          return v;
+        };
+        await setControls({ platform_daily_budget_usd: num("platform_daily_budget_usd"), platform_monthly_budget_usd: num("platform_monthly_budget_usd") }, reviewer(req), PLATFORM);
         return "Platform caps saved";
       }),
     { platform: true },
@@ -294,5 +316,4 @@ ${card(
     },
     { platform: true },
   );
-  void influencerId;
 }

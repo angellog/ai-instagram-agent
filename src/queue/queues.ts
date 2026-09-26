@@ -35,6 +35,8 @@ export const JOBS = {
   calendarRecap: "calendar.recap",
   benchmarkRun: "generation.benchmark",
   hatchFaces: "hatch.faces",
+  contentCreate: "content.create",
+  profileSync: "instagram.profile_sync",
   sweep: "maintenance.sweep",
 } as const;
 

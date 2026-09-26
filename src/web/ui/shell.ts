@@ -33,6 +33,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     "Operate",
     [
       ["overview", "/admin", "Overview", "dashboard"],
+      ["create", "/admin/create", "Create a post", "zap"],
       ["reviews", "/admin/reviews", "Reviews", "inbox"],
       ["calendar", "/admin/calendar", "Calendar", "calendar"],
       ["posts", "/admin/posts", "Posts", "image"],
@@ -88,7 +89,7 @@ const APP_JS = String.raw`
   var sc=d.querySelector(".scrim");if(sc){sc.onclick=function(){d.body.classList.remove("nav-open")}}
   d.addEventListener("keydown",function(e){if(e.key==="Escape")d.body.classList.remove("nav-open")});
   // flash → toast (and strip it from the URL so a refresh does not repeat it)
-  var u=new URL(location.href);var f=u.searchParams.get("flash");if(f){toast(f,/^(not |error|failed|invalid|could not|refused|wrong)/i.test(f)?"bad":"");u.searchParams.delete("flash");history.replaceState(null,"",u.pathname+u.search+u.hash)}
+  var u=new URL(location.href);var f=u.searchParams.get("flash");if(f){toast(f,u.searchParams.get("tone")==="bad"||/^(not saved|error|failed|could not)/i.test(f)?"bad":"");u.searchParams.delete("flash");u.searchParams.delete("tone");history.replaceState(null,"",u.pathname+u.search+u.hash)}
   // confirm dialog for destructive forms
   var dlg=d.getElementById("confirm");
   d.addEventListener("submit",function(e){var f=e.target;if(!(f instanceof HTMLFormElement))return;
@@ -131,7 +132,7 @@ export function shell(o: ShellContext): string {
   }</small></span>${icon("chevron", 16)}</summary><div class="menu" role="menu">${o.influencers
     .map(
       (i) =>
-        `<form method="post" action="/admin/switch"><input type="hidden" name="id" value="${i.id}"><input type="hidden" name="back" value=""><button role="menuitem"${
+        `<form method="post" action="/admin/switch"><input type="hidden" name="id" value="${i.id}"><button role="menuitem"${
           cur?.id === i.id ? ' aria-current="true"' : ""
         }>${avatar(i.avatar_url, i.name, 28)}<span class="who"><b>${esc(i.name)}</b><br><small class="muted">${esc(i.username ? `@${i.username}` : i.slug)} · ${esc(i.status)}</small></span>${
           cur?.id === i.id ? icon("check", 16) : ""

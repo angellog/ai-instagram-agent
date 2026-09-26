@@ -10,12 +10,13 @@ import { storeWebhookEvent } from "../../ingest/webhook.js";
 import { primaryAccount } from "../../instagram/accounts.js";
 import { forgetUser } from "../../memory/store.js";
 import { assessText } from "../../safety/safety.js";
+import { createButton } from "./create.js";
 import { persona } from "../../persona/loader.js";
 import { JOBS, jobId, queue, queueCounts } from "../../queue/queues.js";
 import { listEvents } from "../../calendar/events.js";
 import { attempt, consoleRouter, done, isUuid, render, reviewer, type Req } from "../console.js";
 import { approveReview, listReviews, rejectReview } from "../reviews.js";
-import { action, ago, avatar, bar, button, card, empty, esc, field, header, icon, input, kpi, link, pill, select, table, tabs, textarea, usd } from "../ui/kit.js";
+import { action, ago, bar, button, card, empty, esc, field, header, icon, input, kpi, link, pill, select, table, tabs, textarea, usd } from "../ui/kit.js";
 
 /** Post states in which the operator may still edit slides. */
 const EDITABLE = ["awaiting_review", "dry_run", "qc_failed"];
@@ -38,13 +39,13 @@ export async function removeSlide(postId: string, position: number): Promise<str
 }
 
 /** Why a post can't be published yet, and the one action that unblocks it. */
-export function publishBlocker(status: string, slides: number, safety: string | null, published: boolean): { reason: string; fix?: string } {
+export function publishBlocker(status: string, slides: number, safety: string | null, published: boolean): { reason: string } {
   if (published) return { reason: "Already on Instagram." };
   if (safety === "red") return { reason: "The safety check marked this post RED; it is never published." };
   if (status === "rejected") return { reason: "This post was rejected." };
   if (["draft", "generating", "composing"].includes(status)) return { reason: "Images are still being made; the buttons appear when they're ready." };
   if (status === "publishing") return { reason: "Publishing is in progress." };
-  if (!slides) return { reason: "No images yet (production stopped before any were made). Use Retry production above, or Plan a post now." };
+  if (!slides) return { reason: "No images yet: production stopped before any were made. Use Retry production above, or Create a post now." };
   return { reason: `A ${status.replace("_", " ")} post can't be published.` };
 }
 
@@ -104,7 +105,8 @@ export function registerOperate(app: FastifyInstance): void {
       listEvents(new Date(Date.now() - 86400_000), new Date(Date.now() + 14 * 86400_000)),
       one<{ n: number }>("SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND status = 'published' AND published_at > now() - interval '7 days'", [id]),
     ]);
-    const f = followers[0]?.followers ?? null;
+    const live = acct?.profile && typeof (acct.profile as { followers_count?: number }).followers_count === "number" ? (acct.profile as { followers_count: number }).followers_count : null;
+    const f = live ?? followers[0]?.followers ?? null;
     const f7 = followers.at(-1)?.followers ?? null;
     const delta = f !== null && f7 !== null && followers.length > 1 ? f - f7 : null;
     const q = Object.entries(counts).map(([name, n]) => [esc(name), String(n.waiting ?? 0), String(n.active ?? 0), String(n.delayed ?? 0), n.failed ? `<b>${n.failed}</b>` : "0"]);
@@ -116,11 +118,11 @@ export function registerOperate(app: FastifyInstance): void {
     const body = `${header(inf.name, {
       eyebrow: `${p.identity.location} · ${localTime(p.identity.timezone)}`,
       sub: acct ? `@${esc(acct.username ?? acct.ig_user_id)} · ${esc(p.identity.occupation)}` : esc(p.identity.occupation),
-      actions: `${action("/admin/actions/plan", "Plan a post now", { icon: "sparkles", variant: "primary" })}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
+      actions: `${createButton()}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
     })}
 ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) => `<p>${s}</p>`).join("")}</div></div>` : ""}
 <div class="kpis">
-  ${kpi("Followers", f === null ? "—" : f.toLocaleString("en"), { icon: "users", hint: delta === null ? "daily snapshot at 23:50" : `${delta >= 0 ? "+" : ""}${delta} over ${followers.length - 1}d`, tone: delta && delta > 0 ? "ok" : undefined })}
+  ${kpi("Followers", f === null ? "—" : f.toLocaleString("en"), { icon: "users", hint: delta === null ? "synced hourly from Instagram" : `${delta >= 0 ? "+" : ""}${delta} over ${followers.length - 1}d`, tone: delta && delta > 0 ? "ok" : undefined })}
   ${kpi("Waiting for you", String(pending?.n ?? 0), { icon: "inbox", href: "/admin/reviews", tone: pending?.n ? "warn" : undefined, hint: pending?.n ? "open the review queue" : "nothing to review" })}
   ${kpi("Posted this week", String(week?.n ?? 0), { icon: "image", href: "/admin/posts", hint: `max ${c.max_posts_per_day}/day` })}
   ${kpi("Conversations (24h)", String(conv?.total ?? 0), { icon: "message", href: "/admin/conversations", hint: `${conv?.replied ?? 0} handled · ${conv?.ignored ?? 0} skipped` })}
@@ -136,7 +138,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
               `<a href="/admin/posts/${x.id}">${x.cover ? `<img src="${esc(x.cover)}" alt="${esc(x.topic ?? "post")}" loading="lazy">` : `<div class="empty" style="aspect-ratio:4/5;border:1px dashed var(--line-2);border-radius:12px">${icon("image")}</div>`}<div class="cap"><span>${esc((x.topic ?? x.caption).slice(0, 38))}</span>${pill(x.status)}</div></a>`,
           )
           .join("")}</div>`
-      : empty("No posts yet", "Run the planner or wait for the next posting window.", action("/admin/actions/plan", "Plan a post now", { icon: "sparkles" })),
+      : empty("No posts yet", "Create one now to see this influencer in action, or wait for the next posting window.", createButton()),
     { title: "Recent posts", actions: link("All posts", "/admin/posts", { small: true, variant: "ghost" }) },
   )}
   ${card(
@@ -153,7 +155,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
     events.length
       ? `<ul class="list">${events
           .slice(0, 6)
-          .map((e) => `<li>${icon("calendar", 16)}<div><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · ${esc(e.kind)}${e.influencer_id === null ? " · shared" : ""}</div></div></li>`)
+          .map((e) => `<li>${icon("calendar", 16)}<div><b>${esc(e.title)}</b><div class="meta">${new Date(e.starts_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: p.identity.timezone })} · ${esc(e.kind)}${e.influencer_id === null ? " · shared" : ""}</div></div></li>`)
           .join("")}</ul>`
       : empty("Nothing on the calendar", "Add upcoming events and things that happened — the agent uses them for posts and conversations.", link("Open calendar", "/admin/calendar", { small: true })),
     { title: "What's going on", actions: link("Calendar", "/admin/calendar", { small: true, variant: "ghost" }) },
@@ -187,7 +189,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
         ${
           actionable
             ? `<form method="post" action="/admin/reviews/${rv.id}/approve">${field(isPost ? "Caption" : "Reply", textarea("text", text, { rows: isPost ? 6 : 3 }), { help: "Edit before approving if needed." })}
-               <div class="row">${button(isPost ? "Approve (next window)" : "Approve & send", { variant: isPost ? "default" : "primary", icon: "check" })}${
+               <div class="row">${button(isPost ? "Approve (next window)" : "Approve & send", { variant: isPost ? "ghost" : "primary", icon: "check" })}${
                  isPost ? `<button class="btn primary" formaction="/admin/posts/${esc(rv.subject_id)}/post-now">${icon("send", 16)}<span>Post now</span></button>${link("Schedule…", `/admin/posts/${esc(rv.subject_id)}#publish`, { variant: "ghost", icon: "calendar" })}` : ""
                }</div></form>
                <form method="post" action="/admin/reviews/${rv.id}/reject" class="row" style="margin-top:10px"><input name="note" placeholder="Reason (optional)" aria-label="Rejection reason" style="max-width:320px">${button("Reject", { variant: "danger", icon: "x" })}</form>`
@@ -230,7 +232,7 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
        ORDER BY p.created_at DESC LIMIT 120`,
       [influencerId(), filter],
     );
-    const body = `${header("Posts", { actions: action("/admin/actions/plan", "Plan a post now", { icon: "sparkles", variant: "primary" }) })}
+    const body = `${header("Posts", { actions: createButton() })}
 ${tabs([
   { href: "/admin/posts", label: "All", active: filter === "all" },
   { href: "/admin/posts?status=published", label: "Published", active: filter === "published" },
@@ -306,7 +308,7 @@ ${card(
         ? ""
         : card(
             `<div class="row" style="align-items:center;gap:12px"><button class="btn primary" disabled aria-disabled="true">${icon("send", 16)}<span>Post now</span></button><button class="btn" disabled aria-disabled="true">${icon("calendar", 16)}<span>Schedule</span></button>
-             <span class="meta">${esc(blocked.reason)}</span>${blocked.fix ?? ""}</div>`,
+             <span class="meta">${esc(blocked.reason)}</span></div>`,
             { title: "Publish", id: "publish" },
           );
     const actions = [
@@ -316,7 +318,7 @@ ${card(
       p.permalink ? link("Open on Instagram", p.permalink, { external: true }) : "",
     ].join("");
     const body = `${header(p.topic ?? "Post", {
-      eyebrow: `${esc(p.format ?? "")} / ${esc(p.structure ?? "")}`,
+      eyebrow: `${p.format ?? ""} / ${p.structure ?? ""}`,
       sub: `${pill(p.status)} ${pill(p.safety_level)} <span class="meta">repetition ${p.repetition_score ?? "—"} · cost ${usd(costs?.usd)} · created ${ago(p.created_at)}</span>`,
       actions,
     })}
@@ -416,13 +418,6 @@ ${card(
   r.post("/admin/posts/:id/unschedule", async (req: Req, reply) => {
     const res = await cancelSchedule(req.params.id, reviewer(req));
     return done(req, reply, `/admin/posts/${req.params.id}`, res.message, res.ok);
-  });
-  r.post("/admin/posts/:id/publish", async (req: Req, reply) => {
-    const id = req.params.id;
-    const ok = await one("UPDATE posts SET status = 'approved', last_error = NULL WHERE id = $1 AND influencer_id = $2 AND status IN ('approved','failed') AND ig_media_id IS NULL RETURNING id", [id, influencerId()]);
-    if (!ok) return done(req, reply, `/admin/posts/${id}`, "Only approved or failed posts can be published", false);
-    await queue("publish").add(JOBS.postPublish, { influencerId: influencerId(), postId: id }, { jobId: jobId("publish", id, "manual", Date.now()) });
-    return done(req, reply, `/admin/posts/${id}`, "Publishing queued");
   });
   // Re-run production for a failed post; slides that already passed are kept.
   r.post("/admin/posts/:id/retry", async (req: Req, reply) => {
@@ -576,10 +571,6 @@ ${card(table(["When", "", "Channel", "Text", "Status"], msgs.map((m) => [ago(m.c
     await queue("maintenance").add(JOBS.sweep, {}, { jobId: jobId("sweep", "manual", Date.now()) });
     return done(req, reply, "/admin", "Recovery sweep queued");
   });
-  r.post("/admin/actions/analytics", async (req: Req, reply) => {
-    await queue("analytics").add(JOBS.analyticsProcess, {}, { jobId: jobId("analytics", "manual", Date.now()) });
-    return done(req, reply, "/admin", "Analytics recompute queued");
-  });
 
   /** Push a synthetic comment/DM through the real pipeline (ingest → worker) for the selected influencer. */
   r.post("/admin/simulate", async (req: Req, reply) =>
@@ -600,5 +591,4 @@ ${card(table(["When", "", "Channel", "Text", "Status"], msgs.map((m) => [ago(m.c
       return "Simulated interaction queued; refresh in a few seconds";
     }),
   );
-  void avatar;
 }

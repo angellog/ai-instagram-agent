@@ -73,10 +73,15 @@ export type PlanOutcome =
  * repetition check can veto, continuity is enforced, and an accepted idea
  * becomes a draft post handed to production.
  */
-export async function planContent(now = new Date()): Promise<PlanOutcome> {
+export interface PlanOptions {
+  /** Operator pressed "Create a post now": skip window/cadence gates, never "wait", hold the result for review. */
+  operator?: boolean;
+}
+
+export async function planContent(now = new Date(), opts: PlanOptions = {}): Promise<PlanOutcome> {
   const c = await getControls();
   const p = persona();
-  const gateReason = await postingGate(c, p, now);
+  const gateReason = opts.operator ? operatorGate(c) : await postingGate(c, p, now);
   if (gateReason) return { status: "skipped", reason: gateReason };
 
   const { day, hour } = localParts(now, p.identity.timezone);
@@ -100,7 +105,9 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
       maxTokens: 2500,
       temperature: 0.9,
       system: directorSystem(p, c),
-      prompt: directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, feedback }),
+      prompt:
+        directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, feedback }) +
+        (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : ""),
     });
 
     if (out.decision === "wait" || !out.idea) {
@@ -179,21 +186,30 @@ export async function planContent(now = new Date()): Promise<PlanOutcome> {
 
     const postId = await tx(async (client) => {
       const post = await client.query<{ id: string }>(
-        `INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status, visual_state)
-         VALUES ($5, $1, $2, $3, 'draft', $4) RETURNING id`,
-        [ideaRow!.id, idea.format === "carousel" ? "CAROUSEL" : "IMAGE", fitCaption(idea.caption, idea.hashtags, p), JSON.stringify(state), influencerId()],
+        `INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status, visual_state, origin)
+         VALUES ($5, $1, $2, $3, 'draft', $4, $6) RETURNING id`,
+        [ideaRow!.id, idea.format === "carousel" ? "CAROUSEL" : "IMAGE", fitCaption(idea.caption, idea.hashtags, p), JSON.stringify(state), influencerId(), opts.operator ? "operator" : "scheduled"],
       );
       if (activity) {
         await client.query("UPDATE activities SET decision = 'post', reason = $2 WHERE id = $1", [activity.id, `idea ${ideaRow!.id}`]);
       }
       return post.rows[0].id;
     });
-    await queue("content").add(JOBS.contentProduce, { influencerId: influencerId(), postId }, { jobId: jobId("produce", postId) });
+    // Operator runs produce inline (with live progress); scheduled ones go to the queue.
+    if (!opts.operator) await queue("content").add(JOBS.contentProduce, { influencerId: influencerId(), postId }, { jobId: jobId("produce", postId) });
     await recordEvent("info", "content", "Content idea accepted; production queued", { ideaId: ideaRow!.id, postId, topic: idea.topic, attempt });
     return { status: "accepted", ideaId: ideaRow!.id, postId, attempts: attempt };
   }
   await recordEvent("warn", "content", "All content concepts rejected as repetitive", { attempts: c.max_concept_attempts });
   return { status: "rejected_all", attempts: c.max_concept_attempts, reason: feedback.at(-1) ?? "" };
+}
+
+/** Gates for an operator-requested post: only the switches a human set to stop everything. */
+export function operatorGate(c: Controls): string | undefined {
+  if (c.paused) return "paused: resume the influencer first";
+  if (!c.content_enabled) return "content generation is disabled in Controls";
+  if (!c.image_generation_enabled) return "image generation is disabled in Controls";
+  return undefined;
 }
 
 /** Hard gates checked before any LLM spend. Returns a reason to skip, or undefined. */

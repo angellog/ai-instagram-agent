@@ -171,7 +171,8 @@ ${modelCards}`;
       <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="small" style="font-weight:600;margin-bottom:6px">Allowed modalities</legend><div class="row">${MODALITIES.map(
         (m) => `<label class="row small"><input type="checkbox" name="modalities" value="${m}"${p.allowedModalities.includes(m) ? " checked" : ""}> ${m.replace(/_/g, " ")}</label>`,
       ).join("")}</div></fieldset>
-      <div class="row">${button("Save policy", { variant: "primary", icon: "check" })}${scope === "influencer" && own ? action("/admin/generation/policy/reset", "Use platform default", { variant: "ghost", small: true }) : ""}</div></form>`;
+      <div class="row">${button("Save policy", { variant: "primary", icon: "check" })}</div></form>
+      ${scope === "influencer" && own ? `<div class="row" style="margin-top:8px">${action("/admin/generation/policy/reset", "Use platform default", { variant: "ghost", small: true })}</div>` : ""}`;
     const body = `${header("Routing policy", { sub: "How the engine chooses a model. The influencer policy overrides the platform default." })}
 ${genTabs("policy")}
 <div class="grid-2">
@@ -200,7 +201,7 @@ ${card(
       await savePolicy(scope, {
         mode: mode as Policy["mode"],
         qualityTier: (["draft", "standard", "high", "max"].includes(b.qualityTier) ? b.qualityTier : "high") as Policy["qualityTier"],
-        maxCostPerJobUsd: Math.max(0, Number(b.maxCostPerJobUsd ?? 0.5)),
+        maxCostPerJobUsd: b.maxCostPerJobUsd?.trim() ? Math.max(0, Number(b.maxCostPerJobUsd)) : (await policyFor(scope)).maxCostPerJobUsd,
         preferredModelId: num(b.preferredModelId),
         fallbackModelIds: [b.fallback0, b.fallback1, b.fallback2].map(num).filter((x): x is number => x !== null),
         allowedModalities: mods.filter((m) => (MODALITIES as readonly string[]).includes(m)),
@@ -260,7 +261,7 @@ ${card(
       many<{ url: string; kind: string }>("SELECT url, kind FROM assets WHERE generation_request_id = $1", [x.id]),
     ]);
     const route = x.route as { mode?: string; candidates?: Array<{ model: string; score: number; estimatedCostUsd: number; reason: string }>; excluded?: Array<{ model: string; reason: string }> };
-    const body = `${header(`${String(x.modality).replace(/_/g, " ")} request`, { eyebrow: esc(x.purpose), sub: `${pill(x.status)} <code>${esc(x.idempotency_key)}</code> · ${ago(x.created_at)}` })}
+    const body = `${header(`${String(x.modality).replace(/_/g, " ")} request`, { eyebrow: String(x.purpose), sub: `${pill(x.status)} <code>${esc(x.idempotency_key)}</code> · ${ago(x.created_at)}` })}
 ${x.error ? `<div class="callout bad">${icon("alert")}<p>${esc(x.error)}</p></div>` : ""}
 ${assets.length ? card(`<div class="slides">${assets.map((a) => (a.kind === "video" ? `<figure><video src="${esc(a.url)}" controls style="height:320px;border-radius:12px"></video></figure>` : `<figure><img src="${esc(a.url)}" alt="result"></figure>`)).join("")}</div>`, { title: "Result" }) : ""}
 <div class="grid">
@@ -295,7 +296,7 @@ ${card(
 
   // ------------------------------------------------------------ benchmarks
   r.get("/admin/generation/benchmarks", async (req: Req, reply) => {
-    const [models, states, results] = await Promise.all([listModels(), providerStates(), benchmarkResults()]);
+    const [models, results] = await Promise.all([listModels(), benchmarkResults()]);
     const candidates = models.filter((m) => !m.deprecated && m.enabled && (m.capabilities.includes("reference_image") || m.capabilities.includes("soul") || m.capabilities.includes("text_to_image")) && m.provider_id !== "mock");
     const plan = await planBenchmark(candidates.map((m) => m.id));
     const runnable = new Map(plan.models.map((x) => [x.model.id, x.estimate]));

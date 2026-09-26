@@ -31,7 +31,7 @@ const form = (url: string, body: Record<string, string | string[]>, cookie = "")
 };
 const json = (url: string, body: unknown, cookie = "") =>
   app.inject({ method: "POST", url, payload: JSON.stringify(body), headers: { "content-type": "application/json", accept: "application/json", ...(cookie ? { cookie } : {}) } });
-const flash = (r: { headers: Record<string, unknown> }) => decodeURIComponent(String(r.headers.location ?? "").split("#")[0]).replace(/^.*flash=/, "");
+const flash = (r: { headers: Record<string, unknown> }) => new URL(String(r.headers.location ?? "/"), "http://x").searchParams.get("flash") ?? "";
 const cookieOf = (r: { headers: Record<string, unknown> }) => String(([] as string[]).concat((r.headers["set-cookie"] as string | string[]) ?? [])[0] ?? "").split(";")[0];
 
 describe("Config page", () => {
@@ -141,7 +141,8 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     // 5. launch
     const launch = await form(`/admin/hatch/${id}/launch`, { mode: "dry_run", max_posts_per_day: "1", daily_budget_usd: "2", daily_image_budget_usd: "1", plan_now: "1" }, cookie);
     expect(flash(launch)).toMatch(/Nova is live/);
-    expect(String(launch.headers.location)).toMatch(/^\/admin\?/);
+    // Launch opens the live "creating your first post" page.
+    expect(String(launch.headers.location)).toMatch(/^\/admin\/create\/[0-9a-f-]{36}\?/);
     expect(await one("SELECT status FROM influencers WHERE id = $1", [id])).toEqual({ status: "active" });
     expect(await many("SELECT key, value FROM controls WHERE influencer_id = $1 AND key IN ('mode','max_posts_per_day') ORDER BY key", [id])).toEqual([
       { key: "max_posts_per_day", value: 1 },
@@ -149,8 +150,8 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     ]);
     const schedulers = await queue("content").getJobSchedulers();
     expect(schedulers.map((s) => s.key)).toEqual(expect.arrayContaining([`content-plan-${id}`, "content-plan-1"]));
-    const plan = (await queue("content").getJobs(["waiting"])).find((j) => j.name === JOBS.contentPlan);
-    expect(plan?.data).toMatchObject({ influencerId: id });
+    const create = (await queue("content").getJobs(["waiting"])).find((j) => j.name === JOBS.contentCreate);
+    expect(create?.data).toMatchObject({ influencerId: id });
 
     // The console now shows Nova.
     const home = await app.inject({ url: "/admin", headers: { cookie } });

@@ -1,4 +1,5 @@
 import { influencerId } from "../context.js";
+import { persona } from "../persona/loader.js";
 import { many, one } from "../db/pool.js";
 import { recordEvent } from "../lib/events.js";
 import { applyMemoryPolicy } from "../memory/policy.js";
@@ -13,11 +14,12 @@ import type { CalendarEvent } from "./events.js";
  */
 export async function recapCalendar(now = new Date()): Promise<{ recapped: number }> {
   const inf = influencerId();
+  const tz = persona().identity.timezone;
   const due = await many<CalendarEvent>(
     `SELECT * FROM calendar_events e
      WHERE (e.influencer_id IS NULL OR e.influencer_id = $1)
        AND e.outcome IS NOT NULL AND length(trim(e.outcome)) > 0
-       AND coalesce(e.ends_at, e.starts_at) <= $2
+       AND coalesce(e.ends_at, e.starts_at + CASE WHEN e.all_day THEN interval '1 day' ELSE interval '0' END) <= $2
        AND (e.recapped_at IS NULL OR e.recapped_at < e.updated_at
             OR NOT EXISTS (SELECT 1 FROM memories m WHERE m.influencer_id = $1 AND m.source_type = 'calendar' AND m.source_id = e.id::text AND m.status = 'active'))
      ORDER BY e.starts_at LIMIT 50`,
@@ -25,7 +27,7 @@ export async function recapCalendar(now = new Date()): Promise<{ recapped: numbe
   );
   let recapped = 0;
   for (const e of due) {
-    const day = new Date(e.starts_at).toISOString().slice(0, 10);
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(e.starts_at));
     const v = applyMemoryPolicy({
       kind: "calendar_recap",
       content: `${e.title} (${day}${e.location ? `, ${e.location}` : ""}): ${e.outcome}`.slice(0, 480),

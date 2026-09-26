@@ -3,6 +3,30 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.6: Create a post now, live followers, full console audit
+
+**Create a post now** (Overview, Posts, the sidebar, and automatically after a Hatch launch)
+- One tap runs the real pipeline for the selected influencer: idea → photos → quality and safety checks.
+- It always stops for review, ignoring the posting window and cadence, and never auto-publishes.
+- A live progress page shows an animated bar, a 4-step stepper, and photos fading in as each is hosted. Progress is measured from real pipeline rows, not a timer.
+- When done: caption plus Post now / Schedule / Open / Make another. On failure: a readable reason and Try again.
+- A second tap while a run is active reopens that run.
+
+**Live follower numbers**
+- An hourly Instagram profile sync (followers, following, posts), plus a sync right after an account is attached and a Refresh button on influencer cards.
+- Cards and the Overview KPI no longer wait for the nightly snapshot.
+
+**Audit fixes** (each has a regression test; a new crawler test visits every page and link and submits every form)
+- Hatch actions are billed and logged to the influencer being hatched, not the one selected in the sidebar.
+- The "Use platform default" button sat inside another form, so it re-saved the policy instead of resetting it.
+- Failures now show as error toasts (`tone=bad`), not success toasts.
+- Dates use the influencer's timezone, and all-day events are no longer "past" on their own day.
+- Saving Controls only pins changed values, so platform defaults keep flowing. An emptied number field no longer becomes 0.
+- Scheduling a time in the past is refused instead of posting immediately.
+- Malformed ids return 404 instead of a database error. Unexpected errors on console forms come back as a message, not a raw 500.
+- Removed a double escape, dead routes, and an unused switcher field. Button styles are consistent.
+- Mobile: fixed horizontal overflow on every page (grid min-width), compact top bar, two-column KPIs.
+
 ## v1.0.5: Post now / Schedule
 
 - A **Publish** card on every unpublished post, plus the same buttons on post review cards:

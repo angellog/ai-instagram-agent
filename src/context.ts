@@ -90,6 +90,30 @@ export async function withInfluencer<T>(id: number, fn: () => Promise<T>): Promi
   return storage.run(ctx, fn);
 }
 
+/**
+ * Like withInfluencer, but also works for an influencer that has no persona
+ * yet (hatching): costs, budgets and events are still attributed to it; code
+ * that needs the persona fails with a clear message instead.
+ */
+export async function withInfluencerLoose<T>(id: number, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await withInfluencer(id, fn);
+  } catch (e) {
+    const row = await one<{ id: number; slug: string; name: string; status: InfluencerContext["status"]; persona_yaml: string }>(
+      "SELECT id, slug, name, status, persona_yaml FROM influencers WHERE id = $1",
+      [id],
+    );
+    if (!row || row.persona_yaml.trim()) throw e; // unknown influencer, or a real persona error
+    const bare = { id: Number(row.id), slug: row.slug, name: row.name, status: row.status, personaHash: "", personaYaml: "", knowledge: [] } as unknown as InfluencerContext;
+    Object.defineProperty(bare, "persona", {
+      get() {
+        throw new Error(`${row.name} has no persona yet`);
+      },
+    });
+    return storage.run(bare, fn);
+  }
+}
+
 /** Run with an explicit context object (tests, hatch previews). */
 export function runInContext<T>(ctx: InfluencerContext, fn: () => Promise<T>): Promise<T> {
   return storage.run(ctx, fn);

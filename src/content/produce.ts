@@ -239,7 +239,10 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
 
   const allText = [post.caption, ...assets.map(overlayText)].filter(Boolean).join("\n");
   const assessment = await assessText(allText, { direction: "outbound", context: "Instagram post caption and on-image text", ref: { type: "post", id: postId } });
-  const outcome = gate(assessment.level, c);
+  const origin = (await one<{ origin: string }>("SELECT origin FROM posts WHERE id = $1", [postId]))?.origin;
+  let outcome = gate(assessment.level, c);
+  // "Create a post now" always stops for the operator: they asked to see it before it goes out.
+  if (origin === "operator" && outcome !== "block") outcome = "review";
   await one("UPDATE posts SET safety_level = $2, qc = $3, updated_at = now() WHERE id = $1", [
     postId,
     assessment.level,

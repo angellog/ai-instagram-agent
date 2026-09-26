@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { getControls, setControls } from "../../config/controls.js";
 import { setting } from "../../config/settings.js";
-import { withInfluencer } from "../../context.js";
-import { many, one } from "../../db/pool.js";
+import { withInfluencer, withInfluencerLoose } from "../../context.js";
+import { many } from "../../db/pool.js";
 import { adapters } from "../../generation/adapters/index.js";
 import { composePersona, type HatchBrief } from "../../influencers/compose.js";
 import type { FaceCandidate } from "../../influencers/hatch.js";
@@ -16,6 +16,7 @@ import { newSoulVersion, trainHiggsfieldSoul } from "../../souls/manage.js";
 import { activeSoul, nextSoulId } from "../../souls/souls.js";
 import { composeProfileText, generateProfilePicture, profilePictureFromSoul } from "../../influencers/profile.js";
 import { PROFILE_CSS, profileKitBody } from "./profile.js";
+import { startCreate } from "../../content/create.js";
 import { attempt, consoleRouter, render, reviewer, selectCookie, type Req } from "../console.js";
 import { action, button, card, empty, esc, field, header, icon, input, link, select, steps, textarea } from "../ui/kit.js";
 
@@ -76,6 +77,12 @@ function briefForm(b: Partial<HatchBrief> = {}, to = "/admin/hatch"): string {
 </form>`;
 }
 
+/** A number from a form field, or the fallback when it's empty or not a number. */
+const numOr = (v: string | undefined, fallback: number) => {
+  const n = Number(String(v ?? "").trim());
+  return String(v ?? "").trim() !== "" && Number.isFinite(n) ? n : fallback;
+};
+
 const stepIndex = (s: Step) => ["brief", "persona", "soul", "profile", "instagram", "launch"].indexOf(s);
 
 async function readiness(inf: InfluencerRow) {
@@ -129,8 +136,8 @@ ${card(briefForm(), { title: "The brief" })}`;
       }
       reply.header("set-cookie", selectCookie(Number(inf.id)));
       try {
-        const composed = await composePersona(brief);
-        await updatePersona(Number(inf.id), composed.yaml, "", reviewer(req));
+        const composed = await withInfluencerLoose(Number(inf.id), () => composePersona(brief));
+        await withInfluencerLoose(Number(inf.id), () => updatePersona(Number(inf.id), composed.yaml, "", reviewer(req)));
         await setHatchState(Number(inf.id), { step: "persona" });
         return reply.redirect(`/admin/hatch/${inf.id}?step=persona&flash=${encodeURIComponent(`Persona drafted for ${composed.name}`)}`, 303);
       } catch (e) {
@@ -145,13 +152,16 @@ ${card(briefForm(), { title: "The brief" })}`;
     "/admin/hatch/:id",
     async (req: Req, reply) => {
       const id = Number(req.params.id);
-      const inf = await getInfluencer(id);
+      const inf = Number.isInteger(id) ? await getInfluencer(id) : undefined;
       if (!inf) return reply.redirect("/admin/hatch", 303);
       if (inf.status !== "hatching") return reply.redirect(`/admin?flash=${encodeURIComponent(`${inf.name} is already ${inf.status}`)}`, 303);
       const state = inf.hatch_state as { brief?: HatchBrief; step?: Step; faces?: FaceCandidate[]; faces_status?: string; faces_error?: string | null };
       const hasPersona = Boolean(inf.persona_yaml.trim());
       const ready = await readiness(inf);
-      const wanted = (req.query.step as Step | undefined) ?? state.step ?? (hasPersona ? "persona" : "brief");
+      const STEP_KEYS: Step[] = ["brief", "persona", "soul", "profile", "instagram", "launch"];
+      const asked = STEP_KEYS.includes(req.query.step as Step) ? (req.query.step as Step) : undefined;
+      const saved = STEP_KEYS.includes(state.step as Step) ? (state.step as Step) : undefined;
+      const wanted: Step = asked ?? saved ?? (hasPersona ? "persona" : "brief");
       const step: Step = !hasPersona ? "brief" : (wanted === "profile" || wanted === "instagram" || wanted === "launch") && !ready.soul ? "soul" : wanted;
       let content = "";
       let head = "";
@@ -244,7 +254,7 @@ ${card(
       ${field("Daily budget (USD)", input("daily_budget_usd", c.daily_budget_usd, { type: "number", attrs: 'step="0.5" min="0"' }))}
       ${field("Daily image budget (USD)", input("daily_image_budget_usd", c.daily_image_budget_usd, { type: "number", attrs: 'step="0.5" min="0"' }))}
     </div>
-    <label class="row small" style="margin-bottom:12px"><input type="checkbox" name="plan_now" value="1" checked> Plan the first post right away</label>
+    <label class="row small" style="margin-bottom:12px"><input type="checkbox" name="plan_now" value="1" checked> Create the first post right away (you review it before it goes out)</label>
     ${button("Launch", { variant: "primary", icon: "zap" })}</form>`,
   { title: "Launch settings" },
 )}
@@ -290,7 +300,7 @@ ${content}`;
         await setHatchState(id, { brief, step: "persona" });
         return `Persona drafted for ${composed.name}`;
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   r.post(
     "/admin/hatch/:id/persona",
@@ -302,7 +312,7 @@ ${content}`;
         await setHatchState(id, { step: "soul" });
         return { message: `Saved ${res.name}`, to: `/admin/hatch/${id}?step=soul` };
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   r.post(
     "/admin/hatch/:id/faces",
@@ -315,7 +325,7 @@ ${content}`;
         await queue("content").add(JOBS.hatchFaces, { influencerId: id, batch }, { jobId: jobId("faces", id, batch), attempts: 1 });
         return "Generating three face options…";
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   r.post(
     "/admin/hatch/:id/soul",
@@ -343,7 +353,7 @@ ${content}`;
         await setHatchState(id, { step: "profile" });
         return { message: `Soul ${soul.soul_id} created${extra}`, to: `/admin/hatch/${id}?step=profile` };
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   for (const [path, fn, msg] of [
     ["text", composeProfileText, "Profile text written"],
@@ -361,7 +371,7 @@ ${content}`;
           });
           return msg;
         }),
-      { platform: true },
+      { platform: true, influencerParam: "id" },
     );
   }
   r.post(
@@ -374,7 +384,7 @@ ${content}`;
         await setHatchState(id, { step: "launch" });
         return { message: `Attached @${a.username}${a.subscribed ? " (webhooks on)" : ""}`, to: `/admin/hatch/${id}?step=launch` };
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   r.post(
     "/admin/hatch/:id/instagram/skip",
@@ -385,7 +395,7 @@ ${content}`;
         await setHatchState(id, { step: "launch", instagram_skipped: true });
         return { message: "Skipped Instagram for now", to: `/admin/hatch/${id}?step=launch` };
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
   r.post(
     "/admin/hatch/:id/launch",
@@ -398,9 +408,9 @@ ${content}`;
         await setControls(
           {
             mode,
-            max_posts_per_day: Math.max(0, Math.min(6, Number(b.max_posts_per_day ?? 2))),
-            daily_budget_usd: Math.max(0, Number(b.daily_budget_usd ?? 3)),
-            daily_image_budget_usd: Math.max(0, Number(b.daily_image_budget_usd ?? 2)),
+            max_posts_per_day: Math.max(0, Math.min(6, numOr(b.max_posts_per_day, 2))),
+            daily_budget_usd: Math.max(0, numOr(b.daily_budget_usd, 3)),
+            daily_image_budget_usd: Math.max(0, numOr(b.daily_image_budget_usd, 2)),
           },
           reviewer(req),
           id,
@@ -409,10 +419,12 @@ ${content}`;
         await setHatchState(id, { step: "done", launched_at: new Date().toISOString() });
         await syncInfluencerSchedulers().catch(() => undefined);
         reply.header("set-cookie", selectCookie(id));
-        if (b.plan_now === "1") await queue("content").add(JOBS.contentPlan, { influencerId: id, manual: true }, { jobId: jobId("plan", id, "launch", Date.now()), attempts: 1 });
-        return { message: `${inf.name} is live${b.plan_now === "1" ? ": planning the first post" : ""}`, to: "/admin" };
+        if (b.plan_now === "1") {
+          const run = await withInfluencer(id, () => startCreate(reviewer(req)));
+          return { message: `${inf.name} is live: creating the first post`, to: `/admin/create/${run.id}` };
+        }
+        return { message: `${inf.name} is live`, to: "/admin" };
       }),
-    { platform: true },
+    { platform: true, influencerParam: "id" },
   );
-  void one;
 }

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getControls } from "../config/controls.js";
 import { env } from "../config/env.js";
-import { loadInfluencer, maybeInfluencer, runInContext, type InfluencerContext } from "../context.js";
+import { loadInfluencer, maybeInfluencer, runInContext, withInfluencerLoose, type InfluencerContext } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { errorMessage } from "../lib/errors.js";
 import { shell, type ShellInfluencer } from "./ui/shell.js";
@@ -54,8 +54,14 @@ export async function resolveInfluencer(req: FastifyRequest): Promise<Influencer
  */
 export function consoleRouter(app: FastifyInstance) {
   const wrap =
-    (h: Handler, needsInfluencer: boolean) =>
+    (h: Handler, needsInfluencer: boolean, param?: string) =>
     async (req: Req, reply: FastifyReply) => {
+      // Routes about a specific influencer (hatch, status, sync) run as THAT influencer, whatever the sidebar says.
+      if (param) {
+        const id = Number(req.params?.[param]);
+        if (!Number.isInteger(id) || id < 1 || !(await one("SELECT 1 FROM influencers WHERE id = $1", [id]))) return reply.code(404).send("not found");
+        return withInfluencerLoose(id, async () => h(req, reply));
+      }
       const ctx = await resolveInfluencer(req);
       if (!ctx) {
         if (needsInfluencer) return reply.redirect("/admin/hatch?flash=" + encodeURIComponent("Hatch your first influencer to get started"), 303);
@@ -64,8 +70,8 @@ export function consoleRouter(app: FastifyInstance) {
       return runInContext(ctx, async () => h(req, reply));
     };
   return {
-    get: (path: string, h: Handler, o: { platform?: boolean } = {}) => app.get(path, wrap(h, !o.platform) as never),
-    post: (path: string, h: Handler, o: { platform?: boolean } = {}) => app.post(path, wrap(h, !o.platform) as never),
+    get: (path: string, h: Handler, o: { platform?: boolean; influencerParam?: string } = {}) => app.get(path, wrap(h, !o.platform, o.influencerParam) as never),
+    post: (path: string, h: Handler, o: { platform?: boolean; influencerParam?: string } = {}) => app.post(path, wrap(h, !o.platform, o.influencerParam) as never),
   };
 }
 
@@ -119,7 +125,7 @@ export function done(req: FastifyRequest, reply: FastifyReply, to: string, messa
   if (wantsJson(req)) return reply.send({ ok, message, ...extra });
   // The flash goes in the query string, before any #fragment (browsers never send fragments).
   const [path, hash] = to.split("#");
-  return reply.redirect(`${path}${path.includes("?") ? "&" : "?"}flash=${encodeURIComponent(message)}${hash ? `#${hash}` : ""}`, 303);
+  return reply.redirect(`${path}${path.includes("?") ? "&" : "?"}flash=${encodeURIComponent(message)}${ok ? "" : "&tone=bad"}${hash ? `#${hash}` : ""}`, 303);
 }
 
 /** Run a POST action; any error becomes a readable flash instead of a 500. */

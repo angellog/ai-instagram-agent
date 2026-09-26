@@ -201,10 +201,20 @@ ${CONTROL_GROUPS.map(([title, sub, keys]) =>
       for (const [k, raw] of Object.entries(req.body ?? {})) {
         if (!(k in shape) || k.startsWith("platform_")) continue;
         const cur = current[k];
-        patch[k] = typeof cur === "boolean" ? raw === "true" : typeof cur === "number" ? Number(raw) : raw;
+        const text = String(raw).trim();
+        if (text === "") continue; // an emptied field means "leave as is", never 0
+        let v: unknown = raw;
+        if (typeof cur === "boolean") v = text === "true";
+        else if (typeof cur === "number") {
+          v = Number(text);
+          if (!Number.isFinite(v as number)) throw new Error(`${k.replace(/_/g, " ")} must be a number`);
+        }
+        // Only what changed becomes this influencer's own value; the rest keeps inheriting platform defaults.
+        if (v !== cur) patch[k] = v;
       }
+      if (!Object.keys(patch).length) return "Nothing changed";
       await setControls(patch as Partial<Controls>, reviewer(req), influencerId());
-      return "Saved";
+      return `Saved ${Object.keys(patch).length} change${Object.keys(patch).length === 1 ? "" : "s"}`;
     }),
   );
   r.post("/admin/controls/pause", async (req: Req, reply) => {

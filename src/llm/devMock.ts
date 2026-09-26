@@ -106,8 +106,23 @@ export function createDevMockProvider(): MockProvider {
       const u = lastUser(r);
       const act = u.match(/^- (\d+) \| (\w+) \| ([^|]+) \| ([\w-]+)/m);
       const attempt = (u.match(/Attempt \d+ was REJECTED/g) ?? []).length;
-      const topics = ["Morning rotation check", "Three ways to keep white pairs clean", "Why I always pack a second pair", "Reading list and a quiet coffee", "Golden hour fit check"];
-      const topic = `${topics[(Date.now() / 1000 + attempt) % topics.length | 0]}${attempt ? ` (take ${attempt + 1})` : ""}`;
+      // Like a real director: avoid what was posted recently (topic and place).
+      const recentBlock = (u.split("RECENT POSTS")[1] ?? "").split("\n\n")[0].toLowerCase();
+      const topics = [
+        ["Morning rotation check", "Three pairs, one decision, zero coffee yet."],
+        ["Three ways to keep white pairs clean", "Save this before your next rainy walk."],
+        ["Why I always pack a second pair", "Learned this the muddy way."],
+        ["Reading list and a quiet coffee", "Slow afternoons hit different."],
+        ["Golden hour fit check", "The light did most of the work today."],
+        ["Market run in my comfiest pair", "Owino at 8am is a sport of its own."],
+        ["Rooftop sunset, new laces", "Tiny upgrade, big mood."],
+        ["Lunch break walk around town", "Ten thousand steps, one clean pair."],
+      ];
+      const fresh = topics.filter(([t]) => !recentBlock.includes(t.toLowerCase()));
+      const [topicBase, line] = (fresh.length ? fresh : topics)[(Math.floor(Date.now() / 1000) + attempt) % (fresh.length || topics.length)];
+      const topic = topicBase;
+      const locs = [...(u.split("LOCATIONS:")[1] ?? "").split("\n\n")[0].matchAll(/^([\w-]+):/gm)].map((m) => m[1]);
+      const freshLoc = locs.find((l) => !recentBlock.includes(`loc=${l}`)) ?? locs[0] ?? null;
       const carousel = attempt % 2 === 0;
       const slide = (i: number) => ({
         role: i === 0 ? "cover" : "slide",
@@ -130,12 +145,12 @@ export function createDevMockProvider(): MockProvider {
           topic,
           hook: topic,
           angle: "practical",
-          location_id: act?.[4] && act[4] !== "-" ? act[4] : null,
+          location_id: act?.[4] && act[4] !== "-" && !recentBlock.includes(`loc=${act[4]}`) ? act[4] : freshLoc,
           time_of_day: "morning",
           outfit: "cream ribbed knit crop top with light-wash wide-leg denim",
           sneakers: "white leather low-top sneakers",
           slides: Array.from({ length: carousel ? 4 : 1 }, (_, i) => slide(i)),
-          caption: `${topic}. What is your go-to pair this week?`,
+          caption: `${line} ${["Which pair would you pick?", "Tell me your go-to this week.", "Rate the fit 1–10."][attempt % 3]}`,
           hashtags: ["#sneakers", "#kampala"],
         },
       };

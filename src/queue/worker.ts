@@ -4,6 +4,8 @@ import { currentInfluencer, listInfluencers, loadInfluencer, withInfluencer } fr
 import { recapCalendar } from "../calendar/recap.js";
 import { runBenchmark } from "../generation/benchmark.js";
 import { generateFaceCandidates } from "../influencers/hatch.js";
+import { runCreate } from "../content/create.js";
+import { syncProfile } from "../instagram/profileSync.js";
 import { one } from "../db/pool.js";
 import { processWebhookEvent } from "../ingest/process.js";
 import { processInteraction } from "../conversation/agent.js";
@@ -77,6 +79,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.accountCollect]: () => forEachActiveInfluencer("account snapshot", () => collectAccount()),
   [JOBS.memoryExpire]: () => forEachActiveInfluencer("memory expiry", expireMemories),
   [JOBS.calendarRecap]: () => forEachActiveInfluencer("calendar recap", () => recapCalendar()),
+  [JOBS.contentCreate]: scoped((j) => runCreate(String(j.data.runId))),
+  [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
   [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
   [JOBS.benchmarkRun]: scoped((j) => runBenchmark((j.data.modelIds as number[]).map(Number), Number(j.data.maxUsd ?? 2), String(j.data.tag ?? Date.now()))),
   // Platform-wide maintenance.
@@ -103,6 +107,7 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.contentProduce]: 45 * 60_000,
   [JOBS.benchmarkRun]: 60 * 60_000,
   [JOBS.hatchFaces]: 20 * 60_000,
+  [JOBS.contentCreate]: 45 * 60_000,
   [JOBS.postPublish]: 15 * 60_000,
 };
 
@@ -224,6 +229,7 @@ export async function upsertSchedulers(): Promise<void> {
     ["maintenance", "token-refresh", { pattern: "10 4 * * *" }, JOBS.tokenRefresh],
     ["maintenance", "memory-expire", { pattern: "40 2 * * *" }, JOBS.memoryExpire],
     ["maintenance", "calendar-recap", { pattern: "15 * * * *" }, JOBS.calendarRecap],
+    ["analytics", "profile-sync", { pattern: "35 * * * *" }, JOBS.profileSync],
     ["maintenance", "reviews-expire", { pattern: "5 * * * *" }, JOBS.reviewsExpire],
     ["maintenance", "sweep", { every: 10 * 60_000 }, JOBS.sweep],
   ];
