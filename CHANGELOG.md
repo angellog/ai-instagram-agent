@@ -25,6 +25,12 @@ console footer, `/health` and `/api/status`.
 - The brief goes to the director and to replies (never adding facts beyond the headline).
 - New Trends & news page: brief, sources, raw headlines, Refresh now, and Add to calendar.
 
+**Trend sources narrowed** (per request): TikTok Uganda, Instagram Kampala, X Uganda, Premier League, Champions League and a few international sources (Hypebeast Footwear, Sneaker News, BBC Entertainment & Arts). 15 sources, each labelled.
+- The brief is balanced across labels: round-robin candidates, at most 2 per label, up to 8 items.
+- Queries can set their own time window ("… when:7d").
+- X has no free trends API for Uganda, so "X Uganda" follows Ugandan news coverage of what's trending on X.
+- The hard filter now also blocks legal, crime, funeral and military stories.
+
 **Also**
 - A Wardrobe card on Persona & soul shows closet size and today's planned look, workout outfit, remix and occasion wear.
 - The composer writes closets, occasions, weekend activities, weekend ideas and news sources for new influencers.

@@ -54,7 +54,9 @@ export function parseFeed(xml: string, fallbackSource: string): Headline[] {
 /** Google News search feed for a query in a region (free, no key). */
 export function googleNewsUrl(query: string, region: string, language: string): string {
   const r = region.toUpperCase();
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:3d`)}&hl=${language}-${r}&gl=${r}&ceid=${r}:${language}`;
+  // Default to the last 3 days; a query may set its own window ("… when:7d") for slower topics.
+  const q = /\bwhen:\d+[hd]\b/.test(query) ? query : `${query} when:3d`;
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${language}-${r}&gl=${r}&ceid=${r}:${language}`;
 }
 
 export async function fetchFeed(url: string, label: string): Promise<Headline[]> {

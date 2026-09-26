@@ -244,10 +244,28 @@ weekend_ideas:
 trends:
   region: UG
   language: en
-  queries: [sneakers release, sneaker culture, Kampala events this weekend, Uganda fashion, Uganda music]
+  max_items: 8
+  # Only these: Ugandan TikTok, Kampala Instagram, X in Uganda, the Premier
+  # League and Champions League, and a few international culture sources.
+  # (X has no free trends API for Uganda, so "X Uganda" follows Ugandan news
+  # coverage of what's trending on X.)
+  queries:
+    - { query: "TikTok Uganda when:7d", label: TikTok Uganda }
+    - { query: "Ugandan TikTokers when:7d", label: TikTok Uganda }
+    - { query: "TikTok trend Uganda when:7d", label: TikTok Uganda }
+    - { query: "Kampala socialite when:7d", label: Instagram Kampala }
+    - { query: "Ugandan influencer when:7d", label: Instagram Kampala }
+    - { query: "Kampala Instagram when:14d", label: Instagram Kampala }
+    - { query: "Ugandans on X when:7d", label: X Uganda }
+    - { query: "trending on X Uganda when:7d", label: X Uganda }
+    - { query: "Premier League", label: Premier League }
+    - { query: "Champions League", label: Champions League }
   feeds:
-    - https://sneakernews.com/feed/
-    - https://hypebeast.com/footwear/feed
+    - { url: "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml", label: Premier League }
+    - { url: "https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml", label: Champions League }
+    - { url: "https://hypebeast.com/footwear/feed", label: International }
+    - { url: "https://sneakernews.com/feed/", label: International }
+    - { url: "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml", label: International }
   avoid: [betting]
 
 hashtags:

@@ -2,8 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createEvent } from "../../calendar/events.js";
 import { currentInfluencer, influencerId } from "../../context.js";
 import { one } from "../../db/pool.js";
-import { googleNewsUrl } from "../../trends/feeds.js";
-import { latestBrief, recentHeadlines, refreshTrends } from "../../trends/trends.js";
+import { latestBrief, recentHeadlines, refreshTrends, trendSources, type TrendSource } from "../../trends/trends.js";
 import { attempt, consoleRouter, render, type Req } from "../console.js";
 import { action, ago, card, empty, esc, header, icon, link, pill, table } from "../ui/kit.js";
 
@@ -12,12 +11,15 @@ export function registerTrends(app: FastifyInstance): void {
 
   r.get("/admin/trends", async (req: Req, reply) => {
     const inf = currentInfluencer();
-    const t = inf.persona.trends;
     const [brief, heads] = await Promise.all([latestBrief(), recentHeadlines(40)]);
-    const sources = [
-      ...t.queries.map((q) => `<li>${icon("search", 14)} News: <b>${esc(q)}</b> <span class="meta">(${esc(t.region)})</span> ${link("feed", googleNewsUrl(q, t.region, t.language), { small: true, variant: "ghost", external: true })}</li>`),
-      ...t.feeds.map((f) => `<li>${icon("activity", 14)} Feed: <code>${esc(f)}</code></li>`),
-    ];
+    const groups = new Map<string, TrendSource[]>();
+    for (const s of trendSources(inf.persona)) groups.set(s.label, [...(groups.get(s.label) ?? []), s]);
+    const sources = [...groups.entries()].map(
+      ([label, list]) =>
+        `<li style="display:block"><b>${esc(label)}</b><div class="meta">${list
+          .map((s) => `${s.kind === "search" ? icon("search", 12) : icon("activity", 12)} <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.kind === "search" ? `“${s.detail}”` : new URL(s.url).hostname)}</a>`)
+          .join(" · ")}</div></li>`,
+    );
     const body = `${header("Trends & news", {
       sub: `What ${esc(inf.name)} keeps up with. Every 6 hours the agent reads these sources, skips politics and tragedy, and keeps a short brief that posts and replies can nod to.`,
       actions: action("/admin/trends/refresh", "Refresh now", { icon: "refresh", variant: "primary" }),
@@ -29,7 +31,7 @@ ${card(
        <ul class="list">${brief.items
          .map(
            (i, n) =>
-             `<li><div style="flex:1"><b>${esc(i.title)}</b><div class="meta">${esc(i.note)} · ${esc(i.source)}</div></div><div class="row">${pill(i.use === "post" ? "post idea" : i.use)}${action(
+             `<li><div style="flex:1"><span class="pill info">${esc(i.source.split(" · ")[0])}</span> <b>${esc(i.title)}</b><div class="meta">${esc(i.note)} · ${esc(i.source.split(" · ").slice(1).join(" · "))}</div></div><div class="row">${pill(i.use === "post" ? "post idea" : i.use)}${action(
                `/admin/trends/${n}/calendar`,
                "Add to calendar",
                { small: true, variant: "ghost", icon: "calendar" },

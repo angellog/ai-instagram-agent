@@ -38,14 +38,20 @@ afterAll(async () => {
 describe("trends and news awareness", () => {
   it("reads every source, drops politics and tragedy, and keeps a short brief", async () => {
     const r = await refreshTrends();
-    expect(requested.some((u) => u.startsWith("https://news.google.com/rss/search?q=sneakers%20release"))).toBe(true);
+    // Only the requested sources: TikTok Uganda, Instagram Kampala, X Uganda, the two leagues, a few international feeds.
+    expect(requested.some((u) => u.startsWith("https://news.google.com/rss/search?q=TikTok%20Uganda%20when%3A7d&hl=en-UG"))).toBe(true);
+    expect(requested.some((u) => u.includes("q=Ugandans%20on%20X"))).toBe(true);
+    expect(requested.some((u) => u.includes("q=Kampala%20socialite"))).toBe(true);
+    expect(requested).toContain("https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml");
+    expect(requested).toContain("https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml");
     expect(requested).toContain("https://sneakernews.com/feed/");
+    expect(requested).toHaveLength(15);
     expect(r.kept).toBeGreaterThan(0);
     const b = await one<{ items: Array<{ title: string }> }>("SELECT items FROM trend_briefs ORDER BY id DESC LIMIT 1");
     const titles = b!.items.map((i) => i.title).join(" | ");
     expect(titles).not.toMatch(/President|killed/);
     expect(await many("SELECT 1 FROM trend_items")).not.toHaveLength(0);
-    expect(await trendsForPrompt("content")).toMatch(/^- /);
+    expect(await trendsForPrompt("content")).toMatch(/^- \[(TikTok Uganda|Instagram Kampala|X Uganda|Premier League|Champions League|International)\] /);
   });
 
   it("the director and replies see this week's trends; weekends get weekend ideas", async () => {

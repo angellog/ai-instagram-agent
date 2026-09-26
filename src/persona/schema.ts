@@ -115,15 +115,19 @@ export const personaSchema = z.object({
   // Post ideas that only make sense on a Saturday or Sunday.
   weekend_ideas: z.array(z.string()).default([]),
   // What this influencer keeps up with: news searches (Google News) and RSS/Atom feeds.
+  // Each source may carry a label (the platform or topic it represents), e.g.
+  // { query: "TikTok Uganda", label: "TikTok Uganda" } or { url: "...", label: "Premier League" }.
   trends: z
     .object({
-      queries: z.array(z.string()).default([]),
-      feeds: z.array(z.string().url()).default([]),
+      queries: z.array(z.union([z.string(), z.object({ query: z.string(), label: z.string().optional() })])).default([]),
+      feeds: z.array(z.union([z.string().url(), z.object({ url: z.string().url(), label: z.string().optional() })])).default([]),
+      // Items per brief (spread across labels).
+      max_items: z.number().int().min(3).max(12).default(8),
       region: z.string().default("US"),
       language: z.string().default("en"),
       avoid: z.array(z.string()).default([]),
     })
-    .default({ queries: [], feeds: [], region: "US", language: "en", avoid: [] }),
+    .default({ queries: [], feeds: [], max_items: 8, region: "US", language: "en", avoid: [] }),
   hashtags: z.object({
     always: z.array(z.string()).default([]),
     pool: z.array(z.string()).default([]),

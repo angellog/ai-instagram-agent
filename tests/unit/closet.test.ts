@@ -90,3 +90,11 @@ describe("news feeds", () => {
     expect(googleNewsUrl("Kampala events", "ug", "en")).toBe("https://news.google.com/rss/search?q=Kampala%20events%20when%3A3d&hl=en-UG&gl=UG&ceid=UG:en");
   });
 });
+
+describe("trend safety filter", () => {
+  it("drops grim, legal and political headlines before the model sees them, keeps sport and culture", async () => {
+    const { BLOCKED } = await import("../../src/trends/trends.js");
+    for (const t of ["Tiktoker Jayden's body returns home from India", "Sipapa, wife have case to answer over Shs1.6b robbery", "Uganda to send 1,200 troops to Gaza", "Manchester City found guilty on Premier League charges"]) expect(BLOCKED.test(t), t).toBe(true);
+    for (const t of ["Two goals in two games - Sesko gives Man Utd a different threat", "Nike Pays Homage to NYC Culture With the Air Force 1 Low", "Benfica vs Austria Wien, Champions League"]) expect(BLOCKED.test(t), t).toBe(false);
+  });
+});
