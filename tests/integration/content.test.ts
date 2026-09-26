@@ -247,3 +247,27 @@ describe("no connected account", () => {
     await expect(collectAccount()).resolves.toBeUndefined();
   });
 });
+
+describe("caption rules in the director", () => {
+  it("sends a narrating paragraph back and keeps the short rewrite", async () => {
+    let n = 0;
+    const base = createDevMockProvider();
+    const mock = base.on("content.plan", async (req) => {
+      n++;
+      const out = JSON.parse(String((await createDevMockProvider().complete(req)).text));
+      out.idea.caption =
+        n === 1
+          ? "Some days don't need a plan. Just a rooftop, cooling coffee, and a clean pair doing their job quietly. Kampala's doing that gold-to-grey thing again and I'm not mad about it. What's holding down your rotation right now?"
+          : "golden hour > everything";
+      return out;
+    });
+    setLLM(new LLM(mock));
+    const r = await planContent();
+    expect(r).toMatchObject({ status: "accepted", attempts: 2 });
+    const second = mock.calls.filter((c) => c.operation === "content.plan")[1];
+    const sent = second.messages.map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n");
+    expect(sent).toMatch(/the caption was rejected \(.*overused phrase/);
+    const post = await one<{ caption: string }>("SELECT caption FROM posts WHERE id = $1", [(r as { postId: string }).postId]);
+    expect(post!.caption.split("\n\n")[0]).toBe("golden hour > everything");
+  });
+});

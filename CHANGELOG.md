@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.7: Simple, readable captions
+
+- Captions were paragraphs narrating the photo (the rooftop, the coffee, the sky, the "rotation"), with the same tics ("Rotation check", "Some days…", "like it owes me") and a question almost every time.
+- **New rules for the director:** the photo already shows the scene, so the caption never describes it. One simple thought, feeling or small joke in 1–2 short lines, under 150 characters (educational carousels: a hook plus up to 3 short tips, under 320). A question only about one post in three. It sees recent captions so it doesn't reuse their openings or phrases. Good and bad examples are included.
+- **Deterministic checker:** a caption that's too long, has too many sentences, uses an overused phrase, opens the same way as a recent caption, or would be the third question in a row is sent back with specific feedback. The rejected caption is kept on the idea for audit. On the last attempt it is trimmed at a sentence boundary instead.
+- **Readable layout:** one sentence per line, then a blank line, then hashtags.
+- Persona rule updated: "Captions are 1-2 short lines with one simple thought".
+
 ## v1.0.6: Create a post now, live followers, full console audit
 
 **Create a post now** (Overview, Posts, the sidebar, and automatically after a Hatch launch)

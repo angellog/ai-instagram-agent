@@ -20,7 +20,7 @@ import { ensureDayPlan, type ActivityRow } from "./activities.js";
 import { enforceContinuity } from "./continuity.js";
 import { recentContent, type RecentItem } from "./history.js";
 import { repetitionScore } from "./repetition.js";
-import { fitCaption } from "./caption.js";
+import { CAPTION_LIMITS, captionProblems, fitCaption, tidyCaption } from "./caption.js";
 
 export const COMPOSITIONS = ["close_up", "medium", "full_body", "detail", "flat_lay", "environment", "over_shoulder", "mirror"] as const;
 
@@ -53,7 +53,7 @@ export function ideaSchema(p: Persona) {
         outfit: z.string(),
         sneakers: z.string().describe("The pair on foot, described generically (silhouette, colours). No invented releases."),
         slides: z.array(slide).min(1).max(p.carousel.max_slides),
-        caption: z.string(),
+        caption: z.string().describe("1-2 short lines: one simple thought or feeling. Never describe what the photo shows."),
         hashtags: z.array(z.string()).max(p.hashtags.max),
       })
       .nullable(),
@@ -119,6 +119,11 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     }
 
     const idea = normalizeIdea(out.idea, p, c);
+    // Caption quality is judged on what the director wrote; the stored caption is the tidied layout.
+    const educational = idea.format === "carousel" && ["educational", "listicle"].includes(idea.structure);
+    const capIssues = captionProblems(idea.caption, { educational, recent: recent.map((r) => r.caption) });
+    const rawCaption = idea.caption;
+    idea.caption = tidyCaption(idea.caption, educational);
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
     if (idea.activity_id && !activity) idea.activity_id = null;
 
@@ -181,6 +186,12 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
 
     if (rep.score >= c.repetition_threshold) {
       feedback.push(`Attempt ${attempt} was REJECTED as repetitive (score ${rep.score}): ${rep.reasons.join("; ")}. Propose a clearly different concept.`);
+      continue;
+    }
+    // A good idea with a bad caption goes back once more (the last attempt keeps the tidied caption).
+    if (capIssues.length && attempt < c.max_concept_attempts) {
+      await one("UPDATE content_ideas SET status = 'rejected', reject_reason = $2, caption = $3 WHERE id = $1", [ideaRow!.id, `caption: ${capIssues.join("; ")}`.slice(0, 500), rawCaption]);
+      feedback.push(`Attempt ${attempt}: the caption was rejected (${capIssues.join("; ")}). Keep the idea if it's good, but rewrite the caption as 1-2 short lines with one simple thought.`);
       continue;
     }
 
@@ -271,7 +282,13 @@ ${
 - Single images: one strong frame, no text on the image.
 - Shots should feel like the persona's own iPhone photos or ones a friend took: candid, everyday, varied angles (mirror fit check, feet-and-floor shot, coffee on the table, walking away).
 - Never claim experiences as real-world facts; the day is a storyline for an AI creator. Keep sneaker facts accurate or phrase them as opinion.
-- Captions: conversational, ${c.max_posts_per_day > 1 ? "varied openings" : "a fresh opening"}, end with a light question or thought now and then (not always). No hashtags inside the caption text; put them in "hashtags" (max ${p.hashtags.max}, from: ${p.hashtags.pool.join(" ")}).
+- Captions: the photo already shows the scene, so NEVER describe it (no listing the place, light, weather, food, outfit or what you're doing). Write ONE simple thought, feeling or small joke, the way a real person captions their own photo.
+  - 1-2 short sentences, under ${CAPTION_LIMITS.short} characters. Educational carousels: one short hook line plus at most 3 short tip lines, under ${CAPTION_LIMITS.educational}.
+  - Everyday words, no filler, at most 1-2 emoji. Ask a question only sometimes (about one post in three), and keep it short.
+  - Never start the way a recent caption started; never reuse their phrases.
+  - Good: "golden hour > everything" · "new laces, same me" · "Sunday reset. Coffee first, decisions later ☕️" · "which one tomorrow?"
+  - Bad: a paragraph narrating the rooftop, the coffee, the sky and the rotation.
+  - No hashtags inside the caption text; put them in "hashtags" (max ${p.hashtags.max}, from: ${p.hashtags.pool.join(" ")}).
 - Overlay text must be plain Latin text (no emoji).
 Return JSON only.`;
 }
@@ -309,6 +326,12 @@ function directorPrompt(o: {
       ? `WHAT'S GOING ON (operator calendar: real events in your world; weave one in only when it fits your life naturally, never force it, never invent details beyond what is written):\n${o.calendar}`
       : "",
     o.remembered?.length ? `RECENT THINGS YOU LIVED THROUGH:\n${o.remembered.map((r) => `- ${r}`).join("\n")}` : "",
+    o.recent.length
+      ? `RECENT CAPTIONS (don't reuse their openings or phrases):\n${o.recent
+          .slice(0, 6)
+          .map((r) => `- "${r.caption.replace(/\s+/g, " ").replace(/#[\p{L}\p{N}_]+/gu, "").trim().slice(0, 90)}"`)
+          .join("\n")}`
+      : "",
     o.requests.length ? `FOLLOWER REQUESTS WORTH CONSIDERING:\n${o.requests.map((r) => `- ${r}`).join("\n")}` : "",
     o.learnings ? `WHAT HAS PERFORMED (engagement learnings; explore sometimes, do not overfit):\n${o.learnings}` : "",
     o.outfits
