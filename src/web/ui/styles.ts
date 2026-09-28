@@ -110,6 +110,10 @@ input[type=checkbox]{width:18px;height:18px;min-height:0;accent-color:var(--prim
 .slides{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
 .slides figure{margin:0;scroll-snap-align:start;flex:none}.slides img{height:320px;aspect-ratio:4/5;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;background:var(--surface-2)}
 .slides figcaption{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted)}
+.slides.story img,.thumbs.story img{aspect-ratio:9/16}.slides.story img{height:420px}
+.slide-tools{display:flex;gap:6px;align-items:center;margin-top:6px}.slide-tools form{display:inline}.slide-tools .btn{padding:0;width:34px;min-height:34px;justify-content:center}
+.slide-cover{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--brand)}.slide-cover svg{fill:currentColor}
+.edit-caption textarea{min-height:120px}.counter{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}.counter.over{color:var(--bad);font-weight:600}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .thumbs a,.thumbs figure{margin:0;display:block;text-decoration:none;color:inherit}.thumbs img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);display:block}
 .thumbs .cap{font-size:12.5px;color:var(--muted);margin-top:6px;display:flex;gap:6px;align-items:center;justify-content:space-between}

@@ -3,6 +3,47 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.12: Story updates, and editing before approval
+
+**Instagram Story updates**
+- **One Story at a time.** Each is one 1080x1920 image published through the official API (`media_type=STORIES`). They're separate from feed posts and their limits.
+- **Kinds:**
+  - moment: a slice of her day
+  - outfit: a fit check
+  - shop: a product or shop shot; the store address line comes verbatim from the business knowledge, never from the model
+  - trend: a reaction to a headline
+  - question: followers answer by replying, which arrives as a DM she handles
+- **Planned from her actual day.** Stories use today's activities and today's outfit (the same one her feed post wears), plus recent stories so she doesn't repeat.
+- **House rules in code:**
+  - no text on photos of her
+  - at most 70 characters of plain words on other shots
+  - numbers on the image must come from the business knowledge or the headlines
+- **Cadence (Controls → Stories):**
+  - `stories_enabled`, `stories_per_day` (3) and `min_hours_between_stories` (2.5)
+  - same posting window
+  - the planner checks at 09:50, 13:50, 17:50 and 20:50 local (`STORY_PLAN_CRON`) and may decide to wait
+- **Same pipeline as feed posts:** production, vision QC, safety, Reviews, "Post now" and Schedule, and the duplicate-proof publisher.
+  - A lost publish response is recovered from the account's live stories.
+  - If Instagram refuses the per-media AI label on stories, the story goes out without it and the fallback is logged.
+  - Story insights aren't collected (they expire after 24h).
+- **Console:**
+  - a new **Stories** page (live count against the daily cap, 9:16 grid)
+  - **Create a story now** on Overview, Create and Stories, with the same animated progress page
+  - Feed lists (Posts, Overview) stay feed-only
+- **API limits:** the API can't add link stickers, polls, mentions or music, so the words are part of the image.
+
+**Edit before approval** (while a post is awaiting review, in dry run, or failed QC)
+- **Caption:** edit it on the post page, with a live character and hashtag counter. Saving checks Instagram's limits (2,200 characters, 30 hashtags) and the safety rules (red is refused).
+- **Slides:**
+  - move them left or right, or make any slide the cover (star)
+  - remove one (bin); one left turns the post into a single photo
+  - the pending review always shows the current slides and caption, with an "Edit" link
+- **Story text:** change or remove the words on a story. The image is re-rendered from the original photo. Photos of her stay text-free, and unverified numbers are refused.
+- **Delete** a draft post or story for good: it cancels any schedule, closes the review and marks the idea rejected. Anything already on Instagram is never touched.
+- **Approved posts:** editing is locked; the page says to unschedule first.
+- Every edit is recorded in the decision trail.
+- Tests: 288.
+
 ## v1.0.11: True, complete answers to business questions
 
 When a follower asks something the business knowledge answers ("what is the shop location?"), the reply now states the fact completely and exactly, in one natural sentence in the influencer's voice. For example: "We're at Pioneer Mall, Level 5, Shop PH-100 in Kampala 📍 come through and say hi!"

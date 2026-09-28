@@ -38,6 +38,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
       ["calendar", "/admin/calendar", "Calendar", "calendar"],
       ["trends", "/admin/trends", "Trends & news", "activity"],
       ["posts", "/admin/posts", "Posts", "image"],
+      ["stories", "/admin/stories", "Stories", "phone"],
       ["content", "/admin/content", "Content brain", "brain"],
       ["conversations", "/admin/conversations", "Conversations", "message"],
       ["people", "/admin/people", "People & memory", "users"],

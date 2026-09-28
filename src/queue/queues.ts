@@ -22,6 +22,7 @@ export const JOBS = {
   conversationProcess: "conversation.process",
   memoryExtract: "memory.extract",
   contentPlan: "content.plan",
+  storyPlan: "content.story",
   contentProduce: "content.produce",
   imageGenerate: "image.generate",
   carouselCompose: "carousel.compose",

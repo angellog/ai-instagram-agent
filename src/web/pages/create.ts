@@ -12,6 +12,11 @@ export function createButton(label = "Create a post now", small = false): string
   return `<form class="inline" method="post" action="/admin/create"><button class="btn primary${small ? " sm" : ""}" type="submit">${icon("zap", 16)}<span>${esc(label)}</span></button></form>`;
 }
 
+/** One tap: plan and make a story right now (held for review). */
+export function storyButton(label = "Create a story now", primary = false): string {
+  return `<form class="inline" method="post" action="/admin/create"><input type="hidden" name="kind" value="story"><button class="btn${primary ? " primary" : ""}" type="submit">${icon("sparkles", 16)}<span>${esc(label)}</span></button></form>`;
+}
+
 const CSS = `<style>
 .cr-card{padding:24px}
 .cr-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
@@ -38,6 +43,7 @@ const CSS = `<style>
 @keyframes cr-pop{0%{transform:scale(.6)}100%{transform:scale(1)}}
 .cr-detail{min-height:22px;margin:10px 0 0;color:var(--ink-2)}
 .cr-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:18px}
+.cr-story .cr-shots{grid-template-columns:repeat(auto-fill,minmax(160px,220px))}.cr-story .cr-shot{aspect-ratio:9/16}
 .cr-shot{aspect-ratio:4/5;border-radius:12px;overflow:hidden;background:var(--surface-2);position:relative;border:1px solid var(--line)}
 .cr-shot.wait::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgb(255 255 255/.18) 50%,transparent 70%);background-size:220% 100%;animation:cr-shimmer 1.3s ease-in-out infinite}
 .cr-shot img{width:100%;height:100%;object-fit:cover;display:block;animation:cr-in .5s ease-out}
@@ -52,11 +58,13 @@ export function registerCreate(app: FastifyInstance): void {
   const r = consoleRouter(app);
 
   r.post("/admin/create", async (req: Req, reply) => {
-    const block = operatorGate(await getControls());
-    if (block) return done(req, reply, "/admin", `Can't create a post: ${block}`, false);
-    const run = await startCreate(reviewer(req));
-    if (String(req.headers.accept ?? "").includes("application/json")) return reply.send({ ok: true, id: run.id, existing: run.existing });
-    return reply.redirect(`/admin/create/${run.id}${run.existing ? `?flash=${encodeURIComponent("A post is already being created: here it is")}` : ""}`, 303);
+    const kind = req.body?.kind === "story" ? "story" : "post";
+    const c = await getControls();
+    const block = operatorGate(c) ?? (kind === "story" && !c.stories_enabled ? "stories are turned off in Controls" : undefined);
+    if (block) return done(req, reply, kind === "story" ? "/admin/stories" : "/admin", `Can't create a ${kind}: ${block}`, false);
+    const run = await startCreate(reviewer(req), kind);
+    if (String(req.headers.accept ?? "").includes("application/json")) return reply.send({ ok: true, id: run.id, existing: run.existing, kind });
+    return reply.redirect(`/admin/create/${run.id}${run.existing ? `?flash=${encodeURIComponent(`A ${kind} is already being created: here it is`)}` : ""}`, 303);
   });
 
   r.get("/admin/api/create/:id", async (req: Req, reply) => {
@@ -67,11 +75,11 @@ export function registerCreate(app: FastifyInstance): void {
 
   r.get("/admin/create", async (req: Req, reply) => {
     const runs = await recentRuns(10);
-    const body = `${header("Create a post now", { sub: "One tap runs the whole pipeline for this influencer (idea → photos → quality and safety checks) and stops so you can look before it goes out.", actions: createButton() })}
+    const body = `${header("Create a post now", { sub: "One tap runs the whole pipeline for this influencer (idea → photos → quality and safety checks) and stops so you can look before it goes out.", actions: `${createButton()}${storyButton()}` })}
 ${card(
   table(
-    ["When", "Status", "Result", ""],
-    runs.map((x) => [ago(x.created_at), pill(x.status === "done" ? "done" : x.status), esc(x.outcome ?? x.stage), `<a href="/admin/create/${x.id}">Open</a>`]),
+    ["When", "Kind", "Status", "Result", ""],
+    runs.map((x) => [ago(x.created_at), esc(x.kind ?? "post"), pill(x.status === "done" ? "done" : x.status), esc(x.outcome ?? x.stage), `<a href="/admin/create/${x.id}">Open</a>`]),
     "No runs yet.",
   ),
   { title: "Recent runs" },
@@ -85,8 +93,12 @@ ${card(
     if (!p) return reply.code(404).send("not found");
     const inf = currentInfluencer();
     const acct = await primaryAccount();
-    const body = `${header(`Creating a post for ${inf.name}`, { eyebrow: "Create a post now", actions: link("All runs", "/admin/create", { variant: "ghost", small: true }) })}
-<section class="card cr-card" id="cr" data-id="${esc(p.id)}" aria-busy="true">
+    const story = p.kind === "story";
+    const noun = story ? "story" : "post";
+    const again = story ? storyButton("Make another") : createButton("Make another", false).replace("btn primary", "btn");
+    const retry = story ? storyButton("Try again", true) : createButton("Try again");
+    const body = `${header(`Creating a ${noun} for ${inf.name}`, { eyebrow: story ? "Create a story now" : "Create a post now", actions: link("All runs", "/admin/create", { variant: "ghost", small: true }) })}
+<section class="card cr-card${story ? " cr-story" : ""}" id="cr" data-id="${esc(p.id)}" data-noun="${noun}" aria-busy="true">
   <div class="cr-top"><div><div class="cr-pct" id="cr-pct">0%</div><div class="meta" id="cr-topic">${esc(p.topic ?? "Thinking of an idea…")}</div></div><div class="cr-time" id="cr-time">0:00</div></div>
   <div class="cr-bar" role="progressbar" aria-label="Post creation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="cr-bar"><div class="cr-fill" id="cr-fill"></div></div>
   <ol class="cr-steps" id="cr-steps">${STAGES.map((s) => `<li data-key="${s.key}"><span class="cr-dot">${icon("check", 16)}</span><span>${esc(s.label)}</span></li>`).join("")}</ol>
@@ -94,18 +106,18 @@ ${card(
   <div class="cr-shots" id="cr-shots"></div>
   <div class="cr-final" id="cr-final">
     <div id="cr-ok" hidden>
-      <div class="callout ok">${icon("check")}<p>Your post is ready. Nothing has been published yet.</p></div>
-      <pre id="cr-caption" style="margin-bottom:12px"></pre>
+      <div class="callout ok">${icon("check")}<p>Your ${noun} is ready. Nothing has been published yet.${story ? " Stories go up without a caption; their words are on the image." : ""}</p></div>
+      <pre id="cr-caption" style="margin-bottom:12px"${story ? " hidden" : ""}></pre>
       <div class="row">
-        <form method="post" id="cr-postnow" data-dynamic data-confirm="Publish this post to ${esc(acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram")} right now?"><button class="btn primary" type="submit">${icon("send", 16)}<span>Post now</span></button></form>
+        <form method="post" id="cr-postnow" data-dynamic data-confirm="Publish this ${noun} to ${esc(acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram")} right now?"><button class="btn primary" type="submit">${icon("send", 16)}<span>Post now</span></button></form>
         <a class="btn" id="cr-schedule">${icon("calendar", 16)}<span>Schedule…</span></a>
-        <a class="btn ghost" id="cr-open">${icon("image", 16)}<span>Open post</span></a>
-        ${createButton("Make another", false).replace("btn primary", "btn")}
+        <a class="btn ghost" id="cr-open">${icon("image", 16)}<span>Open & edit ${noun}</span></a>
+        ${again}
       </div>
     </div>
     <div id="cr-bad" hidden>
       <div class="callout bad">${icon("alert")}<p id="cr-bad-msg" style="white-space:pre-line"></p></div>
-      <div class="row">${createButton("Try again")}<a class="btn ghost" id="cr-open-bad" hidden>${icon("image", 16)}<span>Open post</span></a></div>
+      <div class="row">${retry}<a class="btn ghost" id="cr-open-bad" hidden>${icon("image", 16)}<span>Open ${noun}</span></a></div>
     </div>
   </div>
 </section>`;
@@ -131,7 +143,7 @@ ${card(
       stopped=true;time.textContent=fmt(p.elapsedMs);root.setAttribute("aria-busy","false");root.classList.add(p.status==="done"?"cr-done":"cr-failed");
       if(p.status==="done"){document.getElementById("cr-ok").hidden=false;document.getElementById("cr-caption").textContent=p.caption||"";
         document.getElementById("cr-postnow").action="/admin/posts/"+p.postId+"/post-now";document.getElementById("cr-schedule").href="/admin/posts/"+p.postId+"#publish";document.getElementById("cr-open").href="/admin/posts/"+p.postId;
-        window.aiaToast&&aiaToast("Post ready for review")}
+        window.aiaToast&&aiaToast((root.dataset.noun==="story"?"Story":"Post")+" ready for review")}
       else{document.getElementById("cr-bad").hidden=false;document.getElementById("cr-bad-msg").textContent=p.message||p.detail;if(p.postId){var o=document.getElementById("cr-open-bad");o.hidden=false;o.href="/admin/posts/"+p.postId}}
       return true}
     return false}
@@ -139,6 +151,6 @@ ${card(
   poll();
 })();
 </script>`;
-    return render(req, reply, { title: "Creating a post", active: "create:run", body, head: CSS, scripts });
+    return render(req, reply, { title: `Creating a ${noun}`, active: "create:run", body, head: CSS, scripts });
   });
 }

@@ -10,7 +10,9 @@ import { storeWebhookEvent } from "../../ingest/webhook.js";
 import { primaryAccount } from "../../instagram/accounts.js";
 import { forgetUser } from "../../memory/store.js";
 import { assessText } from "../../safety/safety.js";
-import { createButton } from "./create.js";
+import { deletePost, editCaption, EDITABLE, editStoryText, moveSlide, removeSlide } from "../../content/edit.js";
+import { recentStories } from "../../content/stories.js";
+import { createButton, storyButton } from "./create.js";
 import { persona } from "../../persona/loader.js";
 import { JOBS, jobId, queue, queueCounts } from "../../queue/queues.js";
 import { listEvents } from "../../calendar/events.js";
@@ -18,25 +20,21 @@ import { attempt, consoleRouter, done, isUuid, render, reviewer, type Req } from
 import { approveReview, listReviews, rejectReview } from "../reviews.js";
 import { action, ago, bar, button, card, empty, esc, field, header, icon, input, kpi, link, pill, select, table, tabs, textarea, usd } from "../ui/kit.js";
 
-/** Post states in which the operator may still edit slides. */
-const EDITABLE = ["awaiting_review", "dry_run", "qc_failed"];
-
-export async function removeSlide(postId: string, position: number): Promise<string> {
-  return tx(async (c) => {
-    const post = (await c.query<{ status: string }>("SELECT status FROM posts WHERE id = $1 AND influencer_id = $2 FOR UPDATE", [postId, influencerId()])).rows[0];
-    if (!post) return "Post not found";
-    if (!EDITABLE.includes(post.status)) return `Slides can't be changed while the post is ${post.status}`;
-    const n = (await c.query<{ n: number }>("SELECT count(*)::int AS n FROM post_assets WHERE post_id = $1", [postId])).rows[0].n;
-    if (n <= 1) return "A post needs at least one image";
-    const del = await c.query("DELETE FROM post_assets WHERE post_id = $1 AND position = $2", [postId, position]);
-    if (!del.rowCount) return "No such slide";
-    // Shift later slides down (via negative positions to respect the unique index).
-    await c.query("UPDATE post_assets SET position = -position - 1 WHERE post_id = $1 AND position > $2", [postId, position]);
-    await c.query("UPDATE post_assets SET position = -position - 2 WHERE post_id = $1 AND position < 0", [postId]);
-    if (n - 1 === 1) await c.query("UPDATE posts SET media_type = 'IMAGE', updated_at = now() WHERE id = $1", [postId]);
-    return `Removed slide ${position + 1}; ${n - 1} left`;
-  });
+/** Slide tools for one image: move left/right, make cover, remove. */
+function slideTools(id: string, pos: number, count: number): string {
+  const move = (to: number, label: string, ico: string, title: string) =>
+    `<form method="post" action="/admin/posts/${id}/slides/${pos}/move"><input type="hidden" name="to" value="${to}"><button class="btn sm ghost" type="submit" title="${esc(title)}" aria-label="${esc(title)}">${icon(ico, 14)}${label ? `<span>${label}</span>` : ""}</button></form>`;
+  return `<span class="slide-tools">${pos > 0 ? move(pos - 1, "", "arrowLeft", `Move slide ${pos + 1} left`) : ""}${pos < count - 1 ? move(pos + 1, "", "arrowRight", `Move slide ${pos + 1} right`) : ""}${
+    pos > 0 ? move(0, "", "star", `Make slide ${pos + 1} the cover`) : ""
+  }${
+    count > 1
+      ? `<form method="post" action="/admin/posts/${id}/slides/${pos}/remove" data-confirm="Remove slide ${pos + 1}?"><button class="btn sm danger" type="submit" title="Remove slide ${pos + 1}" aria-label="Remove slide ${pos + 1}">${icon("trash", 14)}</button></form>`
+      : ""
+  }</span>`;
 }
+
+/** Live character count for the caption editor (progressive enhancement). */
+const CAPTION_JS = `<script>document.querySelectorAll("[data-count]").forEach(function(t){var o=document.getElementById(t.dataset.count),max=+t.getAttribute("maxlength")||2200;function u(){var n=t.value.length,tags=(t.value.match(/#[\\p{L}\\p{N}_]+/gu)||[]).length;o.textContent=n+" / "+max+" characters · "+tags+" hashtags";o.classList.toggle("over",n>max||tags>30)}t.addEventListener("input",u);u()})</script>`;
 
 /** Why a post can't be published yet, and the one action that unblocks it. */
 export function publishBlocker(status: string, slides: number, safety: string | null, published: boolean): { reason: string } {
@@ -89,7 +87,7 @@ export function registerOperate(app: FastifyInstance): void {
       many<{ id: string; status: string; caption: string; created_at: Date; cover: string | null; topic: string | null }>(
         `SELECT p.id, p.status, p.caption, p.created_at, ci.topic,
            (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover
-         FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id WHERE p.influencer_id = $1 ORDER BY p.created_at DESC LIMIT 6`,
+         FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' ORDER BY p.created_at DESC LIMIT 6`,
         [id],
       ),
       many<{ level: string; source: string; message: string; created_at: Date }>(
@@ -103,7 +101,7 @@ export function registerOperate(app: FastifyInstance): void {
       ),
       many<{ day: string; followers: number | null }>("SELECT day::text, followers FROM account_metrics WHERE influencer_id = $1 ORDER BY day DESC LIMIT 8", [id]),
       listEvents(new Date(Date.now() - 86400_000), new Date(Date.now() + 14 * 86400_000)),
-      one<{ n: number }>("SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND status = 'published' AND published_at > now() - interval '7 days'", [id]),
+      one<{ n: number }>("SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND media_type <> 'STORY' AND status = 'published' AND published_at > now() - interval '7 days'", [id]),
     ]);
     const live = acct?.profile && typeof (acct.profile as { followers_count?: number }).followers_count === "number" ? (acct.profile as { followers_count: number }).followers_count : null;
     const f = live ?? followers[0]?.followers ?? null;
@@ -118,7 +116,7 @@ export function registerOperate(app: FastifyInstance): void {
     const body = `${header(inf.name, {
       eyebrow: `${p.identity.location} · ${localTime(p.identity.timezone)}`,
       sub: acct ? `@${esc(acct.username ?? acct.ig_user_id)} · ${esc(p.identity.occupation)}` : esc(p.identity.occupation),
-      actions: `${createButton()}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
+      actions: `${createButton()}${storyButton()}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
     })}
 ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) => `<p>${s}</p>`).join("")}</div></div>` : ""}
 <div class="kpis">
@@ -176,26 +174,48 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
   r.get("/admin/reviews", async (req: Req, reply) => {
     const status = req.query.status === "all" ? "all" : "pending";
     const rows = await listReviews(status, 100, influencerId());
+    // Post reviews show the post as it is now (edits included), not the snapshot taken when the review opened.
+    const postIds = rows.filter((rv) => rv.subject_type === "post" && isUuid(rv.subject_id)).map((rv) => rv.subject_id);
+    const live = new Map(
+      (
+        await many<{ id: string; media_type: string; caption: string; slides: string[] | null; text: string | null }>(
+          `SELECT p.id, p.media_type, p.caption,
+             (SELECT array_agg(public_url ORDER BY position) FROM post_assets pa WHERE pa.post_id = p.id AND public_url IS NOT NULL) AS slides,
+             (SELECT overlay->>'heading' FROM post_assets pa WHERE pa.post_id = p.id AND position = 0) AS text
+           FROM posts p WHERE p.id = ANY($1::uuid[])`,
+          [postIds],
+        )
+      ).map((x) => [x.id, x]),
+    );
     const cards = rows.map((rv) => {
       const p = rv.proposed as Record<string, any>;
       const isPost = rv.subject_type === "post";
-      const actionable = rv.status === "pending" && rv.level !== "red";
-      const text = isPost ? (p.caption ?? "") : (p.text ?? "");
+      const now = isPost ? live.get(rv.subject_id) : undefined;
+      const isStory = now?.media_type === "STORY";
+      const actionable = rv.status === "pending" && rv.level !== "red" && (!isPost || Boolean(now));
+      const text = isPost ? (now?.caption ?? p.caption ?? "") : (p.text ?? "");
+      const slides: string[] = isPost ? (now?.slides ?? p.slides ?? []) : [];
       return card(
         `<div class="row" style="margin-bottom:8px">${pill(rv.level)} ${pill(rv.status)} <span class="meta">${esc(rv.categories.join(", "))} · ${ago(rv.created_at)}</span></div>
         ${rv.reason ? `<p class="small muted">${esc(rv.reason)}</p>` : ""}
         ${!isPost && p.inbound ? `<div class="quote"><b>@${esc(p.username ?? "")}</b>: ${esc(p.inbound)}</div>` : ""}
-        ${isPost ? `<div class="slides">${(p.slides ?? []).map((u: string, i: number) => `<figure><img src="${esc(u)}" alt="Slide ${i + 1}" loading="lazy"></figure>`).join("")}</div>` : ""}
+        ${isPost ? `<div class="slides${isStory ? " story" : ""}">${slides.map((u: string, i: number) => `<figure><img src="${esc(u)}" alt="${isStory ? "Story" : `Slide ${i + 1}`}" loading="lazy"></figure>`).join("")}</div>` : ""}
+        ${isPost && now && rv.status === "pending" ? `<p style="margin:8px 0">${link(isStory ? "Edit the story text or delete it" : "Edit caption, reorder or remove slides", `/admin/posts/${esc(rv.subject_id)}`, { small: true, icon: "pencil" })}</p>` : ""}
+        ${isPost && !now ? `<p class="muted small">This ${isStory ? "story" : "post"} was deleted.</p>` : ""}
         ${
           actionable
-            ? `<form method="post" action="/admin/reviews/${rv.id}/approve">${field(isPost ? "Caption" : "Reply", textarea("text", text, { rows: isPost ? 6 : 3 }), { help: "Edit before approving if needed." })}
+            ? `<form method="post" action="/admin/reviews/${rv.id}/approve">${
+                isStory
+                  ? `<p class="small">${now?.text ? `Words on the image: <b>${esc(now.text)}</b>` : "No text on this story."} Stories go up without a caption.</p>`
+                  : field(isPost ? "Caption" : "Reply", textarea("text", text, { rows: isPost ? 6 : 3 }), { help: "Edit before approving if needed." })
+              }
                <div class="row">${button(isPost ? "Approve (next window)" : "Approve & send", { variant: isPost ? "ghost" : "primary", icon: "check" })}${
                  isPost ? `<button class="btn primary" formaction="/admin/posts/${esc(rv.subject_id)}/post-now">${icon("send", 16)}<span>Post now</span></button>${link("Schedule…", `/admin/posts/${esc(rv.subject_id)}#publish`, { variant: "ghost", icon: "calendar" })}` : ""
                }</div></form>
                <form method="post" action="/admin/reviews/${rv.id}/reject" class="row" style="margin-top:10px"><input name="note" placeholder="Reason (optional)" aria-label="Rejection reason" style="max-width:320px">${button("Reject", { variant: "danger", icon: "x" })}</form>`
             : `<pre>${esc(text)}</pre>`
         }`,
-        { title: isPost ? "Post" : `Reply (${esc(String(p.channel ?? "comment"))})` },
+        { title: isPost ? (isStory ? "Story" : "Post") : `Reply (${esc(String(p.channel ?? "comment"))})` },
       );
     });
     const body = `${header("Review queue", { sub: "Everything the agent wants a human to check. Red items are never automated." })}
@@ -228,11 +248,11 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
          (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover,
          (SELECT count(*)::int FROM post_assets pa WHERE pa.post_id = p.id) AS slides
        FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id
-       WHERE p.influencer_id = $1 AND ($2 = 'all' OR p.status = $2 OR ($2 = 'attention' AND p.status IN ('awaiting_review','qc_failed','failed','dry_run')))
+       WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' AND ($2 = 'all' OR p.status = $2 OR ($2 = 'attention' AND p.status IN ('awaiting_review','qc_failed','failed','dry_run')))
        ORDER BY p.created_at DESC LIMIT 120`,
       [influencerId(), filter],
     );
-    const body = `${header("Posts", { actions: createButton() })}
+    const body = `${header("Posts", { sub: "Feed posts. Open one to edit its caption, reorder or remove slides, or delete it before it's approved.", actions: `${createButton()}${link("Stories", "/admin/stories", { icon: "phone" })}` })}
 ${tabs([
   { href: "/admin/posts", label: "All", active: filter === "all" },
   { href: "/admin/posts?status=published", label: "Published", active: filter === "published" },
@@ -251,6 +271,49 @@ ${card(
     : empty("No posts here"),
 )}`;
     return render(req, reply, { title: "Posts", active: "posts", body });
+  });
+
+  // ------------------------------------------------------------ stories
+  r.get("/admin/stories", async (req: Req, reply) => {
+    const [c, rows, today] = await Promise.all([
+      getControls(),
+      recentStories(40),
+      one<{ n: number }>("SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND media_type = 'STORY' AND status = 'published' AND published_at > now() - interval '24 hours'", [influencerId()]),
+    ]);
+    const tz = persona().identity.timezone;
+    const hours = (process.env.STORY_PLAN_CRON ?? "50 9,13,17,20 * * *").split(" ")[1] ?? "";
+    const mins = (process.env.STORY_PLAN_CRON ?? "50 9,13,17,20 * * *").split(" ")[0] ?? "0";
+    const checks = hours.split(",").filter((h) => /^\d+$/.test(h)).map((h) => `${h.padStart(2, "0")}:${mins.padStart(2, "0")}`).join(", ");
+    const body = `${header("Stories", {
+      sub: "Light, in-the-moment frames from her day, separate from feed posts. They stop for review like posts do; open one to change its words or delete it.",
+      actions: `${storyButton("Create a story now", true)}${link("Settings", "/admin/controls", { icon: "sliders", variant: "ghost" })}`,
+    })}
+${
+  c.stories_enabled
+    ? `<div class="callout ok">${icon("phone")}<p><b>${today?.n ?? 0} of ${c.stories_per_day}</b> stories in the last 24 hours. The planner checks at ${esc(checks || "set times")} (${esc(tz)}) and posts one when there's something worth sharing, at least ${c.min_hours_between_stories}h apart.</p></div>`
+    : `<div class="callout warn">${icon("pause")}<p>Stories are off. Turn them on in <a href="/admin/controls">Controls</a>.</p></div>`
+}
+${card(
+  rows.length
+    ? `<div class="thumbs story">${rows
+        .map(
+          (s) =>
+            `<a href="/admin/posts/${s.id}">${s.cover ? `<img src="${esc(s.cover)}" alt="${esc(s.text || s.kind || "story")}" loading="lazy">` : `<div class="empty" style="aspect-ratio:9/16;border:1px dashed var(--line-2);border-radius:12px">${icon("phone")}<span class="small">${esc(s.status)}</span></div>`}
+            <div class="cap"><span>${esc(s.kind ?? "story")}</span>${pill(s.status)}</div>
+            <div class="meta">${s.text ? `"${esc(s.text.slice(0, 40))}" · ` : ""}${s.published_at ? `up ${ago(s.published_at)}` : s.status === "approved" && s.scheduled_for ? `scheduled ${esc(localLabel(new Date(s.scheduled_for), tz))}` : `made ${ago(s.created_at)}`}</div></a>`,
+        )
+        .join("")}</div>`
+    : empty("No stories yet", "Make one now to see how her stories look.", storyButton("Create a story now", true)),
+)}
+${card(
+  `<ul class="small" style="margin:0;padding-left:18px;display:grid;gap:6px">
+    <li>Kinds: a moment from her day, a fit check, a shop drop (with the store address from the business knowledge), a trend reaction, or a question followers answer by replying.</li>
+    <li>No text on photos of her; words only on shots without her, never with numbers the business knowledge doesn't have.</li>
+    <li>Instagram's API can't add link stickers, polls, mentions or music, so the words are part of the image. Replies to a story arrive as DMs and she answers them like any DM.</li>
+    <li>Stories disappear after 24 hours on Instagram; they stay listed here.</li></ul>`,
+  { title: "How stories work" },
+)}`;
+    return render(req, reply, { title: "Stories", active: "stories", body });
   });
 
   r.get("/admin/posts/:id", async (req: Req, reply) => {
@@ -286,6 +349,10 @@ ${card(
       return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
     })();
     const blocked = publishBlocker(p.status, assets.length, p.safety_level, Boolean(p.ig_media_id));
+    const isStory = p.media_type === "STORY";
+    const noun = isStory ? "story" : "post";
+    const canEdit = EDITABLE.includes(p.status) && !p.ig_media_id;
+    const lockedNote = p.status === "approved" && !p.ig_media_id ? `<p class="help">${icon("info", 14)} It's approved and scheduled. Unschedule it to edit.</p>` : "";
     const publishBar = canPublish
       ? card(
           `${scheduled ? `<div class="callout ok" style="margin-bottom:12px">${icon("calendar")}<p>Scheduled for <b>${esc(localLabel(new Date(p.scheduled_for), tz))}</b> (${esc(tz)}).</p></div>` : ""}
@@ -293,7 +360,7 @@ ${card(
             ${action(`/admin/posts/${id}/post-now`, "Post now", {
               variant: "primary",
               icon: "send",
-              confirm: `${p.status === "qc_failed" ? "The quality check flagged this post. " : ""}Publish it to ${acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram"} right now?`,
+              confirm: `${p.status === "qc_failed" ? `The quality check flagged this ${noun}. ` : ""}Publish ${isStory ? "this story" : "it"} to ${acct ? `@${acct.username ?? acct.ig_user_id}` : "Instagram"} right now?`,
             })}
             <form method="post" action="/admin/posts/${id}/schedule" class="row" style="align-items:flex-end">
               <div class="field" style="margin:0"><label for="sched-at">Schedule for <span class="meta">(${esc(tz)})</span></label><input id="sched-at" type="datetime-local" name="at" value="${esc(defaultAt)}" required style="width:auto"></div>
@@ -314,33 +381,57 @@ ${card(
     const actions = [
       ["awaiting_review", "dry_run"].includes(p.status) ? action(`/admin/posts/${id}/approve`, "Approve (next window)", { icon: "check", variant: "ghost" }) : "",
       ["qc_failed", "failed"].includes(p.status) && !p.ig_media_id ? action(`/admin/posts/${id}/retry`, "Retry production", { icon: "refresh" }) : "",
-      !["published", "rejected"].includes(p.status) ? action(`/admin/posts/${id}/reject`, "Reject", { variant: "danger", icon: "x", confirm: "Reject this post?" }) : "",
+      !["published", "rejected"].includes(p.status) ? action(`/admin/posts/${id}/reject`, "Reject", { variant: "ghost", icon: "x", confirm: `Reject this ${noun}?` }) : "",
+      !p.ig_media_id && !["published", "publishing"].includes(p.status)
+        ? action(`/admin/posts/${id}/delete`, "Delete", { variant: "danger", icon: "trash", confirm: `Delete this ${noun} for good? It can't be undone.` })
+        : "",
       p.permalink ? link("Open on Instagram", p.permalink, { external: true }) : "",
     ].join("");
-    const body = `${header(p.topic ?? "Post", {
-      eyebrow: `${p.format ?? ""} / ${p.structure ?? ""}`,
+    const storyText = isStory ? String(assets[0]?.overlay?.heading ?? "") : "";
+    const storyHasHer = isStory && (await one<{ c: boolean | null }>("SELECT (plan->'slides'->0->>'include_character')::boolean AS c FROM content_ideas WHERE id = $1", [p.content_idea_id]))?.c;
+    const textCard = isStory
+      ? card(
+          storyHasHer
+            ? `<p class="muted">${icon("info", 14)} She's in this photo, so it stays text-free (house rule: no text on photos of her).</p>`
+            : canEdit
+              ? `<form method="post" action="/admin/posts/${id}/story-text">${field("Words on the image", input("text", storyText, { attrs: 'maxlength="90" id="story-text"', placeholder: "Leave empty for a plain photo" }), {
+                  help: `Plain words, no emoji. The image is re-rendered from the original photo.${assets[0]?.overlay?.body ? ` The line "${esc(String(assets[0].overlay.body))}" underneath comes from the business knowledge and stays.` : ""}`,
+                })}${button("Update the image", { variant: "primary", icon: "pencil" })}</form>`
+              : `<p>${storyText ? esc(storyText) : '<span class="muted">No text on this story.</span>'}</p>${lockedNote}`,
+          { title: "Story text", id: "caption" },
+        )
+      : card(
+          canEdit
+            ? `<form method="post" action="/admin/posts/${id}/caption" class="edit-caption">${field("Caption", textarea("caption", p.caption, { rows: 7, attrs: 'maxlength="2200" data-count="cap-count" id="caption-text"' }), {
+                help: "Edit freely: it's what goes under the photos. Hashtags at the end.",
+              })}<div class="row" style="justify-content:space-between;align-items:center">${button("Save caption", { variant: "primary", icon: "check" })}<span class="counter" id="cap-count"></span></div></form><p class="meta" style="margin-top:8px">Hook: ${esc(p.hook ?? "")}</p>`
+            : `<pre>${esc(p.caption)}</pre>${lockedNote}<p class="meta" style="margin-top:8px">Hook: ${esc(p.hook ?? "")}</p>`,
+          { title: "Caption", id: "caption" },
+        );
+    const body = `${header(p.topic ?? (isStory ? "Story" : "Post"), {
+      eyebrow: isStory ? `story / ${p.structure ?? ""}` : `${p.format ?? ""} / ${p.structure ?? ""}`,
       sub: `${pill(p.status)} ${pill(p.safety_level)} <span class="meta">repetition ${p.repetition_score ?? "—"} · cost ${usd(costs?.usd)} · created ${ago(p.created_at)}</span>`,
       actions,
     })}
 ${p.last_error ? `<div class="callout bad">${icon("alert")}<p>${esc(p.last_error)}</p></div>` : ""}
 ${publishBar}
 ${card(
-  `<div class="slides">${
+  `<div class="slides${isStory ? " story" : ""}">${
     assets
       .map((a) =>
         a.public_url
-          ? `<figure><img src="${esc(a.public_url)}" alt="${esc(a.overlay?.alt_text ?? `Slide ${a.position + 1}`)}"><figcaption><span>Slide ${a.position + 1}</span>${
-              EDITABLE.includes(p.status) && assets.length > 1 ? action(`/admin/posts/${id}/slides/${a.position}/remove`, "Remove", { variant: "danger", small: true, icon: "trash", confirm: `Remove slide ${a.position + 1}?` }) : ""
-            }</figcaption></figure>`
+          ? `<figure><img src="${esc(a.public_url)}" alt="${esc(a.overlay?.alt_text ?? `Slide ${a.position + 1}`)}"><figcaption>${
+              isStory ? "<span>9:16 story</span>" : a.position === 0 ? `<span class="slide-cover">${icon("star", 12)}Cover</span>` : `<span>Slide ${a.position + 1}</span>`
+            }</figcaption>${canEdit && !isStory && assets.length > 1 ? slideTools(id, a.position, assets.length) : ""}</figure>`
           : "",
       )
       .join("") || `<span class="muted">Not generated yet</span>`
-  }</div>`,
-  { title: "Slides" },
+  }</div>${canEdit && !isStory && assets.length > 1 ? `<p class="help" style="margin-top:8px">Arrows reorder, the star makes a slide the cover, the bin removes it. A carousel needs 2 to 10 slides; one left makes it a single photo.</p>` : ""}`,
+  { title: isStory ? "Story" : `Slides (${assets.length})` },
 )}
 <div class="grid">
-${card(`<pre>${esc(p.caption)}</pre><p class="meta" style="margin-top:8px">Hook: ${esc(p.hook ?? "")}</p>`, { title: "Caption" })}
-${card(
+${textCard}
+${isStory ? "" : card(
   table(
     ["Checkpoint", "Reach", "Likes", "Comments", "Saves", "Shares", "Follows", "Score"],
     metrics.map((m) => [esc(m.checkpoint), m.reach ?? "—", m.likes ?? "—", m.comments ?? "—", m.saves ?? "—", m.shares ?? "—", m.follows ?? "—", m.score ?? "—"].map(String)),
@@ -376,10 +467,25 @@ ${card(
   }`,
   { title: "Visual state & prompts" },
 )}`;
-    return render(req, reply, { title: "Post", active: "posts:detail", body });
+    return render(req, reply, { title: isStory ? "Story" : "Post", active: isStory ? "stories:detail" : "posts:detail", body, scripts: canEdit && !isStory ? CAPTION_JS : undefined });
   });
 
-  r.post("/admin/posts/:id/slides/:pos/remove", async (req: Req, reply) => done(req, reply, `/admin/posts/${req.params.id}`, await removeSlide(req.params.id, Number(req.params.pos))));
+  const edited = (req: Req, reply: Parameters<typeof done>[1], res: { ok: boolean; message: string }, hash = "") => done(req, reply, `/admin/posts/${req.params.id}${hash}`, res.message, res.ok);
+  r.post("/admin/posts/:id/slides/:pos/remove", async (req: Req, reply) => edited(req, reply, await removeSlide(req.params.id, Number(req.params.pos), reviewer(req))));
+  r.post("/admin/posts/:id/slides/:pos/move", async (req: Req, reply) => edited(req, reply, await moveSlide(req.params.id, Number(req.params.pos), Number(req.body?.to), reviewer(req))));
+  r.post("/admin/posts/:id/caption", async (req: Req, reply) => edited(req, reply, await editCaption(req.params.id, String(req.body?.caption ?? ""), reviewer(req)), "#caption"));
+  r.post("/admin/posts/:id/story-text", async (req: Req, reply) =>
+    attempt(req, reply, `/admin/posts/${req.params.id}#caption`, async () => {
+      const res = await editStoryText(req.params.id, String(req.body?.text ?? ""), reviewer(req));
+      if (!res.ok) throw new Error(res.message);
+      return res.message;
+    }),
+  );
+  r.post("/admin/posts/:id/delete", async (req: Req, reply) => {
+    const kind = (await one<{ media_type: string }>("SELECT media_type FROM posts WHERE id = $1 AND influencer_id = $2", [req.params.id, influencerId()]))?.media_type;
+    const res = await deletePost(req.params.id, reviewer(req));
+    return done(req, reply, res.ok ? (kind === "STORY" ? "/admin/stories" : "/admin/posts") : `/admin/posts/${req.params.id}`, res.message, res.ok);
+  });
 
   r.post("/admin/posts/:id/approve", async (req: Req, reply) => {
     const id = req.params.id;

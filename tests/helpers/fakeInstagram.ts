@@ -32,6 +32,7 @@ export class FakeInstagram {
   calls: Call[] = [];
   containers = new Map<string, { status: "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ERROR"; polls: number; params: Record<string, any>; children?: string[] }>();
   media = new Map<string, { id: string; caption: string; permalink: string; timestamp: string; children?: string[] }>();
+  stories = new Map<string, { id: string; permalink: string; timestamp: string; params: Record<string, any> }>();
   replies: Array<{ commentId: string; message: string; id: string }> = [];
   dms: Array<{ recipient: Record<string, string>; text: string; id: string }> = [];
   hidden: string[] = [];
@@ -112,6 +113,12 @@ export class FakeInstagram {
         if (c.status === "PUBLISHED") return err(400, 9007, "The media has already been published");
         if (c.status !== "FINISHED") return err(400, 9007, "Media ID is not available");
         c.status = "PUBLISHED";
+        if (c.params.media_type === "STORIES") {
+          const sid = `s_${id()}`;
+          this.stories.set(sid, { id: sid, permalink: `https://www.instagram.com/stories/zuri.test/${sid}/`, timestamp: new Date().toISOString(), params: c.params });
+          this.quotaUsage++;
+          return ok({ id: sid });
+        }
         const mid = `m_${id()}`;
         this.media.set(mid, { id: mid, caption: c.params.caption ?? "", permalink: `https://www.instagram.com/p/${mid}/`, timestamp: new Date().toISOString(), children: c.children });
         this.quotaUsage++;
@@ -119,6 +126,7 @@ export class FakeInstagram {
       }
       if (method === "GET" && sub === "content_publishing_limit") return ok({ data: [{ quota_usage: this.quotaUsage, config: { quota_total: 100 } }] });
       if (method === "GET" && sub === "media") return ok({ data: [...this.media.values()].reverse() });
+      if (method === "GET" && sub === "stories") return ok({ data: [...this.stories.values()].reverse().map((s) => ({ id: s.id, media_type: "IMAGE", media_product_type: "STORY", permalink: s.permalink, timestamp: s.timestamp })) });
       if (method === "GET" && sub === "insights") return ok({ data: [{ name: query.metric, total_value: { value: 1000 } }] });
     }
 
@@ -137,6 +145,10 @@ export class FakeInstagram {
       const c = this.containers.get(target)!;
       if (c.status === "IN_PROGRESS" && ++c.polls > this.processingPolls - 1) c.status = "FINISHED";
       return ok({ status_code: c.status === "IN_PROGRESS" ? "IN_PROGRESS" : c.status, id: target });
+    }
+    if (method === "GET" && this.stories.has(target)) {
+      const s = this.stories.get(target)!;
+      return ok({ id: s.id, media_type: "IMAGE", media_product_type: "STORY", permalink: s.permalink, timestamp: s.timestamp });
     }
     if (method === "GET" && this.media.has(target)) {
       const m = this.media.get(target)!;

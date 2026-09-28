@@ -23,6 +23,10 @@ export const controlsSchema = z.object({
 
   max_posts_per_day: z.number().int().min(0).default(2),
   min_hours_between_posts: z.number().min(0).default(6),
+  // Instagram Story updates (separate from feed posts and their limits).
+  stories_enabled: z.boolean().default(true),
+  stories_per_day: z.number().int().min(0).max(10).default(3),
+  min_hours_between_stories: z.number().min(0).default(2.5),
   max_comment_replies_per_hour: z.number().int().min(0).default(30),
   max_dms_per_hour: z.number().int().min(0).default(40),
   // Probability of replying to a comment the agent judged worth answering but

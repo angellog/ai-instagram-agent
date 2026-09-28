@@ -19,6 +19,7 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Operating mode", "What is allowed to go out.", ["mode", "paused", "require_review_for_yellow"]],
   ["Features", "Switch whole capabilities on or off.", ["conversation_enabled", "content_enabled", "image_generation_enabled", "carousel_generation_enabled"]],
   ["Posting cadence", "Hours are in the persona's local time.", ["max_posts_per_day", "min_hours_between_posts", "posting_window_start_hour", "posting_window_end_hour"]],
+  ["Stories", "Instagram Story updates: 1-3 a day from her life, separate from feed posts. Same posting window and review rules.", ["stories_enabled", "stories_per_day", "min_hours_between_stories"]],
   ["Conversation limits", "", ["max_comment_replies_per_hour", "max_dms_per_hour", "optional_reply_rate"]],
   ["Budgets (this influencer)", "Hard caps checked before every paid call.", ["daily_budget_usd", "monthly_budget_usd", "daily_llm_budget_usd", "daily_image_budget_usd", "max_retries_per_image"]],
   ["Creativity guards", "", ["repetition_threshold", "max_concept_attempts"]],

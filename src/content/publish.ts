@@ -15,7 +15,7 @@ import { JOBS, jobId, queue } from "../queue/queues.js";
 interface PublishRow {
   id: string;
   status: string;
-  media_type: "IMAGE" | "CAROUSEL";
+  media_type: "IMAGE" | "CAROUSEL" | "STORY";
   caption: string;
   ig_container_id: string | null;
   ig_child_container_ids: string[];
@@ -98,7 +98,8 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
         throw e;
       });
       if (s.status_code === "PUBLISHED") {
-        const recovered = await recoverPublishedMedia(ig, post.caption, new Date(post.updated_at.getTime() - 3600_000));
+        const since = new Date(post.updated_at.getTime() - 3600_000);
+        const recovered = post.media_type === "STORY" ? await recoverPublishedStory(ig, since) : await recoverPublishedMedia(ig, post.caption, since);
         if (recovered) return markPublished(post, recovered.id, recovered.permalink);
         throw new TransientError("container reports PUBLISHED but the media is not in the feed yet");
       }
@@ -114,7 +115,9 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
 
     // ---- build containers
     let containerId: string;
-    if (post.media_type === "IMAGE") {
+    if (post.media_type === "STORY") {
+      containerId = await createStoryContainer(ig, postId, assets[0].public_url);
+    } else if (post.media_type === "IMAGE") {
       const r = await ig.createImageContainer({ imageUrl: assets[0].public_url, caption: post.caption, altText: assets[0].overlay?.alt_text, isAiGenerated: true });
       containerId = r.id;
     } else {
@@ -171,7 +174,8 @@ async function markPublished(post: PublishRow, mediaId: string, permalink?: stri
     const v = applyMemoryPolicy({ kind: "published", content: `${idea.topic} (${idea.format}/${idea.structure})`, confidence: 1, importance: 0.6 });
     if (v.store) await upsertMemory("world", null, v, { type: "post", id: post.id });
   }
-  for (const cp of CHECKPOINTS) {
+  // Story insights vanish after 24h and don't feed the feed's learnings.
+  for (const cp of post.media_type === "STORY" ? [] : CHECKPOINTS) {
     await queue("analytics").add(JOBS.engagementCollect, { influencerId: influencerId(), postId: post.id, checkpoint: cp.name }, { jobId: jobId("engagement", post.id, cp.name), delay: cp.delayMs });
   }
   await recordDecision({
@@ -182,8 +186,8 @@ async function markPublished(post: PublishRow, mediaId: string, permalink?: stri
     reason: `media ${mediaId}`,
     latencyMs: startedAt ? Date.now() - startedAt.getTime() : undefined,
   });
-  await recordEvent("info", "publish", "Post published", { postId: post.id, mediaId, permalink: link });
-  await notify(`✅ Published: ${link ?? mediaId}`);
+  await recordEvent("info", "publish", post.media_type === "STORY" ? "Story published" : "Post published", { postId: post.id, mediaId, permalink: link });
+  await notify(`✅ ${post.media_type === "STORY" ? "Story" : "Published"}: ${link ?? mediaId}`);
   return "published";
 }
 
@@ -192,5 +196,29 @@ export async function recoverPublishedMedia(ig: InstagramClient, caption: string
   const recent = await ig.listRecentMedia(10);
   const norm = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
   const hit = recent.find((m) => norm(m.caption) === norm(caption) && (!m.timestamp || new Date(m.timestamp) >= notBefore));
+  return hit ? { id: hit.id, permalink: hit.permalink } : undefined;
+}
+
+/**
+ * Story container with the AI label. If Meta refuses the label on stories, the
+ * story goes out without it (the account itself carries the AI label) and the
+ * fallback is logged.
+ */
+async function createStoryContainer(ig: InstagramClient, postId: string, imageUrl: string): Promise<string> {
+  try {
+    return (await ig.createStoryContainer({ imageUrl, isAiGenerated: true })).id;
+  } catch (e) {
+    if (e instanceof PermanentError && /is_ai_generated|ai label/i.test(e.message)) {
+      await recordEvent("warn", "publish", "Instagram refused the AI label on a story; publishing it without the per-media label", { postId, error: errorMessage(e) });
+      return (await ig.createStoryContainer({ imageUrl })).id;
+    }
+    throw e;
+  }
+}
+
+/** Find the story a lost media_publish response created: the newest live story since the attempt began. */
+export async function recoverPublishedStory(ig: InstagramClient, notBefore: Date): Promise<{ id: string; permalink?: string } | undefined> {
+  const live = await ig.listStories();
+  const hit = live.filter((m) => !m.timestamp || new Date(m.timestamp) >= notBefore).sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))[0];
   return hit ? { id: hit.id, permalink: hit.permalink } : undefined;
 }

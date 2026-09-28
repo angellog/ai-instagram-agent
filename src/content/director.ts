@@ -95,7 +95,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
   const calendar = await calendarBrief("content", now);
   const remembered = (await worldMemories(["calendar_recap"], 5)).map((m) => m.content);
   const todayEvents = (await listEvents(new Date(now.getTime() - 12 * 3600_000), new Date(now.getTime() + 12 * 3600_000))).map((e) => `${e.title} ${e.description ?? ""}`);
-  const outfits = planOutfits(p, day, recent, { events: todayEvents });
+  const outfits = planOutfits(p, day, await recentContent(15, { stories: true }), { events: todayEvents });
   const weekend = [0, 6].includes(localParts(now, p.identity.timezone).weekday);
   const trends = await trendsForPrompt("content");
   const schema = ideaSchema(p);
@@ -237,12 +237,12 @@ export async function postingGate(c: Controls, p: Persona, now: Date): Promise<s
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(
-    `SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
+    `SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND media_type <> 'STORY' AND status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
     [influencerId()],
   );
   if ((inFlight?.n ?? 0) > 0) return "a post is already in the pipeline";
   const today = await one<{ n: number; last: Date | null }>(
-    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE influencer_id = $1 AND status = 'published'`,
+    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE influencer_id = $1 AND status = 'published' AND media_type <> 'STORY'`,
     [influencerId()],
   );
   if ((today?.n ?? 0) >= c.max_posts_per_day) return `max_posts_per_day (${c.max_posts_per_day}) reached`;

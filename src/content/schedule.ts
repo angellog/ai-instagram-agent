@@ -39,7 +39,7 @@ export function localLabel(d: Date, timeZone: string): string {
 }
 
 /** Remove any queued/delayed publish job for this post so a reschedule never double-posts. */
-async function clearPublishJobs(postId: string): Promise<void> {
+export async function clearPublishJobs(postId: string): Promise<void> {
   const q = queue("publish");
   for (const j of await q.getJobs(["delayed", "waiting", "prioritized"])) {
     if (j.data?.postId === postId) await j.remove().catch(() => undefined);

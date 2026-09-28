@@ -10,7 +10,8 @@ import { registerCreate } from "./pages/create.js";
 import { registerTrends } from "./pages/trends.js";
 
 export { selectedInfluencer } from "./console.js";
-export { removeSlide, rerunInteraction } from "./pages/operate.js";
+export { rerunInteraction } from "./pages/operate.js";
+export { removeSlide } from "../content/edit.js";
 
 /**
  * The operator console (docs/design/HANDOFF.md). Server-rendered pages with a

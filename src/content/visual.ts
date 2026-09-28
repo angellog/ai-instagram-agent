@@ -30,7 +30,8 @@ const LIGHT_TEXT: Record<string, string> = {
  * that holds character identity, outfit, environment, light and camera style
  * constant across the series and consistent with the persona profile.
  */
-export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide, state: VisualState, index: number, total: number): string {
+export function slidePrompt(p: Persona, idea: { format: Idea["format"] | "story" }, slide: Slide, state: VisualState, index: number, total: number): string {
+  const story = idea.format === "story";
   const ch = p.visual.character;
   const ph = p.visual.photography;
   const loc = state.location_id ? p.visual.locations.find((l) => l.id === state.location_id) : undefined;
@@ -57,9 +58,14 @@ export function slidePrompt(p: Persona, idea: Pick<Idea, "format">, slide: Slide
   lines.push(`Framing: ${COMPOSITION_TEXT[slide.composition] ?? slide.composition}.`);
   if (loc) lines.push(`Location: ${loc.description}.`);
   lines.push(`Light: ${LIGHT_TEXT[state.time_of_day ?? "morning"] ?? state.time_of_day}. ${ph.lighting}.`);
-  lines.push(`Style: ${ph.style}; ${ph.camera_feel}; ${ph.realism}. Vertical 4:5 Instagram photo.`);
+  lines.push(
+    story
+      ? `Style: ${ph.style}; ${ph.camera_feel}; ${ph.realism}. Vertical 9:16 Instagram Story photo filling the whole frame, shot in the moment on a phone. Keep faces and the key detail in the middle; nothing important in the top 14% or bottom 20% (Instagram covers those).`
+      : `Style: ${ph.style}; ${ph.camera_feel}; ${ph.realism}. Vertical 4:5 Instagram photo.`,
+  );
   if (total > 1) lines.push(`This is photo ${index + 1} of ${total} from one continuous shoot: same outfit, same place, same light as the others.`);
-  if (p.carousel.text_overlays && !slide.include_character) lines.push("Leave calm, uncluttered space in the lower third of the frame.");
+  if (story && !slide.include_character && slide.overlay_kind !== "none") lines.push("Leave calm, uncluttered space in the lower-middle of the frame for a short line of text.");
+  else if (p.carousel.text_overlays && !slide.include_character) lines.push("Leave calm, uncluttered space in the lower third of the frame.");
   if (ph.negative) lines.push(`Avoid: ${ph.negative.trim()}`);
   return lines.join("\n");
 }

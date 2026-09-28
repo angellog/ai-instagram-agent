@@ -33,7 +33,7 @@ export interface RecentItem {
  * pipeline (a queued post counts; otherwise two near-identical drafts could
  * both pass while neither is published yet).
  */
-export async function recentContent(limit = 15): Promise<RecentItem[]> {
+export async function recentContent(limit = 15, o: { stories?: boolean } = {}): Promise<RecentItem[]> {
   const rows = await many<{
     post_id: string | null;
     idea_id: number;
@@ -53,11 +53,11 @@ export async function recentContent(limit = 15): Promise<RecentItem[]> {
             ci.created_at, p.published_at
      FROM content_ideas ci
      LEFT JOIN posts p ON p.content_idea_id = ci.id
-     WHERE ci.influencer_id = $2 AND ci.status IN ('accepted', 'produced')
+     WHERE ci.influencer_id = $2 AND ci.status IN ('accepted', 'produced') AND ($3 OR ci.format <> 'story')
        AND (p.id IS NULL OR p.status NOT IN ('rejected', 'failed', 'qc_failed'))
      ORDER BY coalesce(p.published_at, ci.created_at) DESC
      LIMIT $1`,
-    [limit, influencerId()],
+    [limit, influencerId(), Boolean(o.stories)],
   );
   return rows.map((r) => ({
     postId: r.post_id,

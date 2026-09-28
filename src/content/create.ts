@@ -5,6 +5,7 @@ import { recordEvent } from "../lib/events.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { planContent } from "./director.js";
 import { producePost } from "./produce.js";
+import { planStory } from "./stories.js";
 
 /**
  * "Create a post now": one tap runs the real pipeline (plan → generate →
@@ -21,9 +22,12 @@ export const STAGES = [
 ] as const;
 export type Stage = (typeof STAGES)[number]["key"] | "queued";
 
+export type CreateKind = "post" | "story";
+
 export interface CreateRun {
   id: string;
   influencer_id: number;
+  kind: CreateKind;
   status: "queued" | "running" | "done" | "failed";
   stage: Stage;
   post_id: string | null;
@@ -44,14 +48,14 @@ async function setRun(id: string, patch: Partial<Pick<CreateRun, "status" | "sta
   );
 }
 
-/** Start a run for the current influencer; at most one active run at a time. */
-export async function startCreate(by: string): Promise<{ id: string; existing: boolean }> {
+/** Start a run for the current influencer; at most one active run of each kind at a time. */
+export async function startCreate(by: string, kind: CreateKind = "post"): Promise<{ id: string; existing: boolean }> {
   const active = await one<{ id: string }>(
-    "SELECT id FROM create_runs WHERE influencer_id = $1 AND status IN ('queued','running') AND updated_at > now() - interval '30 minutes' ORDER BY created_at DESC LIMIT 1",
-    [influencerId()],
+    "SELECT id FROM create_runs WHERE influencer_id = $1 AND kind = $2 AND status IN ('queued','running') AND updated_at > now() - interval '30 minutes' ORDER BY created_at DESC LIMIT 1",
+    [influencerId(), kind],
   );
   if (active) return { id: active.id, existing: true };
-  const run = await one<{ id: string }>("INSERT INTO create_runs (influencer_id, created_by) VALUES ($1, $2) RETURNING id", [influencerId(), by]);
+  const run = await one<{ id: string }>("INSERT INTO create_runs (influencer_id, created_by, kind) VALUES ($1, $2, $3) RETURNING id", [influencerId(), by, kind]);
   await queue("content").add(JOBS.contentCreate, { influencerId: influencerId(), runId: run!.id }, { jobId: jobId("create", run!.id), attempts: 1 });
   return { id: run!.id, existing: false };
 }
@@ -62,14 +66,15 @@ export async function runCreate(runId: string): Promise<string> {
   if (!run || run.status === "done" || run.status === "failed") return "skipped";
   try {
     await setRun(runId, { status: "running", stage: "planning" });
-    const plan = await planContent(new Date(), { operator: true });
+    const story = run.kind === "story";
+    const plan = story ? await planStory(new Date(), { operator: true }) : await planContent(new Date(), { operator: true });
     if (plan.status !== "accepted") {
       const why = "reason" in plan && plan.reason ? plan.reason : plan.status;
       const friendly =
         plan.status === "rejected_all"
           ? "Every idea was too close to recent posts. Add something to the calendar or wait for new activity, then try again."
           : plan.status === "waited"
-            ? "The director found nothing worth posting right now."
+            ? `The director found nothing worth ${story ? "a story" : "posting"} right now.`
             : `Couldn't start: ${why}`;
       await setRun(runId, { status: "failed", outcome: plan.status, message: `${friendly}\n\nDetails: ${why}`.slice(0, 1200) });
       return plan.status;
@@ -81,7 +86,7 @@ export async function runCreate(runId: string): Promise<string> {
       status: ok ? "done" : "failed",
       stage: ok ? "ready" : "checking",
       outcome,
-      message: ok ? "Your post is ready: publish it now or schedule it." : outcome === "qc_failed" ? "The photos didn't pass the quality check." : outcome === "rejected" ? "The safety check blocked this post." : "Production stopped (see the post for details).",
+      message: ok ? `Your ${story ? "story" : "post"} is ready: publish it now or schedule it.` : outcome === "qc_failed" ? "The photos didn't pass the quality check." : outcome === "rejected" ? "The safety check blocked this post." : "Production stopped (see the post for details).",
     });
     await recordEvent(ok ? "info" : "warn", "content", `Create-now run ${outcome}`, { runId, postId: plan.postId });
     return outcome;
@@ -93,6 +98,7 @@ export async function runCreate(runId: string): Promise<string> {
 
 export interface Progress {
   id: string;
+  kind: CreateKind;
   status: CreateRun["status"];
   stage: Stage;
   pct: number;
@@ -165,13 +171,15 @@ export async function createProgress(runId: string, now = Date.now()): Promise<P
       : stage === "queued"
         ? "Starting…"
         : stage === "planning"
-          ? "Reading the calendar, recent posts and today's outfit…"
+          ? run.kind === "story"
+            ? "Looking at her day so far and today's outfit…"
+            : "Reading the calendar, recent posts and today's outfit…"
           : stage === "generating"
             ? `Photo ${Math.min(done + 1, total)} of ${total}${running ? " is being generated" : ""}`
             : stage === "checking"
               ? "Checking identity, anatomy, text and safety…"
               : (run.message ?? "Ready");
-  return { id: run.id, status: run.status, stage, pct, steps, detail, postId: run.post_id, outcome: run.outcome ?? postStatus, message: run.message, slides: { done, total, urls }, topic, caption, elapsedMs };
+  return { id: run.id, kind: run.kind ?? "post", status: run.status, stage, pct, steps, detail, postId: run.post_id, outcome: run.outcome ?? postStatus, message: run.message, slides: { done, total, urls }, topic, caption, elapsedMs };
 }
 
 export async function recentRuns(limit = 5): Promise<CreateRun[]> {

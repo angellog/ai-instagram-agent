@@ -4,7 +4,7 @@ import { llm } from "../llm/llm.js";
 import type { InputImage } from "../llm/types.js";
 import type { Persona } from "../persona/schema.js";
 import { MAX_CAPTION, MAX_HASHTAGS } from "./caption.js";
-import { SLIDE_H, SLIDE_W } from "../render/compose.js";
+import { SLIDE_H, SLIDE_W, STORY_H, STORY_W } from "../render/compose.js";
 
 /**
  * Quality-control worker (brief §7, §9). Structural checks are deterministic;
@@ -13,7 +13,7 @@ import { SLIDE_H, SLIDE_W } from "../render/compose.js";
  */
 
 export interface StructuralInput {
-  mediaType: "IMAGE" | "CAROUSEL";
+  mediaType: "IMAGE" | "CAROUSEL" | "STORY";
   caption: string;
   slides: Array<{ position: number; publicUrl: string | null; width: number | null; height: number | null; bytes?: number; overlayText: string }>;
 }
@@ -25,13 +25,16 @@ export function structuralQc(i: StructuralInput, p: Persona): string[] {
     if (n < Math.max(2, p.carousel.min_slides) || n > Math.min(10, p.carousel.max_slides)) {
       problems.push(`carousel has ${n} slides; allowed ${p.carousel.min_slides}-${Math.min(10, p.carousel.max_slides)}`);
     }
-  } else if (n !== 1) problems.push(`single image post has ${n} assets`);
+  } else if (n !== 1) problems.push(`${i.mediaType === "STORY" ? "story" : "single image post"} has ${n} assets`);
+  const [w, h] = i.mediaType === "STORY" ? [STORY_W, STORY_H] : [SLIDE_W, SLIDE_H];
   for (const s of i.slides) {
     if (!s.publicUrl) problems.push(`slide ${s.position + 1} has no public URL`);
-    if (s.width !== SLIDE_W || s.height !== SLIDE_H) problems.push(`slide ${s.position + 1} is ${s.width}x${s.height}, expected ${SLIDE_W}x${SLIDE_H}`);
+    if (s.width !== w || s.height !== h) problems.push(`slide ${s.position + 1} is ${s.width}x${s.height}, expected ${w}x${h}`);
     if (s.bytes !== undefined && s.bytes > 8 * 1024 * 1024) problems.push(`slide ${s.position + 1} exceeds 8 MB`);
     if (s.overlayText.length > 400) problems.push(`slide ${s.position + 1} overlay text too long`);
   }
+  // Stories have no caption on Instagram; their words are on the image.
+  if (i.mediaType === "STORY") return problems;
   if (!i.caption.trim()) problems.push("empty caption");
   if (i.caption.length > MAX_CAPTION) problems.push(`caption ${i.caption.length} chars > ${MAX_CAPTION}`);
   const tags = i.caption.match(/#[\p{L}\p{N}_]+/gu) ?? [];

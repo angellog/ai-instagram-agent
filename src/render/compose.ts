@@ -16,8 +16,18 @@ import sharp, { type Metadata } from "sharp";
 
 export const SLIDE_W = 1080;
 export const SLIDE_H = 1350;
+/** Instagram Story frame (9:16). */
+export const STORY_W = 1080;
+export const STORY_H = 1920;
 
-export type OverlayKind = "none" | "cover" | "body" | "cta";
+export interface Size {
+  w: number;
+  h: number;
+}
+export const FEED: Size = { w: SLIDE_W, h: SLIDE_H };
+export const STORY: Size = { w: STORY_W, h: STORY_H };
+
+export type OverlayKind = "none" | "cover" | "body" | "cta" | "story";
 
 export interface Overlay {
   kind: OverlayKind;
@@ -98,14 +108,63 @@ export function fit(text: string, sizes: number[], factor: number, maxWidth: num
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function overlaySvg(o: Overlay, brand: Brand): string {
+/**
+ * Story text: a headline and an optional small line (e.g. the shop address) on
+ * a soft panel in the lower-middle of the frame, clear of the areas Instagram
+ * covers with its own UI (top ~14% and bottom ~20%).
+ */
+function storySvg(o: Overlay, brand: Brand, size: Size): string {
+  const pad = 88;
+  const maxW = size.w - pad * 2 - 48;
+  const heading = o.heading ? sanitizeOverlayText(o.heading) : "";
+  const body = o.body ? sanitizeOverlayText(o.body) : "";
+  const h = heading ? fit(heading, [72, 64, 58, 52, 46], WIDTH_FACTOR.interBold, maxW, 4) : undefined;
+  const b = body ? fit(body, [38, 34, 32, 30], WIDTH_FACTOR.interMedium, maxW, 3) : undefined;
+  const hl = h ? Math.round(h.size * 1.15) : 0;
+  const bl = b ? Math.round(b.size * 1.3) : 0;
+  // Lay the lines out from the panel's top, then size the panel to them (equal padding above and below).
+  const padY = 40;
+  const lines: Array<(top: number) => string> = [];
+  let y = padY + 18; // accent bar + gap
+  if (h) {
+    y += Math.round(h.size * 0.78);
+    for (const [i, line] of h.lines.entries()) {
+      const dy = y + i * hl;
+      lines.push((top) => `<text x="${pad + 28}" y="${top + dy}" font-family="Inter" font-weight="700" font-size="${h.size}" fill="${brand.text}">${esc(line)}</text>`);
+    }
+    y += (h.lines.length - 1) * hl;
+  }
+  if (b) {
+    y += h ? Math.round(h.size * 0.22) + 18 + Math.round(b.size * 0.78) : Math.round(b.size * 0.78);
+    for (const [i, line] of b.lines.entries()) {
+      const dy = y + i * bl;
+      lines.push((top) => `<text x="${pad + 28}" y="${top + dy}" font-family="Inter" font-weight="500" font-size="${b.size}" fill="${brand.text}" fill-opacity="0.92">${esc(line)}</text>`);
+    }
+    y += (b.lines.length - 1) * bl;
+  }
+  const boxH = y + Math.round((b ? b.size : h!.size) * 0.22) + padY;
+  const top = Math.round(size.h * 0.78) - boxH;
+  const parts = [
+    `<defs><filter id="s" x="-5%" y="-20%" width="110%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="${brand.shadow}" flood-opacity="0.35"/></filter></defs>`,
+    `<rect x="${pad}" y="${top}" width="${size.w - pad * 2}" height="${boxH}" rx="36" fill="${brand.shadow}" fill-opacity="0.58" filter="url(#s)"/>`,
+    `<rect x="${pad + 28}" y="${top + padY - 8}" width="72" height="8" rx="4" fill="${brand.primary}"/>`,
+    ...lines.map((line) => line(top)),
+  ];
+  return parts.join("");
+}
+
+export function overlaySvg(o: Overlay, brand: Brand, size: Size = FEED): string {
   const pad = 72;
+  const SLIDE_W = size.w;
+  const SLIDE_H = size.h;
   const maxW = SLIDE_W - pad * 2;
   const parts: string[] = [];
   const heading = o.heading ? sanitizeOverlayText(o.heading) : "";
   const body = o.body ? sanitizeOverlayText(o.body) : "";
 
-  if (o.kind !== "none" && (heading || body)) {
+  if (o.kind === "story" && (heading || body)) {
+    parts.push(storySvg(o, brand, size));
+  } else if (o.kind !== "none" && (heading || body)) {
     const gradTop = o.kind === "cover" ? 0.42 : 0.38;
     parts.push(
       `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
@@ -162,10 +221,10 @@ export function overlaySvg(o: Overlay, brand: Brand): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}">${parts.join("")}</svg>`;
 }
 
-export function renderOverlayPng(o: Overlay, brand: Brand): Buffer {
-  const r = new Resvg(overlaySvg(o, brand), {
+export function renderOverlayPng(o: Overlay, brand: Brand, size: Size = FEED): Buffer {
+  const r = new Resvg(overlaySvg(o, brand, size), {
     font: { fontFiles: fonts(), loadSystemFonts: false, defaultFontFamily: "Inter" },
-    fitTo: { mode: "width", value: SLIDE_W },
+    fitTo: { mode: "width", value: size.w },
   });
   return r.render().asPng();
 }
@@ -174,9 +233,9 @@ export function renderOverlayPng(o: Overlay, brand: Brand): Buffer {
  * Crop/resize the source image to 4:5 (attention-based crop keeps the subject),
  * composite the text layer, and encode a baseline sRGB JPEG under 8 MB.
  */
-export async function composeSlide(image: Buffer, o: Overlay, brand: Brand): Promise<{ jpeg: Buffer; width: number; height: number }> {
-  const base = sharp(image, { failOn: "error" }).rotate().resize(SLIDE_W, SLIDE_H, { fit: "cover", position: sharp.strategy.attention });
-  const layers = o.kind === "none" && !o.counter && !o.handle ? [] : [{ input: renderOverlayPng(o, brand), top: 0, left: 0 }];
+export async function composeSlide(image: Buffer, o: Overlay, brand: Brand, size: Size = FEED): Promise<{ jpeg: Buffer; width: number; height: number }> {
+  const base = sharp(image, { failOn: "error" }).rotate().resize(size.w, size.h, { fit: "cover", position: sharp.strategy.attention });
+  const layers = o.kind === "none" && !o.counter && !o.handle ? [] : [{ input: renderOverlayPng(o, brand, size), top: 0, left: 0 }];
   let quality = 90;
   for (;;) {
     const jpeg = await base
@@ -185,7 +244,7 @@ export async function composeSlide(image: Buffer, o: Overlay, brand: Brand): Pro
       .toColorspace("srgb")
       .jpeg({ quality, mozjpeg: true, chromaSubsampling: "4:4:4" })
       .toBuffer();
-    if (jpeg.length <= 7.5 * 1024 * 1024 || quality <= 60) return { jpeg, width: SLIDE_W, height: SLIDE_H };
+    if (jpeg.length <= 7.5 * 1024 * 1024 || quality <= 60) return { jpeg, width: size.w, height: size.h };
     quality -= 10;
   }
 }

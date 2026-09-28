@@ -172,6 +172,24 @@ export class InstagramClient {
     });
   }
 
+  /**
+   * Story container (media_type STORIES): one image, no caption. The API has no
+   * stickers (links, polls, mentions, music); text is part of the image.
+   */
+  createStoryContainer(o: { imageUrl: string; isAiGenerated?: boolean }): Promise<{ id: string }> {
+    return this.request("POST", `${this.igUserId}/media`, {
+      media_type: "STORIES",
+      image_url: o.imageUrl,
+      ...(o.isAiGenerated ? { is_ai_generated: true } : {}),
+    });
+  }
+
+  /** The account's live stories (the last 24 hours). */
+  async listStories(): Promise<IgMedia[]> {
+    const r = await this.request<{ data: IgMedia[] }>("GET", `${this.igUserId}/stories`, { fields: "id,media_type,media_product_type,permalink,timestamp" });
+    return r.data ?? [];
+  }
+
   async getContainerStatus(containerId: string): Promise<{ status_code: ContainerStatus; status?: string }> {
     return this.request("GET", containerId, { fields: "status_code,status" });
   }

@@ -111,6 +111,25 @@ export function createDevMockProvider(): MockProvider {
       matches_brief: true,
       issues: [],
     }))
+    // Offline story planner: rotate kinds so consecutive stories differ; text only when she isn't in frame.
+    .on("story.plan", (r) => {
+      const u = lastUser(r);
+      const act = u.match(/^- (\d+) \| (\w+) \| ([^|]+) \| ([\w-]+)/m);
+      const seen = ((u.split("RECENT STORIES")[1] ?? "").split("\n\n")[0].match(/^- (?!none yet)/gm) ?? []).length;
+      const shop = /- shop:/.test(r.system);
+      const plans = [
+        { kind: "moment", include_character: false, composition: "detail", shot: "Fresh white laces being threaded into a clean pair on a wooden table", text: "Sunday laces ritual" },
+        { kind: "outfit", include_character: true, composition: "mirror", shot: "Quick mirror fit check by the front door", text: "" },
+        ...(shop ? [{ kind: "shop", include_character: false, composition: "detail", shot: "A new pair on the shop wall under warm spotlights", text: "Just landed at the shop" }] : []),
+        { kind: "question", include_character: false, composition: "flat_lay", shot: "Two pairs side by side on the floor, top-down", text: "Which pair for Saturday?" },
+      ];
+      const pick = plans[seen % plans.length];
+      return {
+        decision: "post",
+        reason: "A light moment worth a story.",
+        story: { ...pick, activity_id: act ? Number(act[1]) : null, location_id: act?.[4] && act[4] !== "-" ? act[4] : null, time_of_day: "morning", sneakers: "clean white leather low-tops", alt_text: pick.shot },
+      };
+    })
     .on("content.plan", (r) => {
       const u = lastUser(r);
       const act = u.match(/^- (\d+) \| (\w+) \| ([^|]+) \| ([\w-]+)/m);

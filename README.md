@@ -18,6 +18,8 @@ Instagram → Meta → OpenReply (relay) → web → Redis → worker ──► 
 - **Memory**: identity (persona), world (recent posts, follower requests, what performed), relationship (per follower). A deterministic policy decides what is stored, what expires and what is never stored.
 - **Content brain**: a seeded virtual day, a Content Director that may decide *not* to post, repetition scoring with feedback, outfit/time/hair continuity, Visual Director prompts with reference images, vision QC, carousel composition, safety.
 - **Publisher**: carousel/single containers with `is_ai_generated`, duplicate-proof across retries, crashes and concurrent workers.
+- **Stories**: 1-3 light 9:16 frames a day from the virtual day (moment, fit check, shop drop, trend, question), with their own planner and cadence. Same review, safety and duplicate-proof publishing; no text on photos of her.
+- **Edit before approval**: change the caption, reorder slides or pick the cover, remove slides, change a story's words (re-rendered from the original photo), or delete a draft.
 - **Learning**: insights at 24h/72h/7d → engagement score (saves, shares and follows weigh more than likes) → learnings the director sees.
 - **Controls**: `development`, `dry_run`, `human_approval` (default), `autonomous`, plus pause, rate limits and budgets, all changeable live in `/admin/controls`.
 

@@ -13,7 +13,7 @@ import { notify } from "../notify/telegram.js";
 import { persona } from "../persona/loader.js";
 import type { Persona } from "../persona/schema.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
-import { composeSlide, inspectImage, type Overlay } from "../render/compose.js";
+import { composeSlide, FEED, inspectImage, STORY, type Overlay } from "../render/compose.js";
 import { assessText, gate, openReview } from "../safety/safety.js";
 import { download, hostImage } from "../storage/host.js";
 import type { Idea } from "./director.js";
@@ -26,7 +26,7 @@ type Slide = Idea["slides"][number];
 interface PostRow {
   id: string;
   content_idea_id: number;
-  media_type: "IMAGE" | "CAROUSEL";
+  media_type: "IMAGE" | "CAROUSEL" | "STORY";
   caption: string;
   status: string;
   visual_state: VisualState;
@@ -121,7 +121,8 @@ async function generateValidatedSlide(
   coverUrl: string | undefined,
 ): Promise<SlideImage | undefined> {
   const soul = await activeSoul();
-  const prompt = slidePrompt(p, { format: post.media_type === "CAROUSEL" ? "carousel" : "single" }, slide, post.visual_state, index, total);
+  const story = post.media_type === "STORY";
+  const prompt = slidePrompt(p, { format: formatOf(post) }, slide, post.visual_state, index, total);
   const identity = slide.include_character ? (soul?.identityRefs ?? []) : [];
   const refs = [...identity, ...(index > 0 && coverUrl ? [coverUrl] : [])];
   let reference: Buffer | undefined;
@@ -139,7 +140,7 @@ async function generateValidatedSlide(
         negativePrompt: p.visual.photography.negative || undefined,
         references: refs,
         soul: slide.include_character ? soulContext(soul) : undefined,
-        aspectRatio: "4:5",
+        aspectRatio: story ? "9:16" : "4:5",
         resolution: "2K",
         quality: "high",
         identityConsistency: slide.include_character ? "high" : "medium",
@@ -180,16 +181,27 @@ async function generateValidatedSlide(
   return undefined;
 }
 
-async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: SlideImage): Promise<void> {
-  // No handle or slide counter ever (Instagram shows its own dots); text only
-  // when the persona opts in, and never on a photo of her.
-  const textAllowed = p.carousel.text_overlays && !slide.include_character;
-  const overlay: Overlay = textAllowed
-    ? { kind: slide.overlay_kind, heading: slide.overlay_heading || undefined, body: slide.overlay_body || undefined }
-    : { kind: "none" };
-  const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors);
+const formatOf = (post: Pick<PostRow, "media_type">): "story" | "carousel" | "single" =>
+  post.media_type === "STORY" ? "story" : post.media_type === "CAROUSEL" ? "carousel" : "single";
+
+/**
+ * The text layer for one slide. No handle or slide counter ever (Instagram
+ * shows its own dots), and never text on a photo of her. Feed slides carry text
+ * only when the persona opts in; a story may carry one short line.
+ */
+export function overlayFor(p: Persona, post: Pick<PostRow, "media_type">, slide: Pick<Slide, "include_character" | "overlay_kind" | "overlay_heading" | "overlay_body">): Overlay {
+  const heading = slide.overlay_heading?.trim() || undefined;
+  const body = slide.overlay_body?.trim() || undefined;
+  if (slide.include_character) return { kind: "none" };
+  if (post.media_type === "STORY") return heading || body ? { kind: "story", heading, body } : { kind: "none" };
+  return p.carousel.text_overlays ? { kind: slide.overlay_kind, heading, body } : { kind: "none" };
+}
+
+export async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: Pick<SlideImage, "bytes" | "url" | "assetId" | "providerRequestId" | "provider" | "model">): Promise<void> {
+  const overlay = overlayFor(p, post, slide);
+  const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors, post.media_type === "STORY" ? STORY : FEED);
   const digest = sha256(jpeg);
-  const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/posts/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
+  const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/${post.media_type === "STORY" ? "stories" : "posts"}/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
   await one(
     `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc, asset_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
@@ -200,7 +212,7 @@ async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: nu
       post.id,
       index,
       slide.role,
-      slidePrompt(p, { format: total > 1 ? "carousel" : "single" }, slide, post.visual_state, index, total),
+      slidePrompt(p, { format: formatOf(post) }, slide, post.visual_state, index, total),
       JSON.stringify({ ...overlay, alt_text: slide.alt_text }),
       img.url,
       hosted.url,
@@ -267,7 +279,10 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
   if (outcome === "review") {
     await openReview({ subjectType: "post", subjectId: postId, assessment, proposed: { caption: post.caption, slides: assets.map((a) => a.public_url) } });
     await one("UPDATE posts SET status = 'awaiting_review', updated_at = now() WHERE id = $1", [postId]);
-    await notify(`🖼 Post ready for review (${assessment.level}): ${post.caption.slice(0, 140)}`, `/admin/posts/${postId}`);
+    await notify(
+      post.media_type === "STORY" ? `📱 Story ready for review (${assessment.level})` : `🖼 Post ready for review (${assessment.level}): ${post.caption.slice(0, 140)}`,
+      `/admin/posts/${postId}`,
+    );
     return "awaiting_review";
   }
   if (outcome === "dry_run") {

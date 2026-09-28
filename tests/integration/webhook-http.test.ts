@@ -127,16 +127,16 @@ describe("remove slide", () => {
     const { removeSlide } = await import("../../src/web/admin.js");
     const p = await one<{ id: string }>("INSERT INTO posts (influencer_id, media_type, caption, status) VALUES (1, 'CAROUSEL', 'c', 'awaiting_review') RETURNING id");
     for (const i of [0, 1, 2]) await one("INSERT INTO post_assets (post_id, position, public_url) VALUES ($1, $2, $3)", [p!.id, i, `https://x/${i}.jpg`]);
-    expect(await removeSlide(p!.id, 1)).toBe("Removed slide 2; 2 left");
+    expect((await removeSlide(p!.id, 1)).message).toBe("Removed slide 2; 2 left");
     expect(await many("SELECT position, public_url FROM post_assets WHERE post_id = $1 ORDER BY position", [p!.id])).toEqual([
       { position: 0, public_url: "https://x/0.jpg" },
       { position: 1, public_url: "https://x/2.jpg" },
     ]);
-    expect(await removeSlide(p!.id, 0)).toBe("Removed slide 1; 1 left");
+    expect((await removeSlide(p!.id, 0)).message).toBe("Removed slide 1; 1 left (it's a single photo now)");
     expect(await one("SELECT media_type FROM posts WHERE id = $1", [p!.id])).toEqual({ media_type: "IMAGE" });
-    expect(await removeSlide(p!.id, 0)).toBe("A post needs at least one image");
+    expect(await removeSlide(p!.id, 0)).toEqual({ ok: false, message: "A post needs at least one image; delete the post instead" });
     await one("UPDATE posts SET status = 'published' WHERE id = $1", [p!.id]);
-    expect(await removeSlide(p!.id, 0)).toMatch(/can't be changed/);
+    expect((await removeSlide(p!.id, 0)).message).toMatch(/already on Instagram/);
   });
 });
 

@@ -5,6 +5,7 @@ import { recapCalendar } from "../calendar/recap.js";
 import { runBenchmark } from "../generation/benchmark.js";
 import { composePersonaForHatch, generateFaceCandidates } from "../influencers/hatch.js";
 import { runCreate } from "../content/create.js";
+import { planStory } from "../content/stories.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
@@ -64,6 +65,13 @@ async function planIfActive(): Promise<unknown> {
   return planContent();
 }
 
+/** Story planning only runs for active influencers too. */
+async function storyIfActive(): Promise<unknown> {
+  const inf = currentInfluencer();
+  if (inf.status !== "active") return { skipped: `influencer is ${inf.status}` };
+  return planStory();
+}
+
 /** Job name → handler. Every handler is idempotent (see each module). */
 export const HANDLERS: Record<string, Handler> = {
   // Platform: routes each entry to its owning influencer itself.
@@ -72,6 +80,7 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.conversationProcess]: scoped((j) => processInteraction(j.data.interactionId)),
   [JOBS.memoryExtract]: scoped((j) => extractMemories(j.data.interactionId)),
   [JOBS.contentPlan]: (j) => (j.data?.influencerId ? scoped(planIfActive)(j) : forEachActiveInfluencer("content plan", planContent)),
+  [JOBS.storyPlan]: scoped(storyIfActive),
   [JOBS.contentProduce]: scoped((j) => producePost(j.data.postId)),
   [JOBS.postPublish]: scoped((j) => publishPost(j.data.postId)),
   [JOBS.engagementCollect]: scoped((j) => collectEngagement(j.data.postId, j.data.checkpoint)),
@@ -108,6 +117,7 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.conversationProcess]: 3 * 60_000,
   [JOBS.memoryExtract]: 2 * 60_000,
   [JOBS.contentPlan]: 6 * 60_000,
+  [JOBS.storyPlan]: 3 * 60_000,
   [JOBS.contentProduce]: 45 * 60_000,
   [JOBS.benchmarkRun]: 60 * 60_000,
   [JOBS.hatchFaces]: 20 * 60_000,
@@ -252,6 +262,7 @@ export async function upsertSchedulers(): Promise<void> {
 }
 
 export const planSchedulerId = (influencerId: number) => `content-plan-${influencerId}`;
+export const storySchedulerId = (influencerId: number) => `story-plan-${influencerId}`;
 
 /**
  * Upsert a content-plan scheduler for every active influencer (in their
@@ -260,12 +271,15 @@ export const planSchedulerId = (influencerId: number) => `content-plan-${influen
  */
 export async function syncInfluencerSchedulers(): Promise<{ active: number; removed: number }> {
   const planCron = process.env.CONTENT_PLAN_CRON ?? "20 8,12,16,19 * * *";
+  // Offset from feed planning; the story gate decides whether each check posts.
+  const storyCron = process.env.STORY_PLAN_CRON ?? "50 9,13,17,20 * * *";
   let active = 0;
   let removed = 0;
   for (const inf of await listInfluencers(["active", "paused", "hatching", "archived"])) {
     const id = Number(inf.id);
     if (inf.status !== "active") {
       if (await queue("content").removeJobScheduler(planSchedulerId(id)).catch(() => false)) removed++;
+      await queue("content").removeJobScheduler(storySchedulerId(id)).catch(() => false);
       continue;
     }
     let tz = "UTC";
@@ -280,6 +294,11 @@ export async function syncInfluencerSchedulers(): Promise<{ active: number; remo
         name: JOBS.contentPlan,
         data: { influencerId: id },
         opts: { attempts: 3, backoff: { type: "smart", delay: 30_000 } },
+      });
+      await queue("content").upsertJobScheduler(storySchedulerId(id), { pattern: storyCron, tz }, {
+        name: JOBS.storyPlan,
+        data: { influencerId: id },
+        opts: { attempts: 2, backoff: { type: "smart", delay: 30_000 } },
       });
       active++;
     } catch (e) {
