@@ -3,6 +3,27 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.16: Mode switcher in the top bar; Fix/Edit on every standard check
+
+- **The operating-mode switcher moved to the top bar.** It sits far right, next to the Day/Night toggle, in place of the plain mode label: a pill with a coloured dot and the mode's name.
+  - It opens the four modes with what each means, plus a link to all controls.
+  - On phones it shrinks to the dot.
+  - The sidebar gear is gone.
+- **Every check on the Standard page has a button.** Fix when it falls short, Edit when it passes. Each opens exactly where that information lives, for that influencer:
+
+  | Check | Opens |
+  |---|---|
+  | Persona sections | persona editor |
+  | Business facts | the knowledge field (new `#knowledge` anchor) |
+  | Soul face | Soul |
+  | Profile kit | Profile kit |
+  | Instagram | the Instagram card |
+  | News brief | Trends & news |
+
+  - Hatching influencers open the matching wizard step.
+  - How a failing check gets fixed (automatically / AI fills it in / needs you) now shows inline, next to its numbers.
+- Fixed a leftover style from the sidebar version that pushed the mode dots out of place.
+
 ## v1.0.15: A standard the minimum closet can meet
 
 - **The looks target is now 250**, which is what the minimum closet produces without dresses: 10 tops × 7 bottoms, plus layers. Paresh's rebuilt closet (293 looks) was held to 300, which the standard's own minimums couldn't reach. A test now keeps the two consistent.

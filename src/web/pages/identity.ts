@@ -149,7 +149,7 @@ ${card(table(["Version", "Saved"], versions.map((v) => [`<code>${esc(v.hash)}</c
 ${card(
   `<form method="post" action="/admin/persona">${field("Persona (YAML)", textarea("persona", info.source, { rows: 24, mono: true }), {
     help: "Validated on save (schema, locations, timezone). Takes effect within seconds; every version is kept.",
-  })}${field("Business knowledge (YAML)", textarea("knowledge", knowledge?.knowledge_yaml ?? "", { rows: 10, mono: true }), { help: "Facts the influencer may cite: products, prices, store info. Leave empty if none." })}
+  })}${field("Business knowledge (YAML)", textarea("knowledge", knowledge?.knowledge_yaml ?? "", { rows: 10, mono: true, attrs: 'id="knowledge"' }), { help: "Facts the influencer may cite: products, prices, store info. Leave empty if none." })}
   ${button("Save persona", { variant: "primary", icon: "check" })}</form>`,
   { title: "Edit persona", id: "edit" },
 )}`;

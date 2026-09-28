@@ -20,10 +20,12 @@ async function queueRun(id: number): Promise<boolean> {
   return true;
 }
 
-/** Manual fixes open the right page for THIS influencer, whatever the sidebar has selected. */
-function fixLink(id: number, href: string): string {
-  if (href.startsWith("/admin/hatch/")) return link("Fix", href, { small: true, variant: "ghost" });
-  return `<form method="post" action="/admin/switch" class="inline"><input type="hidden" name="id" value="${id}"><input type="hidden" name="to" value="${esc(href)}"><button class="btn sm ghost" type="submit" title="Needs you: opens the page to fix it">${icon("arrowRight", 14)}<span>Fix</span></button></form>`;
+/** Fix / Edit opens where that information lives, for THIS influencer, whatever the sidebar has selected. */
+function editLink(id: number, href: string, ok: boolean, what: string): string {
+  const label = ok ? "Edit" : "Fix";
+  const title = `${label} ${what.toLowerCase()}`;
+  if (href.startsWith("/admin/hatch/")) return `<a class="btn sm${ok ? " ghost" : ""}" href="${esc(href)}" title="${esc(title)}" aria-label="${esc(title)}">${icon("pencil", 14)}<span>${label}</span></a>`;
+  return `<form method="post" action="/admin/switch" class="inline"><input type="hidden" name="id" value="${id}"><input type="hidden" name="to" value="${esc(href)}"><button class="btn sm${ok ? " ghost" : ""}" type="submit" title="${esc(title)}" aria-label="${esc(title)}">${icon("pencil", 14)}<span>${label}</span></button></form>`;
 }
 
 function influencerCard(rep: StandardReport, run: StandardRun | undefined): string {
@@ -50,9 +52,9 @@ function influencerCard(rep: StandardReport, run: StandardRun | undefined): stri
              .filter((c) => c.group === g)
              .map(
                (c) =>
-                 `<li class="${c.ok ? "ok" : "no"}"><span class="std-i" aria-label="${c.ok ? "meets the standard" : "falls short"}">${icon(c.ok ? "check" : "x", 14)}</span><div><b>${esc(c.label)}</b><div class="meta">${esc(c.detail)}</div></div>${
-                   c.ok ? "" : c.fix === "manual" && c.href ? fixLink(rep.id, c.href) : `<span class="std-fix">${esc(FIX_LABEL[c.fix])}</span>`
-                 }</li>`,
+                 `<li class="${c.ok ? "ok" : "no"}"><span class="std-i" aria-label="${c.ok ? "meets the standard" : "falls short"}">${icon(c.ok ? "check" : "x", 14)}</span><div><b>${esc(c.label)}</b><div class="meta">${esc(c.detail)}${
+                   c.ok ? "" : ` · <span class="std-fix">${esc(FIX_LABEL[c.fix])}</span>`
+                 }</div></div>${c.href ? editLink(rep.id, c.href, c.ok, c.label) : ""}</li>`,
              )
              .join("")}</ul>`,
        )
@@ -64,7 +66,7 @@ function influencerCard(rep: StandardReport, run: StandardRun | undefined): stri
            ? `<form method="post" action="/admin/standard/${rep.id}">${button("Bring up to standard", { variant: "primary", icon: "wand" })}</form><span class="meta">About 1–3 minutes. AI only rewrites the sections that fall short.</span>`
            : busy
              ? ""
-             : `<span class="meta">What's left needs you: use the Fix links.</span>`
+             : `<span class="meta">What's left needs you: use the Fix buttons.</span>`
      }</div>`,
     { id: `inf-${rep.id}` },
   );
@@ -136,5 +138,5 @@ const STYLE = `<style>
 .std li:last-child{border-bottom:0}
 .std-i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;margin-top:1px}
 .std li.ok .std-i{background:var(--ok-bg);color:var(--ok)}.std li.no .std-i{background:var(--bad-bg);color:var(--bad)}
-.std-fix{font-size:12px;color:var(--muted);white-space:nowrap}
+.std-fix{font-weight:600;color:var(--ink-2)}.std li form,.std li>a{align-self:center}
 </style>`;

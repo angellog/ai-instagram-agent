@@ -136,7 +136,7 @@ export function shell(o: ShellContext): string {
   const cur = o.current;
   const modeLabel = MODES.find((m) => m.key === o.mode)?.label ?? o.mode ?? "";
   const modeButton = cur && o.mode
-    ? `<details class="modeset"><summary class="iconbtn" aria-label="Operating mode: ${esc(modeLabel)}. Change it" title="Operating mode: ${esc(modeLabel)}">${icon("settings", 16)}<span class="mode-dot m-${esc(o.mode)}" aria-hidden="true"></span></summary>
+    ? `<details class="modeset"><summary aria-label="Operating mode: ${esc(modeLabel)}. Change it" title="Operating mode for ${esc(cur.name)}"><span class="mode-dot m-${esc(o.mode)}" aria-hidden="true"></span><span class="mode-name">${esc(modeLabel)}</span>${icon("chevron", 14)}</summary>
       <div class="menu mode-menu" role="menu"><p class="mode-h">Operating mode · ${esc(cur.name)}</p>${MODES.map(({ key: k, label, hint }) => [k, label, hint])
         .map(
           ([k, label, hint]) =>
@@ -144,7 +144,7 @@ export function shell(o: ShellContext): string {
         )
         .join("")}<div class="sep"></div><a href="/admin/controls" role="menuitem">${icon("sliders", 16)}<span>All controls</span></a></div></details>`
     : "";
-  const switcher = `<div class="switch-wrap">${modeButton}<details class="switch${modeButton ? " has-mode" : ""}"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
+  const switcher = `<div class="switch-wrap"><details class="switch"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
     cur ? esc(cur.username ? `@${cur.username}` : cur.status) : "hatch one to begin"
   }</small></span>${icon("chevron", 16)}</summary><div class="menu" role="menu">${o.influencers
     .map(
@@ -182,7 +182,6 @@ export function shell(o: ShellContext): string {
     <button class="iconbtn menu-btn" id="menu" aria-label="Open navigation" aria-expanded="false">${icon("menu")}</button>
     <span class="crumb">${esc(cur?.name ?? "")}${cur ? " / " : ""}${esc(o.title)}</span>
     <span class="grow"></span>
-    ${o.mode ? pill(o.mode) : ""}
     ${
       cur
         ? `<form method="post" action="/admin/controls/pause" class="inline"><input type="hidden" name="paused" value="${o.paused ? "false" : "true"}"><button class="btn sm ${o.paused ? "primary" : ""}" title="${
@@ -190,6 +189,7 @@ export function shell(o: ShellContext): string {
           }">${icon(o.paused ? "play" : "pause", 14)}<span>${o.paused ? "Resume" : "Pause"}</span></button></form>`
         : ""
     }
+    ${modeButton || (o.mode ? pill(o.mode) : "")}
     <button class="iconbtn" id="theme" aria-label="Toggle theme" title="Theme">${icon("sun", 18)}</button>
   </header>
   ${banners}

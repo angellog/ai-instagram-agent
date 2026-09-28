@@ -52,7 +52,7 @@ export interface Check {
   ok: boolean;
   detail: string;
   fix: FixKind;
-  /** For manual fixes: where the operator does it. */
+  /** Where this information is edited (Fix when it falls short, Edit when it passes). */
   href?: string;
 }
 export interface StandardReport {
@@ -144,6 +144,26 @@ export function knowledgeChecks(p: Persona, kb: KnowledgeEntry[]): Check[] {
   ];
 }
 
+/** Where each check's information is edited. Hatching influencers are edited in their wizard. */
+export function editHref(key: string, id: number, hatching: boolean): string {
+  const persona = hatching ? `/admin/hatch/${id}?step=persona` : "/admin/persona#edit";
+  switch (key) {
+    case "kb_ai":
+    case "kb_facts":
+      return hatching ? persona : "/admin/persona#knowledge";
+    case "soul":
+      return hatching ? `/admin/hatch/${id}?step=soul` : "/admin/persona#soul";
+    case "profile":
+      return hatching ? `/admin/hatch/${id}?step=profile` : "/admin/profile";
+    case "instagram":
+      return hatching ? `/admin/hatch/${id}?step=instagram` : "/admin/persona#instagram";
+    case "brief":
+      return "/admin/trends";
+    default:
+      return persona; // persona, disclosure, wardrobe, daily life and news sources all live in the persona
+  }
+}
+
 export async function evaluate(id: number): Promise<StandardReport> {
   const inf = await getInfluencer(id);
   if (!inf) throw new PermanentError(`influencer ${id} not found`);
@@ -170,6 +190,7 @@ export async function evaluate(id: number): Promise<StandardReport> {
   checks.push({ key: "instagram", group: "Assets", label: "Instagram connected", ok: Boolean(acct), detail: acct ? `@${acct.username ?? acct.ig_user_id}` : "no account attached", fix: "manual", href: inf.status === "hatching" ? `/admin/hatch/${id}?step=instagram` : "/admin/persona#instagram" });
   const fresh = brief && Date.now() - new Date(brief.created_at).getTime() < STANDARD.trends_max_age_h * 3600_000;
   if (p) checks.push({ key: "brief", group: "News", label: "Fresh news brief", ok: Boolean(fresh), detail: brief ? `${brief.items.length} items, ${Math.round((Date.now() - new Date(brief.created_at).getTime()) / 3600_000)}h old` : "never collected", fix: "auto" });
+  for (const c of checks) c.href = editHref(c.key, id, inf.status === "hatching");
   return { ...base, checks, passed: checks.filter((c) => c.ok).length, total: checks.length, looks: p ? outfits(p).length : 0 };
 }
 

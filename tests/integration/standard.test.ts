@@ -81,6 +81,12 @@ describe("bringing an influencer up to the standard", () => {
     expect(page.body).toMatch(/4 tops \(standard 10\)/);
     expect(page.body).toContain(`action="/admin/standard/${id}"`);
     expect(page.body).toContain("AI fills it in");
+    // Every check has a way to change it: Fix when it falls short, Edit when it passes.
+    const rows = page.body.match(/<li class="(ok|no)">[\s\S]*?<\/li>/g) ?? [];
+    expect(rows.length).toBeGreaterThan(20);
+    for (const row of rows) expect(row, row.slice(0, 120)).toMatch(row.startsWith('<li class="ok"') ? /<span>Edit<\/span>/ : /<span>Fix<\/span>/);
+    expect(page.body).toMatch(new RegExp(`value="${id}"><input type="hidden" name="to" value="/admin/persona#knowledge"`));
+    expect(page.body).toMatch(/name="to" value="\/admin\/trends"/);
     // Manual fixes switch to THIS influencer, then open the page to fix it.
     expect(page.body).toMatch(new RegExp(`name="id" value="${id}"><input type="hidden" name="to" value="/admin/persona#soul"`));
     const go = await form("/admin/switch", { id: String(id), to: "/admin/persona#soul" });
@@ -106,6 +112,11 @@ describe("operating-mode button", () => {
   it("sits in the sidebar switcher and changes this influencer's mode in one tap", async () => {
     const page = await app.inject({ url: "/admin/posts" });
     expect(page.body).toContain('class="modeset"');
+    // In the top bar next to the Day/Night toggle, not in the sidebar.
+    const top = page.body.slice(page.body.indexOf('<header class="top">'), page.body.indexOf("</header>"));
+    expect(top).toMatch(/class="modeset"[\s\S]*id="theme"/);
+    const side = page.body.slice(page.body.indexOf('<aside class="side"'), page.body.indexOf("</aside>"));
+    expect(side).not.toContain("modeset");
     expect(page.body).toContain("Operating mode: Human approval");
     const r = await form("/admin/mode", { mode: "autonomous" }, { referer: "https://console.example/admin/posts?x=1" });
     expect(String(r.headers.location)).toMatch(/^\/admin\/posts\?flash=/);
