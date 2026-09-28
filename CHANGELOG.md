@@ -3,6 +3,21 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.11: True, complete answers to business questions
+
+When a follower asks something the business knowledge answers ("what is the shop location?"), the reply now states the fact completely and exactly, in one natural sentence in the influencer's voice. For example: "We're at Pioneer Mall, Level 5, Shop PH-100 in Kampala 📍 come through and say hi!"
+
+- **Wrong floor fixed.** The knowledge base said **Level 4**; the shop is on **Level 5, Shop PH-100** (confirmed 2026-09-26).
+- **Reply rules no longer block business contacts.** They used to say "never repeat phone numbers or addresses", which also blocked FeetBit's own address and WhatsApp number. It now covers only the follower's personal data.
+  - Replies must give the full address or contact exactly as written, publicly, and must not add details the knowledge doesn't state (no invented hours or directions).
+- **Fact check before sending** (`src/conversation/facts.ts`):
+  - Knowledge entries can list `must_include` phrases. A reply that cites the entry must contain every one: the full address; the WhatsApp number in any format.
+  - Every number in a reply must come from the knowledge shown or from the follower's own message, so a made-up floor or phone number is caught.
+  - A failing draft gets one rewrite. If it still fails, it goes to Reviews with the tag `fact_check` and is never sent automatically. Each decision records what the fact check did.
+- **Safety filter.** The business WhatsApp is recognised in local format (`0789 652 909`) as well as international (`+256 789 652 909`). Other numbers are still blocked.
+- More ways of asking where the shop is now find the store entry: located, find you, which floor, directions, pass by.
+- Tests: 272.
+
 ## v1.0.10: Hatch persona drafts pass validation
 
 **Fixed:** with v1.0.9 the persona job ran to completion (about 2.5 minutes, no timeout), but Kemigisha's draft was rejected twice: `daily_life.activities.5.slot: Invalid option`.

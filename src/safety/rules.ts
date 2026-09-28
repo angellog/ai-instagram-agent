@@ -78,7 +78,7 @@ export function evaluateRules(text: string, o: RulesOptions): RuleHit[] {
   const allowed = new Set((o.allowedContacts ?? []).map(digitsOrLower));
   for (const m of text.match(PHONE) ?? []) {
     const digits = m.replace(/\D/g, "");
-    if (digits.length < 9 || allowed.has(digits)) continue;
+    if (digits.length < 9 || allowed.has(digitsOrLower(digits))) continue;
     hits.push({ level: o.direction === "outbound" ? "red" : "yellow", category: "personal_contact", match: m.trim() });
   }
   for (const m of text.match(EMAIL) ?? []) {
@@ -92,8 +92,11 @@ export function levelOf(hits: RuleHit[]): SafetyLevel {
   return maxLevel("green", ...hits.map((h) => h.level));
 }
 
+/** Emails compare lowercased; phone numbers on their last 9 digits, so +256 789… and 0789… match. */
 function digitsOrLower(s: string): string {
-  return s.includes("@") ? s.toLowerCase() : s.replace(/\D/g, "");
+  if (s.includes("@")) return s.toLowerCase();
+  const d = s.replace(/\D/g, "");
+  return d.length >= 9 ? d.slice(-9) : d;
 }
 
 function luhn(raw: string): boolean {
@@ -118,6 +121,6 @@ export function redactPersonalData(text: string, allowedContacts: string[] = [])
     .replace(EMAIL, (m) => (allowed.has(m.toLowerCase()) ? m : "[email]"))
     .replace(PHONE, (m) => {
       const d = m.replace(/\D/g, "");
-      return d.length < 9 || allowed.has(d) ? m : "[phone]";
+      return d.length < 9 || allowed.has(digitsOrLower(d)) ? m : "[phone]";
     });
 }

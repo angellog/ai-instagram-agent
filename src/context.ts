@@ -18,6 +18,8 @@ export interface KnowledgeEntry {
   id: string;
   keywords: string[];
   content: string;
+  /** Exact phrases a reply citing this entry must contain (full address, contact number). */
+  must_include?: string[];
 }
 
 export interface InfluencerContext {
@@ -34,7 +36,9 @@ export interface InfluencerContext {
 const storage = new AsyncLocalStorage<InfluencerContext>();
 
 const knowledgeSchema = z.object({
-  entries: z.array(z.object({ id: z.string(), keywords: z.array(z.string()).min(1), content: z.string() })).default([]),
+  entries: z
+    .array(z.object({ id: z.string(), keywords: z.array(z.string()).min(1), content: z.string(), must_include: z.array(z.string()).optional() }))
+    .default([]),
 });
 
 export function parseKnowledge(yamlText: string): KnowledgeEntry[] {

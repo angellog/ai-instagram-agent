@@ -34,6 +34,8 @@ import {
   type Perception,
 } from "./prompts.js";
 import { deliver, outboundCountLastHour, rearmIfRetryable, reserveOutbound, windowOpen, type ReplyChannel } from "./send.js";
+import { checkFacts, fixInstruction, hasProblems } from "./facts.js";
+import type { KnowledgeEntry } from "./knowledge.js";
 
 export type ConversationOutcome =
   | "replied"
@@ -256,6 +258,38 @@ export async function processInteraction(interactionId: number): Promise<Convers
     return finish("ignored", hidden ? "hidden" : "ignored");
   }
 
+  // ---------------------------------------------------------- fact check
+  // Business facts go out complete and true, or a human looks first.
+  const byId = new Map(ctx.knowledge.map((k) => [k.id, k]));
+  const factCtx = { used: decision.used_knowledge_ids.map((id) => byId.get(id)).filter((k): k is KnowledgeEntry => Boolean(k)), shown: ctx.knowledge, inbound: it.text };
+  let facts = checkFacts(text, factCtx);
+  let factNote: string | undefined;
+  if (hasProblems(facts)) {
+    const first = facts;
+    const rewrite = await llm()
+      .generate({
+        operation: "conversation.fix_facts",
+        tier: "smart",
+        maxTokens: 300,
+        ref: { type: "interaction", id: String(it.id) },
+        system: `${personaSystemBlock(p)}\n\n---\nYou are correcting one Instagram reply before it is sent. Keep the same voice and warmth; keep it natural and short (max ${p.communication_style.max_reply_chars} characters). Use only facts from the KNOWLEDGE. Return only the corrected reply text, nothing else.`,
+        prompt: `${renderContext(it, ctx)}\n\nDRAFT REPLY: """${text}"""\n\n${fixInstruction(first)}`,
+      })
+      .catch(() => "");
+    const candidate = truncate(rewrite.trim().replace(/^["“]|["”]$/g, "").trim(), p.communication_style.max_reply_chars);
+    const again = candidate ? checkFacts(candidate, factCtx) : first;
+    if (candidate && !hasProblems(again)) {
+      text = candidate;
+      facts = again;
+      factNote = `fact check rewrote the reply (${[...first.missing.map((m) => `missing "${m}"`), ...first.unverified.map((n) => `unverified ${n}`)].join(", ")})`;
+    } else {
+      if (candidate) text = candidate;
+      facts = again;
+      factNote = `fact check failed: ${[...facts.missing.map((m) => `missing "${m}"`), ...facts.unverified.map((n) => `unverified ${n}`)].join(", ")}`;
+    }
+  }
+  const factHold = hasProblems(facts);
+
   // ---------------------------------------------------------- throttles & windows
   const kind = channel === "dm" ? "dms" : "comments";
   const limit = kind === "dms" ? c.max_dms_per_hour : c.max_comment_replies_per_hour;
@@ -277,14 +311,20 @@ export async function processInteraction(interactionId: number): Promise<Convers
   });
   // Escalations always go to a human, whatever the safety level of the draft.
   let outcome = action === "escalate" ? (assessment.level === "red" ? "block" : "review") : gate(assessment.level, c);
+  // A reply whose facts couldn't be verified is never sent on its own.
+  if (factHold && outcome !== "block") {
+    outcome = "review";
+    assessment.categories = [...new Set(["fact_check", ...assessment.categories])];
+    assessment.reason = `${factNote}; ${assessment.reason}`;
+  }
   // Simulated interactions (admin "simulate", e2e tests) never reach Instagram.
   if (outcome === "send" && isSimulated(it)) outcome = "dry_run";
   const decisionId = await recordDecision({
     ...decisionBase,
     action: `${action}:${outcome}`,
     safetyLevel: assessment.level,
-    reason: decision.reason,
-    output: { ...decisionBase.output, safety: { categories: assessment.categories, reason: assessment.reason } },
+    reason: factNote ? `${decision.reason} (${factNote})` : decision.reason,
+    output: { ...decisionBase.output, safety: { categories: assessment.categories, reason: assessment.reason }, fact_check: { ...facts, note: factNote ?? null } },
     latencyMs: Date.now() - started,
   });
 

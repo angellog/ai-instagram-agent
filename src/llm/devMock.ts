@@ -63,12 +63,17 @@ export function createDevMockProvider(): MockProvider {
         reply_value: "required",
         response: intent === "question_about_persona" ? "I'm an AI creator made by the FeetBit team, the sneaker talk is real though 👟" : `Love that! ${msg.length > 40 ? "Great point." : "Clean choice."} 👟`,
         used_memory_ids: memIds.slice(0, 1),
-        used_knowledge_ids: kn,
+        used_knowledge_ids: [], // a small-talk reply cites no business facts
         workflow: intent === "content_request" ? "content_request" : "none",
         content_request_topic: intent === "content_request" ? msg.slice(0, 120) : null,
         confidence: 0.75,
         reason: "Friendly reply to a direct message.",
       };
+    })
+    // Offline fact-check rewrite: restate the first KNOWLEDGE entry the reply relied on.
+    .on("conversation.fix_facts", (r) => {
+      const fact = between(lastUser(r), "KNOWLEDGE:", "\n\n").split("\n").find((l) => /^\s*\[/.test(l)) ?? "";
+      return fact.replace(/^\s*\[[\w-]+\]\s*/, "").trim() || between(lastUser(r), 'DRAFT REPLY: """', '"""');
     })
     .on("safety.moderate", () => ({ level: "green", categories: [], reason: "mock moderator: nothing notable" }))
     .on("memory.extract", (r) => {
