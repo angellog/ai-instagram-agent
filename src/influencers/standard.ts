@@ -31,7 +31,8 @@ export const STANDARD = {
   bottoms: 7,
   layers: 3,
   activewear: 3,
-  looks: 300,
+  // What the minimum closet below yields without dresses (10 tops x 7 bottoms, plus layers): the two can't disagree.
+  looks: 250,
   signature_outfits: 6,
   occasions: 2,
   activities: 8,
@@ -344,7 +345,8 @@ export async function standardize(id: number): Promise<StandardRun> {
         run.fixed.push(failing.find((c) => c.key === "profile")!.label);
       }
       if (p && failing.some((c) => c.key === "brief")) {
-        await refreshTrends().catch((e) => recordEvent("warn", "standard", `News brief not refreshed: ${errorMessage(e)}`));
+        // A fresh context: the upgrade above may just have given them their news sources.
+        await withInfluencerLoose(id, () => refreshTrends()).catch((e) => recordEvent("warn", "standard", `News brief not refreshed: ${errorMessage(e)}`));
         run.fixed.push(failing.find((c) => c.key === "brief")!.label);
       }
       report = await evaluate(id);

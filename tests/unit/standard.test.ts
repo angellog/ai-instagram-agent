@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse, stringify } from "yaml";
-import { knowledgeChecks, mergeSections, personaChecks, structureExamples } from "../../src/influencers/standard.js";
+import { knowledgeChecks, mergeSections, personaChecks, STANDARD, structureExamples } from "../../src/influencers/standard.js";
 import { parsePersona } from "../../src/persona/parse.js";
 import { thinPersona } from "../helpers/personas.js";
 
@@ -11,6 +11,16 @@ describe("the influencer standard", () => {
   it("Zuri meets every persona check", () => {
     const failing = personaChecks(parsePersona(ref)).filter((c) => !c.ok);
     expect(failing).toEqual([]);
+  });
+
+  it("keeps the looks target reachable by the minimum closet (no dresses)", async () => {
+    const { outfits } = await import("../../src/content/wardrobe.js");
+    const p = parsePersona(thinPersona()) as any;
+    const n = (k: string, count: number) => Array.from({ length: count }, (_, i) => `${k} ${i + 1}`);
+    p.visual.character.closet = { tops: n("top", 10), bottoms: n("bottom", 7), layers: n("layer", 3), one_pieces: [], activewear: n("set", 3), occasions: [] };
+    p.visual.character.wardrobe = n("outfit", 6);
+    expect(outfits(p).length).toBeGreaterThanOrEqual(STANDARD.looks);
+    expect(personaChecks(p).find((c) => c.key === "closet")!.ok).toBe(true);
   });
 
   it("names exactly what a thin persona is missing", () => {

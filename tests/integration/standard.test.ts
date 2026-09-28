@@ -45,7 +45,7 @@ describe("bringing an influencer up to the standard", () => {
   it("fills only the sections that fall short, adds the AI-disclosure entry, and lists what needs a person", async () => {
     const id = await thinInfluencer();
     const before = await evaluate(id);
-    expect(before.looks).toBeLessThan(300);
+    expect(before.looks).toBeLessThan(250);
     expect(before.checks.filter((c) => !c.ok).map((c) => c.key)).toEqual(expect.arrayContaining(["closet", "weekend", "weekend_ideas", "kb_ai", "soul", "instagram"]));
     const originalVoice = (parse((await one<{ persona_yaml: string }>("SELECT persona_yaml FROM influencers WHERE id = $1", [id]))!.persona_yaml) as any).communication_style;
 
@@ -60,7 +60,7 @@ describe("bringing an influencer up to the standard", () => {
 
     const after = await evaluate(id);
     const ok = (k: string) => after.checks.find((c) => c.key === k)?.ok;
-    expect(after.looks).toBeGreaterThanOrEqual(300);
+    expect(after.looks).toBeGreaterThanOrEqual(250);
     for (const k of ["closet", "occasions", "weekend", "weekend_ideas", "kb_ai"]) expect(ok(k), k).toBe(true);
     expect(run.remaining.join(" | ")).toMatch(/Soul face.*Instagram connected|Instagram connected/);
     // Only the failing sections were sent and changed; the rest of her is untouched.
@@ -97,7 +97,7 @@ describe("bringing an influencer up to the standard", () => {
     const job = (await queue("maintenance").getJobs(["waiting"])).find((j) => j.name === JOBS.hatchPersona)!;
     expect(await HANDLERS[JOBS.hatchPersona]({ name: JOBS.hatchPersona, data: job.data } as unknown as Job)).toMatchObject({ status: "done" });
     const report = await evaluate(Number(inf.id));
-    expect(report.looks).toBeGreaterThanOrEqual(300);
+    expect(report.looks).toBeGreaterThanOrEqual(250);
     expect(report.checks.filter((c) => c.fix === "ai" && !c.ok)).toEqual([]);
   });
 });

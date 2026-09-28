@@ -3,6 +3,11 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.15: A standard the minimum closet can meet
+
+- **The looks target is now 250**, which is what the minimum closet produces without dresses: 10 tops × 7 bottoms, plus layers. Paresh's rebuilt closet (293 looks) was held to 300, which the standard's own minimums couldn't reach. A test now keeps the two consistent.
+- **The news brief refresh reloads the influencer first**, so news sources added moments earlier by the same upgrade are used. Paresh's brief was "never collected" because the refresh ran on his pre-upgrade persona.
+
 ## v1.0.14: Standard upgrades survive shape slips
 
 - **Paresh Mardi's first upgrade failed.** He was hatched before closets existed and had 4 looks. The model sent his outfits and weekend ideas as objects instead of plain lists, so validation rejected the upgrade twice and nothing was saved.
