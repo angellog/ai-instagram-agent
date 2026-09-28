@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parse, stringify } from "yaml";
 import { LLM } from "./llm.js";
 import { MockProvider } from "./providers.js";
 import type { CompletionRequest } from "./types.js";
@@ -102,6 +103,8 @@ export function createDevMockProvider(): MockProvider {
     }))
     .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
     .on("persona.compose", (r) => devPersona(lastUser(r)))
+    // Offline standard upgrade: fill each requested section from the reference persona.
+    .on("persona.upgrade", (r) => devUpgrade(lastUser(r)))
     .on("image.validate", () => ({
       acceptable: true,
       character_consistent: "yes",
@@ -186,6 +189,13 @@ export function createDevMockProvider(): MockProvider {
 }
 
 /** Offline persona composer: the reference persona, renamed from the brief. */
+function devUpgrade(prompt: string): string {
+  const keys = (/exactly these keys: (.+)\.\s*$/m.exec(prompt)?.[1] ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+  const ref = parse(readFileSync(resolve(process.env.PERSONA_PATH ?? "config/persona.yaml"), "utf8")) as Record<string, unknown>;
+  const at = (path: string) => path.split(".").reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), ref);
+  return stringify(Object.fromEntries(keys.map((k) => [k, at(k)])));
+}
+
 function devPersona(prompt: string): string {
   const name = /^Name: (.+)$/m.exec(prompt.split("BRIEF:")[1] ?? "")?.[1]?.trim() ?? "Nova";
   const tpl = readFileSync(resolve(process.env.PERSONA_PATH ?? "config/persona.yaml"), "utf8");

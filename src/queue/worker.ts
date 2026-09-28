@@ -6,6 +6,7 @@ import { runBenchmark } from "../generation/benchmark.js";
 import { composePersonaForHatch, generateFaceCandidates } from "../influencers/hatch.js";
 import { runCreate } from "../content/create.js";
 import { planStory } from "../content/stories.js";
+import { standardize } from "../influencers/standard.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
@@ -81,6 +82,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.memoryExtract]: scoped((j) => extractMemories(j.data.interactionId)),
   [JOBS.contentPlan]: (j) => (j.data?.influencerId ? scoped(planIfActive)(j) : forEachActiveInfluencer("content plan", planContent)),
   [JOBS.storyPlan]: scoped(storyIfActive),
+  // Runs in the influencer's (loose) context itself: it works for hatching influencers too.
+  [JOBS.standardize]: (j) => standardize(ownerOf(j)),
   [JOBS.contentProduce]: scoped((j) => producePost(j.data.postId)),
   [JOBS.postPublish]: scoped((j) => publishPost(j.data.postId)),
   [JOBS.engagementCollect]: scoped((j) => collectEngagement(j.data.postId, j.data.checkpoint)),
@@ -121,7 +124,8 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.contentProduce]: 45 * 60_000,
   [JOBS.benchmarkRun]: 60 * 60_000,
   [JOBS.hatchFaces]: 20 * 60_000,
-  [JOBS.hatchPersona]: 12 * 60_000, // compose + one repair, 5 min each at most
+  [JOBS.hatchPersona]: 20 * 60_000, // compose + repair, then a standard upgrade if short
+  [JOBS.standardize]: 15 * 60_000,
   [JOBS.contentCreate]: 45 * 60_000,
   [JOBS.postPublish]: 15 * 60_000,
 };

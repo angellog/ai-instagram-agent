@@ -39,6 +39,18 @@ code,.mono,pre,kbd{font-family:var(--mono);font-size:.86em}
 .side{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:var(--s4) var(--s3)}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;font-weight:700;letter-spacing:-.01em}
 .brand .mark{width:28px;height:28px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff}
+.switch-wrap{position:relative;margin:0 0 12px}.switch-wrap .switch{margin:0}
+.switch.has-mode summary{padding-right:52px}
+.modeset{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:31}
+.modeset>summary{list-style:none;position:relative;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;cursor:pointer;color:var(--ink-2);background:var(--surface);border:1px solid var(--line)}
+.modeset>summary::-webkit-details-marker{display:none}.modeset>summary:hover,.modeset[open]>summary{color:var(--ink);border-color:var(--line-2)}
+.modeset>summary .mode-dot{position:absolute;top:-3px;right:-3px;box-shadow:0 0 0 2px var(--surface-2)}
+.mode-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--muted)}.mode-dot.m-autonomous{background:var(--brand)}.mode-dot.m-human_approval{background:var(--ok)}.mode-dot.m-dry_run{background:var(--info)}.mode-dot.m-development{background:var(--muted)}
+.mode-menu{position:absolute;right:-8px;top:calc(100% + 14px);width:calc(var(--sidebar) - 24px);max-width:calc(100vw - 24px);background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--shadow-lg);padding:6px;z-index:40}
+.mode-menu .mode-h{margin:4px 8px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.mode-menu button,.mode-menu a{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:8px;border-radius:8px;cursor:pointer}
+.mode-menu button:hover,.mode-menu a:hover,.mode-menu button:focus-visible,.mode-menu a:focus-visible{background:var(--surface-2)}
+.mode-menu button[aria-current] b{color:var(--ink)}.mode-menu .who{flex:1;min-width:0}.mode-menu .sep{height:1px;background:var(--line);margin:6px 0}
 .switch{margin:0 0 12px;position:relative}
 .switch summary{list-style:none;display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--surface-2)}
 .switch summary::-webkit-details-marker{display:none}

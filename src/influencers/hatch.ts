@@ -6,6 +6,8 @@ import { persona } from "../persona/loader.js";
 import { addCandidateReference } from "../souls/souls.js";
 import { composePersona, faceCandidatePrompts, type HatchBrief } from "./compose.js";
 import { getInfluencer, setHatchState, updatePersona } from "./manage.js";
+import { personaChecks, upgradePersona } from "./standard.js";
+import { parsePersona } from "../persona/parse.js";
 
 export interface FaceCandidate {
   url: string;
@@ -61,6 +63,8 @@ export interface PersonaJobState {
   persona_error?: string | null;
   persona_batch?: string;
   persona_queued_at?: string;
+  /** What the job is doing right now, when there's more than writing (e.g. a standard upgrade). */
+  persona_note?: string | null;
 }
 
 /** A queued or running persona job older than this is treated as lost (worker restart, crash). */
@@ -86,10 +90,16 @@ export async function composePersonaForHatch(id: number, batch: string): Promise
     await setHatchState(id, { persona_status: "failed", persona_error: "no brief saved" });
     return { status: "failed" };
   }
-  await setHatchState(id, { persona_status: "running" });
+  await setHatchState(id, { persona_status: "running", persona_note: null });
   try {
     const composed = await composePersona(state.brief);
     await updatePersona(id, composed.yaml, "", "hatch");
+    // Every new influencer starts at the platform standard: fill any section the draft left short.
+    const short = personaChecks(parsePersona(composed.yaml)).filter((c) => !c.ok && c.fix === "ai");
+    if (short.length) {
+      await setHatchState(id, { persona_status: "running", persona_note: `Bringing ${short.map((c) => c.label.toLowerCase()).join(", ")} up to standard…` });
+      await upgradePersona(id, short).catch((e) => recordEvent("warn", "hatch", `Standard upgrade after compose failed: ${errorMessage(e)}`));
+    }
     await setHatchState(id, { persona_status: "done", persona_error: null, step: "persona" });
     await recordEvent("info", "hatch", `Persona drafted for ${composed.name}`);
     return { status: "done", name: composed.name };

@@ -93,7 +93,7 @@ function writingCard(name: string, s: PersonaJobState): string {
   const since = Date.parse(s.persona_queued_at ?? "");
   const secs = Number.isFinite(since) ? Math.max(0, Math.round((Date.now() - since) / 1000)) : 0;
   return card(
-    `<div class="empty">${icon("refresh", 28)}<b>Writing ${esc(name)}'s persona…</b><p>${s.persona_status === "queued" ? "Waiting for the worker." : "The model is writing their life, closet, weekends and news sources."} ${secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} so far. ` : ""}Usually 1–3 minutes. This page refreshes on its own.</p></div>`,
+    `<div class="empty">${icon("refresh", 28)}<b>Writing ${esc(name)}'s persona…</b><p>${s.persona_status === "queued" ? "Waiting for the worker." : esc(s.persona_note ?? "The model is writing their life, closet, weekends and news sources.")} ${secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} so far. ` : ""}Usually 1–3 minutes. This page refreshes on its own.</p></div>`,
     { title: "Persona" },
   );
 }

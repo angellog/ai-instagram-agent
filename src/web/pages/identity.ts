@@ -1,3 +1,4 @@
+import { MODES } from "../../config/modes.js";
 import type { FastifyInstance } from "fastify";
 import { controlsSchema, getControls, setControls, type Controls } from "../../config/controls.js";
 import { setting } from "../../config/settings.js";
@@ -251,5 +252,15 @@ ${CONTROL_GROUPS.map(([title, sub, keys]) =>
     await setControls({ paused }, reviewer(req), influencerId());
     const back = String(req.headers.referer ?? "/admin").replace(/^https?:\/\/[^/]+/, "").split("?")[0] || "/admin";
     return done(req, reply, back.startsWith("/admin") ? back : "/admin", paused ? `${currentInfluencer().name} paused` : `${currentInfluencer().name} resumed`);
+  });
+  // The sidebar's mode button: one tap changes what this influencer is allowed to send.
+  r.post("/admin/mode", async (req: Req, reply) => {
+    const back = String(req.headers.referer ?? "/admin").replace(/^https?:\/\/[^/]+/, "").split("?")[0].split("#")[0] || "/admin";
+    const to = back.startsWith("/admin") ? back : "/admin";
+    const mode = String(req.body?.mode ?? "");
+    const m = MODES.find((x) => x.key === mode);
+    if (!m) return done(req, reply, to, "Unknown mode", false);
+    await setControls({ mode: m.key }, reviewer(req), influencerId());
+    return done(req, reply, to, `${currentInfluencer().name}: ${m.label.toLowerCase()}`);
   });
 }

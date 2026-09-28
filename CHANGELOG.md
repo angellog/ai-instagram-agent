@@ -3,6 +3,32 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.13: The Influencer Standard, and a one-tap operating-mode button
+
+**Influencer Standard** (Platform → Standard)
+- One master checklist every influencer is held to, however and whenever it was hatched.
+  - **Wardrobe:** 300+ looks from a closet of separates (10+ tops, 7+ bottoms, 3+ layers, 3+ activewear sets; dresses optional), 6+ signature outfits, 2+ occasion outfits.
+  - **Daily life:** 8+ activities over 4+ times of day, 4+ weekend activities, 5+ weekend post ideas, 4+ places.
+  - **News:** 5+ labelled news searches with a region, and a news brief under 36h old.
+  - **Assets:** openly AI, a soul face, a profile kit (bio + picture), Instagram connected, replies that know she's AI, and true business facts for any brand she's affiliated with.
+- Every check shows the numbers against the standard and how it gets fixed:
+  - **automatically:** the AI-disclosure knowledge entry, the profile kit, a fresh news brief
+  - **by AI:** the persona sections that fall short
+  - **by you:** the face, the Instagram login, business facts, which are never invented
+- **Bring up to standard** (one influencer, or everyone below standard) runs as a background job (`influencer.standardize`):
+  - The model receives the current persona plus exactly what falls short, and returns only those sections.
+  - They're merged in and validated before saving; everything else is left untouched.
+  - The run is then re-checked and what still needs a person is listed.
+- Fix buttons open the right page for that influencer, whatever the sidebar has selected. `/admin/switch` takes an optional `to`, limited to console pages.
+- **New influencers:** right after the persona is written, any section below the standard is filled in the same hatch job, before you see it.
+
+**Operating-mode button**
+- A gear in the far-right corner of the sidebar's influencer card. A coloured dot shows the current mode.
+- One tap opens the four modes (development, dry run, human approval, autonomous), each with what it means. Picking one changes it for that influencer and returns you to the same page.
+- The menu closes on an outside click or Escape.
+
+Tests: 300.
+
 ## v1.0.12: Story updates, and editing before approval
 
 **Instagram Story updates**

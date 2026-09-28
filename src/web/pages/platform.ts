@@ -112,7 +112,13 @@ ${
     const hatching = await one("SELECT 1 FROM influencers WHERE id = $1 AND status = 'hatching'", [id]);
     reply.header("set-cookie", selectCookie(id));
     const ref = String(req.headers.referer ?? "").replace(/^https?:\/\/[^/]+/, "").split("?")[0];
-    const back = hatching ? `/admin/hatch/${id}` : ref.startsWith("/admin") && !/\/(posts|people|generation\/requests)\/[^/]+$/.test(ref) && !ref.startsWith("/admin/hatch") ? ref : "/admin";
+    // An explicit destination ("switch to X, then open its persona") wins over the referer.
+    const to = String(req.body?.to ?? "");
+    const back = hatching
+      ? `/admin/hatch/${id}`
+      : /^\/admin\/[\w\-/]*(#[\w-]+)?$/.test(to)
+        ? to
+        : ref.startsWith("/admin") && !/\/(posts|people|generation\/requests)\/[^/]+$/.test(ref) && !ref.startsWith("/admin/hatch") ? ref : "/admin";
     return reply.redirect(back, 303);
   });
 

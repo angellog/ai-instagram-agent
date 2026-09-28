@@ -1,3 +1,4 @@
+import { MODES } from "../../config/modes.js";
 import { VERSION } from "../../version.js";
 import { avatar, esc, icon, pill } from "./kit.js";
 import { CSS } from "./styles.js";
@@ -66,6 +67,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     "Platform",
     [
       ["influencers", "/admin/influencers", "Influencers", "egg"],
+      ["standard", "/admin/standard", "Standard", "shield"],
       ["config", "/admin/config", "Config & keys", "key"],
       ["costs", "/admin/costs", "Costs", "wallet"],
       ["events", "/admin/events", "Events & jobs", "activity"],
@@ -109,6 +111,9 @@ const APP_JS = String.raw`
     Array.prototype.forEach.call(inp.files||[],function(file){var img=new Image();var url=URL.createObjectURL(file);img.onload=function(){var max=1600,s=Math.min(1,max/Math.max(img.width,img.height));var c=d.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);var data=c.toDataURL("image/jpeg",0.88);ta.value=(ta.value.trim()?ta.value.trim()+"\n":"")+data;URL.revokeObjectURL(url);
       if(prev){var t=d.createElement("img");t.src=data;t.alt="";prev.append(t)}toast("Added "+file.name)};img.onerror=function(){toast("Could not read "+file.name,"bad")};img.src=url})})});
+  // sidebar menus (influencer switcher, operating mode) close on an outside click or Escape
+  d.addEventListener("click",function(e){d.querySelectorAll("details.switch[open],details.modeset[open]").forEach(function(m){if(!m.contains(e.target))m.open=false})});
+  d.addEventListener("keydown",function(e){if(e.key==="Escape")d.querySelectorAll("details.switch[open],details.modeset[open]").forEach(function(m){m.open=false})});
   // copy-to-clipboard buttons
   d.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-copy]");if(!b)return;var el=d.getElementById(b.dataset.copy);if(!el)return;
     navigator.clipboard.writeText(el.textContent).then(function(){toast("Copied")},function(){toast("Copy failed: select and copy manually","bad")})});
@@ -129,7 +134,17 @@ export function shell(o: ShellContext): string {
   ).join("");
 
   const cur = o.current;
-  const switcher = `<details class="switch"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
+  const modeLabel = MODES.find((m) => m.key === o.mode)?.label ?? o.mode ?? "";
+  const modeButton = cur && o.mode
+    ? `<details class="modeset"><summary class="iconbtn" aria-label="Operating mode: ${esc(modeLabel)}. Change it" title="Operating mode: ${esc(modeLabel)}">${icon("settings", 16)}<span class="mode-dot m-${esc(o.mode)}" aria-hidden="true"></span></summary>
+      <div class="menu mode-menu" role="menu"><p class="mode-h">Operating mode · ${esc(cur.name)}</p>${MODES.map(({ key: k, label, hint }) => [k, label, hint])
+        .map(
+          ([k, label, hint]) =>
+            `<form method="post" action="/admin/mode"><input type="hidden" name="mode" value="${k}"><button role="menuitemradio" aria-checked="${o.mode === k}"${o.mode === k ? ' aria-current="true"' : ""}><span class="mode-dot m-${k}" aria-hidden="true"></span><span class="who"><b>${label}</b><br><small class="muted">${hint}</small></span>${o.mode === k ? icon("check", 16) : ""}</button></form>`,
+        )
+        .join("")}<div class="sep"></div><a href="/admin/controls" role="menuitem">${icon("sliders", 16)}<span>All controls</span></a></div></details>`
+    : "";
+  const switcher = `<div class="switch-wrap">${modeButton}<details class="switch${modeButton ? " has-mode" : ""}"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
     cur ? esc(cur.username ? `@${cur.username}` : cur.status) : "hatch one to begin"
   }</small></span>${icon("chevron", 16)}</summary><div class="menu" role="menu">${o.influencers
     .map(
@@ -140,7 +155,7 @@ export function shell(o: ShellContext): string {
           cur?.id === i.id ? icon("check", 16) : ""
         }</button></form>`,
     )
-    .join("")}<div class="sep"></div><a href="/admin/hatch" role="menuitem">${icon("egg", 18)}<span>Hatch a new influencer</span></a></div></details>`;
+    .join("")}<div class="sep"></div><a href="/admin/hatch" role="menuitem">${icon("egg", 18)}<span>Hatch a new influencer</span></a></div></details></div>`;
 
   const banners = [
     o.openAccess ? `<div class="banner">${icon("alert", 16)}<span>Development mode: the console has no password. Set ADMIN_TOKEN before exposing it.</span></div>` : "",

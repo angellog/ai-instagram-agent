@@ -8,6 +8,7 @@ import { registerPlatform } from "./pages/platform.js";
 import { registerProfile } from "./pages/profile.js";
 import { registerCreate } from "./pages/create.js";
 import { registerTrends } from "./pages/trends.js";
+import { registerStandard } from "./pages/standard.js";
 
 export { selectedInfluencer } from "./console.js";
 export { rerunInteraction } from "./pages/operate.js";
@@ -27,6 +28,7 @@ export function registerAdmin(app: FastifyInstance): void {
   registerProfile(app);
   registerCreate(app);
   registerTrends(app);
+  registerStandard(app);
   registerHatch(app);
   app.get("/admin/logout", async (_req, reply) => {
     reply.header("set-cookie", "aia_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
