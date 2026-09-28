@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { parseKnowledge, withInfluencerLoose, type KnowledgeEntry } from "../context.js";
 import { many, one } from "../db/pool.js";
@@ -187,6 +189,26 @@ Rules:
 - visual.locations: items {id, description, slots}; ids are lowercase-with-dashes.
 - trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".`;
 
+/** Sections that are plain lists of strings: models sometimes send objects instead. */
+const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas"]);
+const CLOSET_LISTS = ["tops", "bottoms", "layers", "one_pieces", "activewear"];
+
+/** The value at a dotted path. */
+const at = (o: unknown, path: string) => path.split(".").reduce<unknown>((v, k) => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined), o);
+
+/** "Match this structure": each requested section from the reference persona, lists cut to two items. */
+export function structureExamples(paths: string[]): string {
+  let ref: unknown;
+  try {
+    ref = parse(readFileSync(resolve(process.env.PERSONA_PATH ?? "config/persona.yaml"), "utf8"));
+  } catch {
+    return "";
+  }
+  const trim = (v: unknown): unknown => (Array.isArray(v) ? v.slice(0, 2).map(trim) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, trim(x)])) : v);
+  const out = Object.fromEntries(paths.map((p) => [p, trim(at(ref, p))]).filter(([, v]) => v !== undefined));
+  return Object.keys(out).length ? stringify(out, { lineWidth: 0 }) : "";
+}
+
 /** Ask the model for the failing sections only, merge them in, validate, save. */
 export async function upgradePersona(id: number, failing: Check[]): Promise<string[]> {
   const inf = (await getInfluencer(id))!;
@@ -198,7 +220,10 @@ export async function upgradePersona(id: number, failing: Check[]): Promise<stri
   if (paths.includes("daily_life.activities") && !paths.includes("visual.locations")) paths.push("visual.locations");
   const need = failing.filter((c) => SECTION[c.key]).map((c) => `- ${c.label}: ${c.detail}`).join("\n");
   const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region.`;
-  const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\nWHAT FALLS SHORT:\n${need}\n\n${minimums}\n\nReturn the complete new value for exactly these keys: ${paths.join(", ")}.`;
+  const shapes = structureExamples(paths);
+  const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\nWHAT FALLS SHORT:\n${need}\n\n${minimums}\n\n${
+    shapes ? `STRUCTURE TO MATCH (from a different creator: copy the exact shape of each key, lists of plain strings stay plain strings; never copy the content):\n${shapes}\n\n` : ""
+  }Return the complete new value for exactly these keys: ${paths.join(", ")}.`;
   let text = await llm().generate({ operation: "persona.upgrade", tier: "smart", maxTokens: 8000, timeoutMs: COMPOSE_TIMEOUT_MS, system: UPGRADE_SYSTEM, prompt });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -232,8 +257,9 @@ export function mergeSections(personaYaml: string, sectionsYaml: string, paths: 
   const got = parse(clean) as Record<string, unknown> | null;
   if (!got || typeof got !== "object") throw new Error("the model didn't return a YAML mapping");
   for (const path of paths) {
-    const value = got[path] ?? path.split(".").reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), got);
+    let value = got[path] ?? at(got, path);
     if (value === undefined) throw new Error(`missing section ${path}`);
+    coerceShapes(path, value, (v) => (value = v));
     const keys = path.split(".");
     let node = base;
     for (const k of keys.slice(0, -1)) {
@@ -243,6 +269,28 @@ export function mergeSections(personaYaml: string, sectionsYaml: string, paths: 
     node[keys.at(-1)!] = value;
   }
   return stringify(base, { lineWidth: 0 });
+}
+
+/** One plain string from whatever the model sent for a list item. */
+function asText(x: unknown): string | undefined {
+  if (typeof x === "string") return x.trim() || undefined;
+  if (x && typeof x === "object") {
+    const o = x as Record<string, unknown>;
+    for (const k of ["text", "idea", "outfit", "description", "title", "name", "value"]) if (typeof o[k] === "string") return (o[k] as string).trim();
+    const strings = Object.values(o).filter((v): v is string => typeof v === "string");
+    return strings.length ? strings.join(": ") : undefined;
+  }
+  return undefined;
+}
+
+/** Forgive common shape slips (objects where plain strings belong) before strict validation. */
+export function coerceShapes(path: string, value: unknown, set: (v: unknown) => void): void {
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : []).map(asText).filter((s): s is string => Boolean(s));
+  if (STRING_LISTS.has(path)) set(list(value));
+  if (path === "visual.character.closet" && value && typeof value === "object") {
+    const c = value as Record<string, unknown>;
+    for (const k of CLOSET_LISTS) if (c[k] !== undefined) c[k] = list(c[k]);
+  }
 }
 
 const AI_ENTRY = (p: Persona): KnowledgeEntry => ({
@@ -287,17 +335,17 @@ export async function standardize(id: number): Promise<StandardRun> {
         const kb = inf.knowledge_yaml?.trim() ? (parse(inf.knowledge_yaml) as { entries?: unknown[] }) : { entries: [] };
         const entries = [...(kb.entries ?? []), AI_ENTRY(p)];
         await updatePersona(id, inf.persona_yaml, stringify({ entries }, { lineWidth: 0 }), "standard");
-        run.fixed.push("Replies know she's AI");
+        run.fixed.push(failing.find((c) => c.key === "kb_ai")!.label);
       }
       if (failing.some((c) => c.key === "profile" && c.fix === "auto")) {
         const kit = await getKit(id);
         if (!kit.pictures?.length) await profilePictureFromSoul().catch((e) => recordEvent("warn", "standard", `Profile picture not made: ${errorMessage(e)}`));
         if (!kit.text?.bios?.length) await composeProfileText().catch((e) => recordEvent("warn", "standard", `Profile text not written: ${errorMessage(e)}`));
-        run.fixed.push("Profile kit");
+        run.fixed.push(failing.find((c) => c.key === "profile")!.label);
       }
       if (p && failing.some((c) => c.key === "brief")) {
         await refreshTrends().catch((e) => recordEvent("warn", "standard", `News brief not refreshed: ${errorMessage(e)}`));
-        run.fixed.push("Fresh news brief");
+        run.fixed.push(failing.find((c) => c.key === "brief")!.label);
       }
       report = await evaluate(id);
       run.remaining = report.checks.filter((c) => !c.ok).map((c) => `${c.label}: ${c.detail}`);

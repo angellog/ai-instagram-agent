@@ -1,19 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse, stringify } from "yaml";
-import { knowledgeChecks, mergeSections, personaChecks } from "../../src/influencers/standard.js";
+import { knowledgeChecks, mergeSections, personaChecks, structureExamples } from "../../src/influencers/standard.js";
 import { parsePersona } from "../../src/persona/parse.js";
+import { thinPersona } from "../helpers/personas.js";
 
 const ref = readFileSync("config/persona.yaml", "utf8");
-
-/** Zuri's persona with a thin closet and no weekend life: what an older or rushed hatch looks like. */
-export function thinPersona(): string {
-  const p = parse(ref) as any;
-  p.visual.character.closet = { tops: ["white tee", "black tank", "grey hoodie", "denim shirt"], bottoms: ["blue jeans", "black joggers"], layers: [], one_pieces: [], activewear: ["black set"], occasions: [] };
-  p.daily_life.activities = p.daily_life.activities.filter((a: any) => !a.weekends_only && !(a.days ?? []).length).slice(0, 6);
-  p.weekend_ideas = [];
-  return stringify(p);
-}
 
 describe("the influencer standard", () => {
   it("Zuri meets every persona check", () => {
@@ -44,5 +36,24 @@ describe("the influencer standard", () => {
     const affiliated = { ...p, identity: { ...p.identity, affiliation: "See-Me Cosmetics" } };
     expect(knowledgeChecks(affiliated, []).find((c) => c.key === "kb_facts")).toMatchObject({ ok: false, fix: "manual" });
     expect(knowledgeChecks(affiliated, [{ id: "store", keywords: ["shop"], content: "x", must_include: ["x"] }]).find((c) => c.key === "kb_facts")!.ok).toBe(true);
+  });
+
+  it("repairs the shape slips that sank Paresh's first upgrade (objects where plain lists belong)", () => {
+    const sent = stringify({
+      "visual.character.wardrobe": { casual: { outfit: "white tee with olive chinos" }, smart: "navy linen shirt with cream trousers" },
+      weekend_ideas: [{ idea: "Saturday football fit" }, { title: "Sunday reset" }, "market run haul"],
+      "visual.character.closet": { tops: [{ name: "white tee" }, "black tee"], bottoms: ["jeans"], layers: [], one_pieces: [], activewear: ["track set"], occasions: [] },
+    });
+    const merged = parse(mergeSections(thinPersona(), sent, ["visual.character.wardrobe", "weekend_ideas", "visual.character.closet"])) as any;
+    expect(merged.visual.character.wardrobe).toEqual(["white tee with olive chinos", "navy linen shirt with cream trousers"]);
+    expect(merged.weekend_ideas).toEqual(["Saturday football fit", "Sunday reset", "market run haul"]);
+    expect(merged.visual.character.closet.tops).toEqual(["white tee", "black tee"]);
+  });
+
+  it("shows the model the exact structure of each section it must write", () => {
+    const ex = parse(structureExamples(["visual.character.wardrobe", "daily_life.activities"])) as any;
+    expect(typeof ex["visual.character.wardrobe"][0]).toBe("string");
+    expect(ex["visual.character.wardrobe"]).toHaveLength(2);
+    expect(ex["daily_life.activities"][0]).toHaveProperty("slot");
   });
 });

@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.14: Standard upgrades survive shape slips
+
+- **Paresh Mardi's first upgrade failed.** He was hatched before closets existed and had 4 looks. The model sent his outfits and weekend ideas as objects instead of plain lists, so validation rejected the upgrade twice and nothing was saved.
+  - The upgrade prompt now includes each requested section's exact structure, taken from the reference persona (lists cut to two items, "copy the shape, never the content").
+  - Near-miss shapes are converted before validation: objects become plain strings for outfits, weekend ideas and closet lists.
+- **Run reports use each check's own name**, so a fixed profile picture shows as fixed instead of "nothing to fix automatically".
+- The test-only thin persona moved to `tests/helpers/personas.ts`, so no test file runs twice.
+
 ## v1.0.13: The Influencer Standard, and a one-tap operating-mode button
 
 **Influencer Standard** (Platform → Standard)

@@ -14,7 +14,7 @@ import { HANDLERS } from "../../src/queue/worker.js";
 import { setStorageFetch } from "../../src/storage/host.js";
 import { buildServer } from "../../src/web/server.js";
 import { resetState, teardown } from "../helpers/db.js";
-import { thinPersona } from "../unit/standard.test.js";
+import { thinPersona } from "../helpers/personas.js";
 
 let app: FastifyInstance;
 beforeEach(async () => {
