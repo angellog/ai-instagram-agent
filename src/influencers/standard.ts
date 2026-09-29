@@ -187,7 +187,14 @@ export async function evaluate(id: number): Promise<StandardReport> {
   const bio = Boolean(kit.text?.bios?.length);
   const pic = Boolean(kit.pictures?.length);
   checks.push({ key: "profile", group: "Assets", label: "Profile kit (bio + picture)", ok: bio && pic, detail: `${bio ? "bio written" : "no bio"}, ${pic ? "picture ready" : "no picture"}`, fix: soul ? "auto" : "manual", href: "/admin/profile" });
-  checks.push({ key: "instagram", group: "Assets", label: "Instagram connected", ok: Boolean(acct), detail: acct ? `@${acct.username ?? acct.ig_user_id}` : "no account attached", fix: "manual", href: inf.status === "hatching" ? `/admin/hatch/${id}?step=instagram` : "/admin/persona#instagram" });
+  const live = acct && acct.token_status !== "invalid";
+  checks.push({
+    key: "instagram",
+    group: "Assets",
+    label: "Instagram connected",
+    ok: Boolean(live),
+    detail: !acct ? "no account attached" : live ? `@${acct.username ?? acct.ig_user_id}` : `@${acct.username ?? acct.ig_user_id} disconnected: Meta ended the session, attach a new token`,
+    fix: "manual", href: inf.status === "hatching" ? `/admin/hatch/${id}?step=instagram` : "/admin/persona#instagram" });
   const fresh = brief && Date.now() - new Date(brief.created_at).getTime() < STANDARD.trends_max_age_h * 3600_000;
   if (p) checks.push({ key: "brief", group: "News", label: "Fresh news brief", ok: Boolean(fresh), detail: brief ? `${brief.items.length} items, ${Math.round((Date.now() - new Date(brief.created_at).getTime()) / 3600_000)}h old` : "never collected", fix: "auto" });
   for (const c of checks) c.href = editHref(c.key, id, inf.status === "hatching");

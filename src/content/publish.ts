@@ -1,8 +1,9 @@
 import { getControls, isSendingDisabled } from "../config/controls.js";
 import { influencerId } from "../context.js";
 import { db, many, one } from "../db/pool.js";
-import { instagramClient } from "../instagram/accounts.js";
-import type { InstagramClient } from "../instagram/client.js";
+import { accountBlocker, instagramClient } from "../instagram/accounts.js";
+import { TokenInvalidError, type InstagramClient } from "../instagram/client.js";
+import { DISCONNECTED } from "./reconnect.js";
 import { recordDecision } from "../lib/decisions.js";
 import { errorMessage, PermanentError, TransientError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
@@ -83,11 +84,19 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
   );
   if (!assets.length || assets.some((a) => !a.public_url)) throw new PermanentError(`post ${postId} has missing assets`);
 
+  // A disconnected account: hold the post (it returns to Reviews on reconnect) without calling Meta.
+  const blocked = await accountBlocker();
+  if (blocked?.startsWith(DISCONNECTED)) {
+    await one("UPDATE posts SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1", [postId, blocked]);
+    await recordEvent("warn", "publish", "Held: Instagram is disconnected", { postId });
+    return "deferred";
+  }
+
   await one("UPDATE posts SET status = 'publishing', publish_attempts = publish_attempts + 1, updated_at = now() WHERE id = $1", [postId]);
-  const ig = await instagramClient();
   const startedAt = new Date();
 
   try {
+    const ig = await instagramClient();
     const quota = await ig.getPublishingLimit().catch(() => undefined);
     if (quota && quota.quota_usage >= quota.quota_total) throw new TransientError(`publishing quota used (${quota.quota_usage}/${quota.quota_total})`);
 
@@ -138,6 +147,13 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     const published = await ig.publishContainer(containerId);
     return markPublished(post, published.id, undefined, startedAt);
   } catch (e) {
+    if (e instanceof TokenInvalidError) {
+      // The account was just marked disconnected (and the operator alerted once); hold this post for review.
+      const msg = errorMessage(e).startsWith(DISCONNECTED) ? errorMessage(e) : `${DISCONNECTED}: Meta ended the session. ${errorMessage(e)}`;
+      await one("UPDATE posts SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1", [postId, msg.slice(0, 1000)]);
+      await recordEvent("warn", "publish", "Held: Instagram is disconnected", { postId });
+      return "deferred";
+    }
     await one("UPDATE posts SET last_error = $2, updated_at = now() WHERE id = $1", [postId, errorMessage(e).slice(0, 1000)]);
     if (e instanceof PermanentError) {
       await one("UPDATE posts SET status = 'failed' WHERE id = $1", [postId]);

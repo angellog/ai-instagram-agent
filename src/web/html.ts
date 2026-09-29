@@ -26,6 +26,8 @@ export const usd = (n: number | null | undefined) => `$${Number(n ?? 0).toFixed(
 
 const PILL: Record<string, string> = {
   green: "ok",
+  connected: "ok",
+  disconnected: "bad",
   published: "ok",
   sent: "ok",
   done: "ok",

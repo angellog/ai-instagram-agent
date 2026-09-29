@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { invalidateInfluencer, parseKnowledge, slugify, withInfluencerLoose } from "../context.js";
 import { many, one } from "../db/pool.js";
-import { upsertAccount } from "../instagram/accounts.js";
+import { instagramFetch, upsertAccount } from "../instagram/accounts.js";
 import { InstagramClient } from "../instagram/client.js";
 import { PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
@@ -54,10 +54,10 @@ export async function getInfluencer(id: number): Promise<InfluencerRow | undefin
 }
 
 export async function allInfluencers(): Promise<
-  Array<InfluencerRow & { username: string | null; followers: number | null; follows: number | null; media: number | null; synced_at: Date | null; soul_id: string | null }>
+  Array<InfluencerRow & { username: string | null; token_status: "ok" | "invalid" | null; followers: number | null; follows: number | null; media: number | null; synced_at: Date | null; soul_id: string | null }>
 > {
   return many(
-    `SELECT i.*, a.username,
+    `SELECT i.*, a.username, a.token_status,
             coalesce((a.profile->>'followers_count')::int, (SELECT followers FROM account_metrics m WHERE m.influencer_id = i.id ORDER BY day DESC LIMIT 1)) AS followers,
             (a.profile->>'follows_count')::int AS follows, (a.profile->>'media_count')::int AS media, a.updated_at AS synced_at,
             (SELECT soul_id FROM souls s WHERE s.influencer_id = i.id AND s.status = 'active') AS soul_id
@@ -125,7 +125,8 @@ export async function attachInstagram(
   const t = token.trim();
   if (t.length < 20) throw new PermanentError("that does not look like an Instagram access token");
   const e = env();
-  const probe = new InstagramClient({ accessToken: t, igUserId: "me", host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl: o.fetchImpl });
+  const fetchImpl = o.fetchImpl ?? instagramFetch();
+  const probe = new InstagramClient({ accessToken: t, igUserId: "me", host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl });
   const profile = await probe.getProfile();
   const igUserId = String(profile.user_id ?? profile.id);
   if (profile.account_type && !["BUSINESS", "MEDIA_CREATOR", "CREATOR"].includes(String(profile.account_type).toUpperCase())) {
@@ -142,7 +143,7 @@ export async function attachInstagram(
   });
   let subscribed = false;
   if (o.subscribe) {
-    const ig = new InstagramClient({ accessToken: t, igUserId, host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl: o.fetchImpl });
+    const ig = new InstagramClient({ accessToken: t, igUserId, host: e.META_GRAPH_HOST, version: e.META_GRAPH_API_VERSION, fetchImpl });
     subscribed = Boolean((await ig.subscribeWebhooks(["comments", "messages"])).success);
   }
   await recordEvent("info", "instagram", `Attached @${profile.username}`, { influencerId, igUserId, subscribed });

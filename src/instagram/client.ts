@@ -60,6 +60,8 @@ export interface InstagramClientOptions {
   fetchImpl?: FetchLike;
   /** Poll schedule for container status, overridable in tests. */
   pollDelaysMs?: number[];
+  /** Called once per request when Meta says the token is dead (code 190), before the error is thrown. */
+  onTokenInvalid?: (message: string) => Promise<unknown> | unknown;
 }
 
 const DEFAULT_POLL = [3_000, 5_000, 10_000, 15_000, 30_000, 30_000, 30_000, 30_000, 30_000, 30_000, 30_000];
@@ -70,8 +72,10 @@ export class InstagramClient {
   private readonly token: string;
   private readonly f: FetchLike;
   private readonly pollDelays: number[];
+  private readonly onTokenInvalid?: InstagramClientOptions["onTokenInvalid"];
 
   constructor(o: InstagramClientOptions) {
+    this.onTokenInvalid = o.onTokenInvalid;
     this.igUserId = o.igUserId;
     this.token = o.accessToken;
     this.base = `${(o.host ?? "https://graph.instagram.com").replace(/\/$/, "")}/${o.version ?? "v25.0"}`;
@@ -103,7 +107,11 @@ export class InstagramClient {
       data = { raw: text };
     }
     const err = (data as { error?: { message?: string; code?: number; error_subcode?: number; type?: string; fbtrace_id?: string } }).error;
-    if (!res.ok || err) throw classifyMetaError(res.status, url.pathname, err);
+    if (!res.ok || err) {
+      const e = classifyMetaError(res.status, url.pathname, err);
+      if (e instanceof TokenInvalidError && this.onTokenInvalid) await Promise.resolve(this.onTokenInvalid(e.message)).catch(() => undefined);
+      throw e;
+    }
     return data as T;
   }
 

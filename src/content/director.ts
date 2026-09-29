@@ -14,7 +14,7 @@ import { learningsForPrompt } from "../analytics/learnings.js";
 import { calendarBrief, listEvents } from "../calendar/events.js";
 import { trendsForPrompt } from "../trends/trends.js";
 import { enforceOutfit, planOutfits, type OutfitPlan } from "./wardrobe.js";
-import { hasAccount } from "../instagram/accounts.js";
+import { accountBlocker } from "../instagram/accounts.js";
 import { influencerId } from "../context.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { ensureDayPlan, type ActivityRow } from "./activities.js";
@@ -233,7 +233,10 @@ export async function postingGate(c: Controls, p: Persona, now: Date): Promise<s
   if (!c.content_enabled) return "content generation disabled";
   // Producing a post costs money; outside the preview modes, don't until there
   // is an account to publish it to. dry_run/development may plan to preview.
-  if (!["dry_run", "development"].includes(c.mode) && !(await hasAccount())) return "no Instagram account connected";
+  if (!["dry_run", "development"].includes(c.mode)) {
+    const blocked = await accountBlocker(); // no account, or Meta ended its session: don't spend on posts that can't go out
+    if (blocked) return blocked;
+  }
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(

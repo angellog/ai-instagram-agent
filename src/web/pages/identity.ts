@@ -130,7 +130,11 @@ ${card(
 <div>
 ${card(
   acct
-    ? `<dl class="kv"><dt>Account</dt><dd><b>@${esc(acct.username ?? acct.ig_user_id)}</b></dd><dt>User ID</dt><dd><code>${esc(acct.ig_user_id)}</code></dd><dt>Token</dt><dd>expires ${ago(acct.token_expires_at)}</dd></dl>
+    ? `${
+        acct.token_status === "invalid"
+          ? `<div class="callout bad" style="margin-bottom:12px">${icon("alert")}<div><p><b>Disconnected ${ago(acct.token_invalid_at)}.</b> Meta ended this token's session (a password change or a security check on the account). Generate a new token below and attach it: held posts come back to Reviews.</p><p class="small muted" style="margin-top:6px">${esc(acct.token_error ?? "")}</p></div></div>`
+          : ""
+      }<dl class="kv"><dt>Account</dt><dd><b>@${esc(acct.username ?? acct.ig_user_id)}</b> ${pill(acct.token_status === "invalid" ? "disconnected" : "connected")}</dd><dt>User ID</dt><dd><code>${esc(acct.ig_user_id)}</code></dd><dt>Token</dt><dd>${acct.token_status === "invalid" ? "ended by Meta" : `expires ${ago(acct.token_expires_at)}`}</dd></dl>
        <div class="row" style="margin-top:12px">${action("/admin/instagram/subscribe", "Subscribe to comments & DMs", { icon: "zap", small: true })}${action("/admin/instagram/check", "Check connection", { icon: "refresh", small: true })}</div>`
     : `<p class="muted">No Instagram account attached. The influencer can plan and generate, but cannot publish or reply.</p>`,
   { title: "Instagram", id: "instagram" },

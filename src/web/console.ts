@@ -97,10 +97,16 @@ export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
   let mode: string | undefined;
   let paused: boolean | undefined;
   let pending = 0;
+  let disconnected: { username: string; since: Date | null } | undefined;
   if (ctx) {
     const c = await getControls();
     mode = c.mode;
     paused = c.paused;
+    const acct = await one<{ username: string | null; ig_user_id: string; token_invalid_at: Date | null }>(
+      "SELECT username, ig_user_id, token_invalid_at FROM ig_accounts WHERE influencer_id = $1 AND is_primary AND token_status = 'invalid'",
+      [ctx.id],
+    );
+    if (acct) disconnected = { username: acct.username ?? acct.ig_user_id, since: acct.token_invalid_at };
     pending = (await one<{ n: number }>("SELECT count(*)::int AS n FROM safety_reviews WHERE status = 'pending' AND influencer_id = $1", [ctx.id]))?.n ?? 0;
   }
   const flash = typeof req.query?.flash === "string" ? req.query.flash : undefined;
@@ -112,6 +118,7 @@ export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
       influencers,
       mode,
       paused,
+      disconnected,
       pendingReviews: pending,
       openAccess: !env().ADMIN_TOKEN,
     }),

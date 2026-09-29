@@ -3,6 +3,31 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.17: Handle Meta ending an account's session (code 190)
+
+**Incident, 2026-09-28/29:** Meta ended the sessions of all four accounts at the same moment (code 190: "the user changed their password or Facebook has changed the session for security reasons"). With every influencer in autonomous mode:
+- posts were still planned and photographed (spending credits), then failed to publish
+- the hourly profile check failed silently for about 9 hours
+- nothing alerted the operator
+
+**Now**
+- The first code 190 from any Instagram call marks the account **disconnected**, via a hook in the client, so every call path is covered. The account records the error and when it happened.
+  - A single alert goes out: an event plus Telegram if configured, never repeated.
+- **While disconnected:**
+  - No calls go to Meta with the dead token.
+  - The feed and story planners stop (their gate says why), so no credits are spent on posts that can't go out.
+  - Profile sync, snapshots and token refresh skip quietly.
+  - Publishing holds posts instead of failing them repeatedly.
+- **It's shown everywhere:**
+  - a red banner on every console page for that influencer, with a Reconnect link
+  - the Instagram card: status, when, and Meta's message
+  - a "disconnected" label on the influencer card
+  - the Standard's "Instagram connected" check fails
+- **Reconnecting** (attach a new token, or Log in with Instagram) clears the flag.
+  - Posts held back in the last 7 days go back to **Reviews** (tagged "held while disconnected") so you can check they still fit, then Post now or Schedule. Nothing is published automatically.
+  - This includes posts that failed on a raw code 190 before this release.
+- Tests: 302.
+
 ## v1.0.16: Mode switcher in the top bar; Fix/Edit on every standard check
 
 - **The operating-mode switcher moved to the top bar.** It sits far right, next to the Day/Night toggle, in place of the plain mode label: a pill with a coloured dot and the mode's name.

@@ -54,7 +54,8 @@ ${
     ? `<div class="grid">${rows
         .map((i) =>
           card(
-            `<div class="row" style="margin-bottom:10px">${avatar(i.avatar_url, i.name, 48)}<div><b style="font-size:17px">${esc(i.name)}</b><div class="meta">${i.username ? `@${esc(i.username)}` : "no Instagram yet"} · <code>${esc(i.slug)}</code></div></div><span class="right">${status(i.status)}</span></div>
+            `<div class="row" style="margin-bottom:10px">${avatar(i.avatar_url, i.name, 48)}<div><b style="font-size:17px">${esc(i.name)}</b><div class="meta">${i.username ? `@${esc(i.username)}` : "no Instagram yet"} · <code>${esc(i.slug)}</code></div></div><span class="right">${i.token_status === "invalid" ? `${pill("disconnected")} ` : ""}${status(i.status)}</span></div>
+            ${i.token_status === "invalid" ? `<div class="callout bad" style="margin:0 0 10px">${icon("alert")}<p>Instagram disconnected: Meta ended the session. <b>Reconnect</b> to resume posting.</p></div>` : ""}
             <div class="stats">${[
               ["Followers", i.followers],
               ["Following", i.follows],

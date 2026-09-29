@@ -4,7 +4,7 @@ import { currentInfluencer, influencerId } from "../context.js";
 import { checkFacts } from "../conversation/facts.js";
 import { knowledge } from "../conversation/knowledge.js";
 import { many, one, tx } from "../db/pool.js";
-import { hasAccount } from "../instagram/accounts.js";
+import { accountBlocker } from "../instagram/accounts.js";
 import { recordDecision } from "../lib/decisions.js";
 import { recordEvent } from "../lib/events.js";
 import { localParts, slotForHour, TIMES_OF_DAY } from "../lib/time.js";
@@ -76,7 +76,10 @@ export async function storyGate(c: Controls, p: Persona, now: Date, operator: bo
   if (c.paused) return "paused";
   if (!c.content_enabled || !c.image_generation_enabled) return "content or image generation disabled";
   if (!c.stories_enabled || c.stories_per_day <= 0) return "stories disabled";
-  if (!["dry_run", "development"].includes(c.mode) && !(await hasAccount())) return "no Instagram account connected";
+  if (!["dry_run", "development"].includes(c.mode)) {
+    const blocked = await accountBlocker();
+    if (blocked) return blocked;
+  }
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(
