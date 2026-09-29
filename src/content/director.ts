@@ -240,12 +240,12 @@ export async function postingGate(c: Controls, p: Persona, now: Date): Promise<s
   const { hour } = localParts(now, p.identity.timezone);
   if (hour < c.posting_window_start_hour || hour >= c.posting_window_end_hour) return `outside posting window (${hour}h local)`;
   const inFlight = await one<{ n: number }>(
-    `SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND media_type <> 'STORY' AND status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
+    `SELECT count(*)::int AS n FROM posts WHERE influencer_id = $1 AND platform = 'instagram' AND media_type <> 'STORY' AND status IN ('draft','generating','composing','awaiting_review','approved','publishing')`,
     [influencerId()],
   );
   if ((inFlight?.n ?? 0) > 0) return "a post is already in the pipeline";
   const today = await one<{ n: number; last: Date | null }>(
-    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE influencer_id = $1 AND status = 'published' AND media_type <> 'STORY'`,
+    `SELECT count(*) FILTER (WHERE published_at > now() - interval '24 hours')::int AS n, max(published_at) AS last FROM posts WHERE influencer_id = $1 AND status = 'published' AND platform = 'instagram' AND media_type <> 'STORY'`,
     [influencerId()],
   );
   if ((today?.n ?? 0) >= c.max_posts_per_day) return `max_posts_per_day (${c.max_posts_per_day}) reached`;

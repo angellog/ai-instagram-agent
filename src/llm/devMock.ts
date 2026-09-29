@@ -103,6 +103,8 @@ export function createDevMockProvider(): MockProvider {
     }))
     .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
     .on("persona.compose", (r) => devPersona(lastUser(r)))
+    // Offline TikTok caption: a hook line and a few hashtags.
+    .on("tiktok.caption", () => ({ title: "New laces, same me", caption: "Sunday reset, sneakers first 👟", hashtags: ["sneakers", "kampala", "fitcheck"] }))
     // Offline standard upgrade: fill each requested section from the reference persona.
     .on("persona.upgrade", (r) => devUpgrade(lastUser(r)))
     .on("image.validate", () => ({

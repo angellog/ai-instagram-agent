@@ -33,6 +33,34 @@ function slideTools(id: string, pos: number, count: number): string {
   }</span>`;
 }
 
+const PRIVACY_CHOICES: Array<[string, string]> = [
+  ["PUBLIC_TO_EVERYONE", "Everyone"],
+  ["FOLLOWER_OF_CREATOR", "Followers"],
+  ["MUTUAL_FOLLOW_FRIENDS", "Friends"],
+  ["SELF_ONLY", "Only me"],
+];
+
+/** TikTok's per-post settings: chosen by the operator before it goes out (TikTok requires an explicit privacy choice). */
+function tiktokSettingsCard(id: string, t: Record<string, any>, canEdit: boolean): string {
+  const used = t.privacy_used ? `<p class="meta" style="margin-top:8px">Posted as <b>${esc(PRIVACY_CHOICES.find(([k]) => k === t.privacy_used)?.[1] ?? t.privacy_used)}</b>${t.note ? ` · ${esc(t.note)}` : ""}</p>` : "";
+  if (!canEdit) {
+    return card(
+      `<dl class="kv"><dt>Title</dt><dd>${esc(t.title || "—")}</dd><dt>Who can view</dt><dd>${esc(PRIVACY_CHOICES.find(([k]) => k === t.privacy)?.[1] ?? "—")}</dd><dt>Comments</dt><dd>${t.allow_comments === false ? "Off" : "On"}</dd><dt>Promotes own business</dt><dd>${t.promotes_own_business ? "Yes" : "No"}</dd><dt>AI label</dt><dd>On (always)</dd></dl>${used}`,
+      { title: "TikTok settings", id: "tiktok" },
+    );
+  }
+  return card(
+    `<form method="post" action="/admin/posts/${id}/tiktok-settings">
+      ${field("Title", input("title", t.title ?? "", { attrs: 'maxlength="90"' }), { help: "Shown on the photo post; up to 90 characters." })}
+      ${field("Who can view", select("privacy", PRIVACY_CHOICES, t.privacy ?? "PUBLIC_TO_EVERYONE"), { help: "Until TikTok audits the app, posts go up as Only me whatever you pick." })}
+      <label class="row small" style="margin:6px 0"><input type="checkbox" name="allow_comments" value="1"${t.allow_comments === false ? "" : " checked"}> Allow comments</label>
+      <label class="row small" style="margin:6px 0"><input type="checkbox" name="promotes_own_business" value="1"${t.promotes_own_business ? " checked" : ""}> Promotes her own business (e.g. FeetBit): shown as promotional content</label>
+      <label class="row small muted" style="margin:6px 0 12px"><input type="checkbox" checked disabled> AI-generated label (always on)</label>
+      ${button("Save TikTok settings", { icon: "check" })}</form>${used}`,
+    { title: "TikTok settings", id: "tiktok" },
+  );
+}
+
 /** Live character count for the caption editor (progressive enhancement). */
 const CAPTION_JS = `<script>document.querySelectorAll("[data-count]").forEach(function(t){var o=document.getElementById(t.dataset.count),max=+t.getAttribute("maxlength")||2200;function u(){var n=t.value.length,tags=(t.value.match(/#[\\p{L}\\p{N}_]+/gu)||[]).length;o.textContent=n+" / "+max+" characters · "+tags+" hashtags";o.classList.toggle("over",n>max||tags>30)}t.addEventListener("input",u);u()})</script>`;
 
@@ -178,8 +206,8 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
     const postIds = rows.filter((rv) => rv.subject_type === "post" && isUuid(rv.subject_id)).map((rv) => rv.subject_id);
     const live = new Map(
       (
-        await many<{ id: string; media_type: string; caption: string; slides: string[] | null; text: string | null }>(
-          `SELECT p.id, p.media_type, p.caption,
+        await many<{ id: string; media_type: string; platform: string; caption: string; slides: string[] | null; text: string | null }>(
+          `SELECT p.id, p.media_type, p.platform, p.caption,
              (SELECT array_agg(public_url ORDER BY position) FROM post_assets pa WHERE pa.post_id = p.id AND public_url IS NOT NULL) AS slides,
              (SELECT overlay->>'heading' FROM post_assets pa WHERE pa.post_id = p.id AND position = 0) AS text
            FROM posts p WHERE p.id = ANY($1::uuid[])`,
@@ -192,6 +220,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
       const isPost = rv.subject_type === "post";
       const now = isPost ? live.get(rv.subject_id) : undefined;
       const isStory = now?.media_type === "STORY";
+      const tall = isStory || now?.platform === "tiktok"; // both are 9:16
       const actionable = rv.status === "pending" && rv.level !== "red" && (!isPost || Boolean(now));
       const text = isPost ? (now?.caption ?? p.caption ?? "") : (p.text ?? "");
       const slides: string[] = isPost ? (now?.slides ?? p.slides ?? []) : [];
@@ -199,7 +228,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
         `<div class="row" style="margin-bottom:8px">${pill(rv.level)} ${pill(rv.status)} <span class="meta">${esc(rv.categories.join(", "))} · ${ago(rv.created_at)}</span></div>
         ${rv.reason ? `<p class="small muted">${esc(rv.reason)}</p>` : ""}
         ${!isPost && p.inbound ? `<div class="quote"><b>@${esc(p.username ?? "")}</b>: ${esc(p.inbound)}</div>` : ""}
-        ${isPost ? `<div class="slides${isStory ? " story" : ""}">${slides.map((u: string, i: number) => `<figure><img src="${esc(u)}" alt="${isStory ? "Story" : `Slide ${i + 1}`}" loading="lazy"></figure>`).join("")}</div>` : ""}
+        ${isPost ? `<div class="slides${tall ? " story" : ""}">${slides.map((u: string, i: number) => `<figure><img src="${esc(u)}" alt="${isStory ? "Story" : `Slide ${i + 1}`}" loading="lazy"></figure>`).join("")}</div>` : ""}
         ${isPost && now && rv.status === "pending" ? `<p style="margin:8px 0">${link(isStory ? "Edit the story text or delete it" : "Edit caption, reorder or remove slides", `/admin/posts/${esc(rv.subject_id)}`, { small: true, icon: "pencil" })}</p>` : ""}
         ${isPost && !now ? `<p class="muted small">This ${isStory ? "story" : "post"} was deleted.</p>` : ""}
         ${
@@ -215,7 +244,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
                <form method="post" action="/admin/reviews/${rv.id}/reject" class="row" style="margin-top:10px"><input name="note" placeholder="Reason (optional)" aria-label="Rejection reason" style="max-width:320px">${button("Reject", { variant: "danger", icon: "x" })}</form>`
             : `<pre>${esc(text)}</pre>`
         }`,
-        { title: isPost ? (isStory ? "Story" : "Post") : `Reply (${esc(String(p.channel ?? "comment"))})` },
+        { title: isPost ? (isStory ? "Story" : now?.platform === "tiktok" ? "TikTok post" : "Post") : `Reply (${esc(String(p.channel ?? "comment"))})` },
       );
     });
     const body = `${header("Review queue", { sub: "Everything the agent wants a human to check. Red items are never automated." })}
@@ -242,13 +271,14 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
   // ------------------------------------------------------------ posts
   r.get("/admin/posts", async (req: Req, reply) => {
     const filter = req.query.status ?? "all";
-    const rows = await many<{ id: string; status: string; media_type: string; caption: string; created_at: Date; published_at: Date | null; scheduled_for: Date | null; score: number | null; cover: string | null; topic: string | null; slides: number }>(
-      `SELECT p.id, p.status, p.media_type, p.caption, p.created_at, p.published_at, p.scheduled_for, ci.topic,
+    const rows = await many<{ id: string; status: string; media_type: string; platform: string; caption: string; created_at: Date; published_at: Date | null; scheduled_for: Date | null; score: number | null; cover: string | null; topic: string | null; slides: number }>(
+      `SELECT p.id, p.status, p.media_type, p.platform, p.caption, p.created_at, p.published_at, p.scheduled_for, ci.topic,
          (SELECT score FROM engagement_metrics em WHERE em.post_id = p.id ORDER BY collected_at DESC LIMIT 1) AS score,
          (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover,
          (SELECT count(*)::int FROM post_assets pa WHERE pa.post_id = p.id) AS slides
        FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id
-       WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' AND ($2 = 'all' OR p.status = $2 OR ($2 = 'attention' AND p.status IN ('awaiting_review','qc_failed','failed','dry_run')))
+       WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' AND ($2 IN ('all', 'tiktok') OR p.status = $2 OR ($2 = 'attention' AND p.status IN ('awaiting_review','qc_failed','failed','dry_run')))
+         AND ($2 <> 'tiktok' OR p.platform = 'tiktok')
        ORDER BY p.created_at DESC LIMIT 120`,
       [influencerId(), filter],
     );
@@ -257,6 +287,7 @@ ${tabs([
   { href: "/admin/posts", label: "All", active: filter === "all" },
   { href: "/admin/posts?status=published", label: "Published", active: filter === "published" },
   { href: "/admin/posts?status=attention", label: "Needs attention", active: filter === "attention" },
+  { href: "/admin/posts?status=tiktok", label: "TikTok", active: filter === "tiktok" },
 ])}
 ${card(
   rows.length
@@ -265,7 +296,7 @@ ${card(
           (p) =>
             `<a href="/admin/posts/${p.id}">${p.cover ? `<img src="${esc(p.cover)}" alt="${esc(p.topic ?? "post")}" loading="lazy">` : `<div class="empty" style="aspect-ratio:4/5;border:1px dashed var(--line-2);border-radius:12px">${icon("image")}<span class="small">${esc(p.status)}</span></div>`}
             <div class="cap"><span>${esc((p.topic ?? p.caption).slice(0, 34))}</span>${pill(p.status)}</div>
-            <div class="meta">${p.slides > 1 ? `${p.slides} slides · ` : ""}${p.published_at ? `published ${ago(p.published_at)}` : p.status === "approved" && p.scheduled_for ? `scheduled ${esc(localLabel(new Date(p.scheduled_for), persona().identity.timezone))}` : `created ${ago(p.created_at)}`}${p.score !== null ? ` · score ${Number(p.score).toFixed(1)}` : ""}</div></a>`,
+            <div class="meta">${p.platform === "tiktok" ? "TikTok · " : ""}${p.slides > 1 ? `${p.slides} slides · ` : ""}${p.published_at ? `published ${ago(p.published_at)}` : p.status === "approved" && p.scheduled_for ? `scheduled ${esc(localLabel(new Date(p.scheduled_for), persona().identity.timezone))}` : `created ${ago(p.created_at)}`}${p.score !== null ? ` · score ${Number(p.score).toFixed(1)}` : ""}</div></a>`,
         )
         .join("")}</div>`
     : empty("No posts here"),
@@ -350,7 +381,10 @@ ${card(
     })();
     const blocked = publishBlocker(p.status, assets.length, p.safety_level, Boolean(p.ig_media_id));
     const isStory = p.media_type === "STORY";
-    const noun = isStory ? "story" : "post";
+    const isTikTok = p.platform === "tiktok";
+    const noun = isStory ? "story" : isTikTok ? "TikTok post" : "post";
+    const tiktokTwin = !isTikTok ? await one<{ id: string; status: string }>("SELECT id, status FROM posts WHERE source_post_id = $1 AND platform = 'tiktok'", [id]) : undefined;
+    const tiktokOn = (await getControls()).tiktok_enabled;
     const canEdit = EDITABLE.includes(p.status) && !p.ig_media_id;
     const lockedNote = p.status === "approved" && !p.ig_media_id ? `<p class="help">${icon("info", 14)} It's approved and scheduled. Unschedule it to edit.</p>` : "";
     const publishBar = canPublish
@@ -385,7 +419,12 @@ ${card(
       !p.ig_media_id && !["published", "publishing"].includes(p.status)
         ? action(`/admin/posts/${id}/delete`, "Delete", { variant: "danger", icon: "trash", confirm: `Delete this ${noun} for good? It can't be undone.` })
         : "",
-      p.permalink ? link("Open on Instagram", p.permalink, { external: true }) : "",
+      !isTikTok && tiktokOn && !tiktokTwin && !["rejected", "failed", "draft", "generating", "composing"].includes(p.status) && p.safety_level !== "red"
+        ? action(`/admin/posts/${id}/tiktok`, "Also post to TikTok", { icon: "zap", variant: "ghost" })
+        : "",
+      tiktokTwin ? link(`TikTok version (${tiktokTwin.status.replace("_", " ")})`, `/admin/posts/${tiktokTwin.id}`, { variant: "ghost" }) : "",
+      isTikTok && p.source_post_id ? link("From the Instagram post", `/admin/posts/${p.source_post_id}`, { variant: "ghost" }) : "",
+      p.permalink ? link(isTikTok ? "Open on TikTok" : "Open on Instagram", p.permalink, { external: true }) : "",
     ].join("");
     const storyText = isStory ? String(assets[0]?.overlay?.heading ?? "") : "";
     const storyHasHer = isStory && (await one<{ c: boolean | null }>("SELECT (plan->'slides'->0->>'include_character')::boolean AS c FROM content_ideas WHERE id = $1", [p.content_idea_id]))?.c;
@@ -408,15 +447,15 @@ ${card(
             : `<pre>${esc(p.caption)}</pre>${lockedNote}<p class="meta" style="margin-top:8px">Hook: ${esc(p.hook ?? "")}</p>`,
           { title: "Caption", id: "caption" },
         );
-    const body = `${header(p.topic ?? (isStory ? "Story" : "Post"), {
-      eyebrow: isStory ? `story / ${p.structure ?? ""}` : `${p.format ?? ""} / ${p.structure ?? ""}`,
+    const body = `${header(p.topic ?? (isStory ? "Story" : isTikTok ? "TikTok post" : "Post"), {
+      eyebrow: isTikTok ? `TikTok · ${p.media_type === "CAROUSEL" ? "photo carousel" : "photo"}` : isStory ? `story / ${p.structure ?? ""}` : `${p.format ?? ""} / ${p.structure ?? ""}`,
       sub: `${pill(p.status)} ${pill(p.safety_level)} <span class="meta">repetition ${p.repetition_score ?? "—"} · cost ${usd(costs?.usd)} · created ${ago(p.created_at)}</span>`,
       actions,
     })}
 ${p.last_error ? `<div class="callout bad">${icon("alert")}<p>${esc(p.last_error)}</p></div>` : ""}
 ${publishBar}
 ${card(
-  `<div class="slides${isStory ? " story" : ""}">${
+  `<div class="slides${isStory || isTikTok ? " story" : ""}">${
     assets
       .map((a) =>
         a.public_url
@@ -431,7 +470,8 @@ ${card(
 )}
 <div class="grid">
 ${textCard}
-${isStory ? "" : card(
+${isTikTok ? tiktokSettingsCard(id, p.tiktok ?? {}, canEdit) : ""}
+${isStory || isTikTok ? "" : card(
   table(
     ["Checkpoint", "Reach", "Likes", "Comments", "Saves", "Shares", "Follows", "Score"],
     metrics.map((m) => [esc(m.checkpoint), m.reach ?? "—", m.likes ?? "—", m.comments ?? "—", m.saves ?? "—", m.shares ?? "—", m.follows ?? "—", m.score ?? "—"].map(String)),

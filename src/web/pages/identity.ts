@@ -1,3 +1,4 @@
+import { primaryTikTok, tiktokApp, type TikTokAccountRow } from "../../tiktok/accounts.js";
 import { MODES } from "../../config/modes.js";
 import type { FastifyInstance } from "fastify";
 import { controlsSchema, getControls, setControls, type Controls } from "../../config/controls.js";
@@ -20,11 +21,33 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Operating mode", "What is allowed to go out.", ["mode", "paused", "require_review_for_yellow"]],
   ["Features", "Switch whole capabilities on or off.", ["conversation_enabled", "content_enabled", "image_generation_enabled", "carousel_generation_enabled"]],
   ["Posting cadence", "Hours are in the persona's local time.", ["max_posts_per_day", "min_hours_between_posts", "posting_window_start_hour", "posting_window_end_hour"]],
+  ["TikTok", "Defaults for TikTok posts; each post can be changed before it goes out. Private until TikTok approves the app.", ["tiktok_enabled", "tiktok_default_privacy", "tiktok_allow_comments"]],
   ["Stories", "Instagram Story updates: 1-3 a day from her life, separate from feed posts. Same posting window and review rules.", ["stories_enabled", "stories_per_day", "min_hours_between_stories"]],
   ["Conversation limits", "", ["max_comment_replies_per_hour", "max_dms_per_hour", "optional_reply_rate"]],
   ["Budgets (this influencer)", "Hard caps checked before every paid call.", ["daily_budget_usd", "monthly_budget_usd", "daily_llm_budget_usd", "daily_image_budget_usd", "max_retries_per_image"]],
   ["Creativity guards", "", ["repetition_threshold", "max_concept_attempts"]],
 ];
+
+const PRIVACY_LABEL: Record<string, string> = { PUBLIC_TO_EVERYONE: "Everyone", FOLLOWER_OF_CREATOR: "Followers", MUTUAL_FOLLOW_FRIENDS: "Friends", SELF_ONLY: "Only me" };
+
+/** The TikTok account card on the Persona page: status, what it can do, and the buttons to connect or check it. */
+function tiktokCard(tk: TikTokAccountRow | undefined, appReady: boolean, audited: boolean): string {
+  if (!appReady) return `<p class="muted">Add the TikTok app's client key and secret in <a href="/admin/config">Config & keys → TikTok</a> first. Setup guide: <code>docs/TIKTOK_SETUP.md</code>.</p>`;
+  const connect = (label: string, primary = true) => `<a class="btn${primary ? " primary" : ""}" href="/admin/tiktok/connect">${icon("zap", 16)}<span>${label}</span></a>`;
+  if (!tk) return `<p class="muted">No TikTok account yet. Use a <b>Business</b> account with an AI disclosure in its bio.</p><div class="row" style="margin-top:12px">${connect("Log in with TikTok")}</div>`;
+  const stats = tk.stats as { followers?: number | null; likes?: number | null; videos?: number | null };
+  const opts = (tk.creator_info?.privacy_level_options ?? []).map((o) => PRIVACY_LABEL[o] ?? o).join(", ");
+  return `${
+    tk.token_status === "invalid"
+      ? `<div class="callout bad" style="margin-bottom:12px">${icon("alert")}<div><p><b>Disconnected ${ago(tk.token_invalid_at)}.</b> TikTok ended this login. Log in with TikTok again: held posts come back to Reviews.</p><p class="small muted" style="margin-top:6px">${esc(tk.token_error ?? "")}</p></div></div>`
+      : ""
+  }${audited ? "" : `<div class="callout warn" style="margin-bottom:12px">${icon("info")}<p>The TikTok app isn't audited yet, so posts go up as <b>Only me</b> (private). Mark it audited in Config once TikTok approves it.</p></div>`}
+  <dl class="kv"><dt>Account</dt><dd><b>@${esc(tk.username ?? tk.display_name ?? "?")}</b> ${pill(tk.token_status === "invalid" ? "disconnected" : "connected")}</dd>
+  <dt>Followers</dt><dd>${stats.followers ?? "—"} · ${stats.likes ?? "—"} likes · ${stats.videos ?? "—"} posts</dd>
+  <dt>Privacy options</dt><dd>${esc(opts || "check the connection to load them")}</dd>
+  <dt>Login</dt><dd>${tk.token_status === "invalid" ? "ended by TikTok" : `renews automatically (until ${new Date(tk.refresh_expires_at ?? Date.now()).toISOString().slice(0, 10)})`}</dd></dl>
+  <div class="row" style="margin-top:12px">${tk.token_status === "invalid" ? connect("Log in with TikTok again") : `${action("/admin/tiktok/check", "Check connection", { icon: "refresh", small: true })}${connect("Switch account", false)}`}${action("/admin/tiktok/disconnect", "Disconnect", { small: true, variant: "danger", icon: "x", confirm: "Disconnect this TikTok account? Its tokens are deleted; posts already on TikTok stay." })}</div>`;
+}
 
 const HELP: Partial<Record<keyof Controls, string>> = {
   mode: "development: no external writes · dry_run: full pipeline, nothing sent · human_approval: everything waits for you · autonomous: green goes out on its own",
@@ -64,6 +87,7 @@ export function registerIdentity(app: FastifyInstance): void {
     const inf = currentInfluencer();
     const info = personaInfo();
     const p = info.persona;
+    const [tk, tkApp, tkAudited] = await Promise.all([primaryTikTok(inf.id), tiktokApp(), setting("TIKTOK_APP_AUDITED")]);
     const [soul, souls, acct, versions, knowledge, hfConfigured, igAppId] = await Promise.all([
       activeSoul(),
       listSouls(inf.id),
@@ -147,6 +171,7 @@ ${card(
    <div class="row">${button("Attach account", { variant: "primary", icon: "instagram" })}${igAppId ? link("Or log in with Instagram", `/admin/connect?inf=${inf.id}`, { variant: "ghost" }) : ""}</div></form>`,
   { title: acct ? "Replace account" : "Attach an account" },
 )}
+${card(tiktokCard(tk, Boolean(tkApp), tkAudited === "yes"), { title: "TikTok", id: "tiktok" })}
 ${card(table(["Version", "Saved"], versions.map((v) => [`<code>${esc(v.hash)}</code>`, ago(v.loaded_at)])), { title: "Persona versions" })}
 </div>
 </div>
@@ -216,6 +241,8 @@ ${card(
       const v = c[k];
       if (k === "mode") return select("mode", ["development", "dry_run", "human_approval", "autonomous"], v);
       if (typeof v === "boolean") return select(k, [["true", "On"], ["false", "Off"]], String(v));
+      if (k === "tiktok_default_privacy")
+        return select(k, [["PUBLIC_TO_EVERYONE", "Everyone"], ["FOLLOWER_OF_CREATOR", "Followers"], ["MUTUAL_FOLLOW_FRIENDS", "Friends"], ["SELF_ONLY", "Only me"]], String(v));
       return input(k, v, { type: "number", attrs: 'step="any" inputmode="decimal"' });
     };
     const body = `${header("Controls", { sub: `Operating rules for ${esc(currentInfluencer().name)}. Changes apply within seconds; no deploy.` })}

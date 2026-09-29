@@ -65,3 +65,11 @@ describe("safety filter", () => {
     expect(evaluateRules("text me on 0772 123 456", { direction: "outbound", allowedContacts: allowed })[0]).toMatchObject({ level: "red", category: "personal_contact" });
   });
 });
+
+describe("TikTok ids", () => {
+  it("keeps 19-digit post ids exact", async () => {
+    const { parseLosslessly } = await import("../../src/tiktok/client.js");
+    expect(parseLosslessly('{"data":{"publicaly_available_post_id":[7450000000000000001, 7450000000000000002]}}')).toEqual({ data: { publicaly_available_post_id: ["7450000000000000001", "7450000000000000002"] } });
+    expect(parseLosslessly('{"a":12,"b":"x"}')).toEqual({ a: 12, b: "x" });
+  });
+});

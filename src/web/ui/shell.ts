@@ -24,6 +24,8 @@ export interface ShellContext {
   paused?: boolean;
   /** The current influencer's Instagram token was ended by Meta. */
   disconnected?: { username: string; since: Date | null };
+  /** The current influencer's TikTok login was ended. */
+  tiktokDisconnected?: { username: string; since: Date | null };
   pendingReviews?: number;
   openAccess?: boolean;
   head?: string;
@@ -165,6 +167,9 @@ export function shell(o: ShellContext): string {
       ? `<div class="banner bad">${icon("alert", 16)}<span><b>Instagram is disconnected for ${esc(cur.name)} (@${esc(o.disconnected.username)})${
           o.disconnected.since ? ` since ${esc(new Date(o.disconnected.since).toISOString().slice(0, 16).replace("T", " "))} UTC` : ""
         }.</b> Meta ended the session, so nothing posts or replies. <a href="/admin/persona#instagram">Reconnect with a new token</a>; held posts come back to Reviews.</span></div>`
+      : "",
+    o.tiktokDisconnected && cur
+      ? `<div class="banner bad">${icon("alert", 16)}<span><b>TikTok is disconnected for ${esc(cur.name)} (@${esc(o.tiktokDisconnected.username)}).</b> Nothing posts to TikTok. <a href="/admin/persona#tiktok">Log in with TikTok again</a>; held posts come back to Reviews.</span></div>`
       : "",
     o.paused && cur ? `<div class="banner bad">${icon("pause", 16)}<span><b>${esc(cur.name)} is paused.</b> Nothing is planned, sent or published for this influencer.</span></div>` : "",
   ].join("");

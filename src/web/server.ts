@@ -13,7 +13,9 @@ import { hmacSha256Hex, safeEqual } from "../lib/crypto.js";
 import { recordEvent } from "../lib/events.js";
 import { logger } from "../lib/logger.js";
 import { JOBS, jobId, queue, queueCounts, redis } from "../queue/queues.js";
-import { localMediaPath } from "../storage/host.js";
+import { download, localMediaPath } from "../storage/host.js";
+import { positionFromFile } from "../tiktok/media.js";
+import { legalPage } from "./legal.js";
 import { registerAdmin, selectedInfluencer } from "./admin.js";
 import { setting } from "../config/settings.js";
 import { listInfluencers, withInfluencer } from "../context.js";
@@ -233,6 +235,31 @@ button{background:#c8410e;border:0;color:#fff;font-weight:600;cursor:pointer}inp
     } catch {
       return reply.code(400).send("bad path");
     }
+  });
+
+  // TikTok downloads photo posts from here (a domain verified in the TikTok app; no redirects allowed).
+  // Only the frames of TikTok posts are served, by post id and slide.
+  app.get("/tiktok-media/:postId/:file", async (req: FastifyRequest<{ Params: { postId: string; file: string } }>, reply) => {
+    const pos = positionFromFile(req.params.file);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.postId) || pos === undefined) return reply.code(404).send("not found");
+    const a = await one<{ public_url: string }>(
+      "SELECT pa.public_url FROM post_assets pa JOIN posts p ON p.id = pa.post_id WHERE p.id = $1 AND p.platform = 'tiktok' AND pa.position = $2 AND pa.public_url IS NOT NULL",
+      [req.params.postId, pos],
+    );
+    if (!a) return reply.code(404).send("not found");
+    try {
+      const bytes = await download(a.public_url);
+      return reply.header("cache-control", "public, max-age=3600").type("image/jpeg").send(bytes);
+    } catch {
+      return reply.code(502).send("image unavailable");
+    }
+  });
+
+  // Public Terms and Privacy pages (TikTok's app review needs them).
+  app.get("/legal/:page", async (req: FastifyRequest<{ Params: { page: string } }>, reply) => {
+    const page = req.params.page === "terms" ? "terms" : req.params.page === "privacy" ? "privacy" : undefined;
+    if (!page) return reply.code(404).send("not found");
+    return reply.type("text/html").send(legalPage(page, { company: (await setting("LEGAL_COMPANY_NAME")) ?? "The operator", email: (await setting("LEGAL_CONTACT_EMAIL")) ?? "" }));
   });
 
   registerAdmin(app);

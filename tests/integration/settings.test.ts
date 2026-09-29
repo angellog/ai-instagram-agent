@@ -38,7 +38,7 @@ describe("in-app settings (Config page)", () => {
     await expect(setSetting("LLM_PROVIDER", "skynet")).rejects.toThrow(/must be one of/);
     await expect(setSetting("NOT_A_KEY", "x")).rejects.toThrow(/Unknown setting/);
     expect(mask("short")).toBe("••••");
-    expect(SETTINGS.every((s) => ["llm", "generation", "storage", "instagram", "openreply", "alerts"].includes(s.group))).toBe(true);
+    expect(SETTINGS.every((s) => ["llm", "generation", "storage", "instagram", "tiktok", "openreply", "alerts"].includes(s.group))).toBe(true);
   });
 
   it("the LLM picks up a new key or model without a restart", async () => {

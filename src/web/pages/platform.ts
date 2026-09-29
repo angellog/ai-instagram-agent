@@ -23,6 +23,7 @@ const GROUPS: Array<[SettingGroup, string, string]> = [
   ["storage", "Media storage", "Where generated images live so Instagram can fetch them."],
   ["instagram", "Instagram / Meta app", "Needed for Connect Instagram and direct webhooks."],
   ["openreply", "OpenReply relay", "When OpenReply owns the Meta webhook and relays events here."],
+  ["tiktok", "TikTok", "Log in with TikTok, photo posting and the legal pages TikTok's review needs. Setup guide: docs/TIKTOK_SETUP.md."],
   ["alerts", "Alerts", "Where the agent pings you about reviews and failures."],
 ];
 

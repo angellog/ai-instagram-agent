@@ -7,6 +7,7 @@ import { composePersonaForHatch, generateFaceCandidates } from "../influencers/h
 import { runCreate } from "../content/create.js";
 import { planStory } from "../content/stories.js";
 import { standardize } from "../influencers/standard.js";
+import { refreshTikTokTokens } from "../tiktok/accounts.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
@@ -101,6 +102,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.benchmarkRun]: scoped((j) => runBenchmark((j.data.modelIds as number[]).map(Number), Number(j.data.maxUsd ?? 2), String(j.data.tag ?? Date.now()))),
   // Platform-wide maintenance.
   [JOBS.tokenRefresh]: () => refreshExpiringTokens(),
+  // TikTok access tokens live 24h: renew the ones close to expiry every hour.
+  [JOBS.tiktokRefresh]: () => refreshTikTokTokens(),
   [JOBS.reviewsExpire]: () => expireReviews(),
   [JOBS.sweep]: () => sweep(),
 };
@@ -246,6 +249,7 @@ export async function upsertSchedulers(): Promise<void> {
     ["analytics", "analytics-process", { pattern: "30 3 * * *" }, JOBS.analyticsProcess],
     ["analytics", "account-collect", { pattern: "50 23 * * *" }, JOBS.accountCollect],
     ["maintenance", "token-refresh", { pattern: "10 4 * * *" }, JOBS.tokenRefresh],
+    ["maintenance", "tiktok-refresh", { pattern: "25 * * * *" }, JOBS.tiktokRefresh],
     ["maintenance", "memory-expire", { pattern: "40 2 * * *" }, JOBS.memoryExpire],
     ["maintenance", "calendar-recap", { pattern: "15 * * * *" }, JOBS.calendarRecap],
     ["analytics", "profile-sync", { pattern: "35 * * * *" }, JOBS.profileSync],

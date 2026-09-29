@@ -24,6 +24,7 @@ interface PublishRow {
   publish_attempts: number;
   content_idea_id: number | null;
   publish_override: "operator" | null;
+  platform: "instagram" | "tiktok";
   updated_at: Date;
 }
 
@@ -83,6 +84,13 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     [postId],
   );
   if (!assets.length || assets.some((a) => !a.public_url)) throw new PermanentError(`post ${postId} has missing assets`);
+
+  // TikTok posts have their own publisher (same lock, same dry-run and pause rules above).
+  if (post.platform === "tiktok") {
+    const { publishTikTok } = await import("../tiktok/publish.js");
+    const r = await publishTikTok(postId);
+    return r === "published" ? "published" : r;
+  }
 
   // A disconnected account: hold the post (it returns to Reviews on reconnect) without calling Meta.
   const blocked = await accountBlocker();

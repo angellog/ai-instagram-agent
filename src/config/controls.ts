@@ -23,6 +23,10 @@ export const controlsSchema = z.object({
 
   max_posts_per_day: z.number().int().min(0).default(2),
   min_hours_between_posts: z.number().min(0).default(6),
+  // TikTok (Business accounts; posts are private until the app passes TikTok's audit).
+  tiktok_enabled: z.boolean().default(true),
+  tiktok_default_privacy: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("PUBLIC_TO_EVERYONE"),
+  tiktok_allow_comments: z.boolean().default(true),
   // Instagram Story updates (separate from feed posts and their limits).
   stories_enabled: z.boolean().default(true),
   stories_per_day: z.number().int().min(0).max(10).default(3),

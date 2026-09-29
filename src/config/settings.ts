@@ -11,7 +11,7 @@ import { env } from "./env.js";
  * environment-only and are deliberately absent from this catalog.
  */
 
-export type SettingGroup = "llm" | "generation" | "storage" | "instagram" | "openreply" | "alerts";
+export type SettingGroup = "llm" | "generation" | "storage" | "instagram" | "tiktok" | "openreply" | "alerts";
 
 export interface SettingDef {
   key: string;
@@ -54,6 +54,13 @@ export const SETTINGS: SettingDef[] = [
   { key: "INSTAGRAM_APP_SECRET", label: "Instagram app secret", group: "instagram", secret: true, help: "Same page. Verifies webhooks and powers Connect Instagram.", provider: "meta" },
   { key: "FACEBOOK_APP_SECRET", label: "Facebook app secret", group: "instagram", secret: true, help: "Only if your app signs webhooks with the Facebook secret." },
   { key: "WEBHOOK_VERIFY_TOKEN", label: "Webhook verify token", group: "instagram", secret: true, help: "Only if Meta points straight at this service (not via OpenReply)." },
+  // TikTok
+  { key: "TIKTOK_CLIENT_KEY", label: "TikTok client key", group: "tiktok", secret: false, help: "developers.tiktok.com → your app → Client key. See docs/TIKTOK_SETUP.md." },
+  { key: "TIKTOK_CLIENT_SECRET", label: "TikTok client secret", group: "tiktok", secret: true, help: "Same page. Powers Log in with TikTok and token renewal." },
+  { key: "TIKTOK_MEDIA_BASE_URL", label: "TikTok media base URL", group: "tiktok", secret: false, help: "The domain verified in the TikTok app that points at this service; TikTok downloads photos from here.", placeholder: "https://media.salesgen.com" },
+  { key: "TIKTOK_APP_AUDITED", label: "App audited", group: "tiktok", secret: false, help: "yes once TikTok approves the app. Until then every post is private (only the account sees it).", choices: ["no", "yes"] },
+  { key: "LEGAL_COMPANY_NAME", label: "Company name (legal pages)", group: "tiktok", secret: false, help: "Shown on /legal/terms and /legal/privacy, which TikTok's app review needs.", placeholder: "FeetBit Group" },
+  { key: "LEGAL_CONTACT_EMAIL", label: "Contact email (legal pages)", group: "tiktok", secret: false, help: "Where people can reach you about data and terms." },
   // OpenReply
   { key: "OPENREPLY_RELAY_SECRET", label: "OpenReply relay secret", group: "openreply", secret: true, help: "Must equal AGENT_RELAY_SECRET on OpenReply." },
   { key: "OPENREPLY_DEFER_KEYWORDS", label: "Keywords OpenReply answers", group: "openreply", secret: false, help: "Comma-separated campaign keywords; the agent stays silent on them.", placeholder: "LINK, GUIDE" },

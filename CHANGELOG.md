@@ -3,6 +3,37 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.18: TikTok, Phase 1 (connect, adapt, publish photo posts)
+
+TikTok is a second platform next to Instagram. Setup guide for the operator: `docs/TIKTOK_SETUP.md` (developer app, Login Kit + Direct Post, salesgen.com media domain, legal pages, Business accounts, audit).
+
+- **Log in with TikTok** per influencer (Persona & soul → TikTok):
+  - The login state is signed and expires after 15 minutes.
+  - Tokens are stored encrypted. The 24h access token renews automatically (hourly `tiktok.refresh`, and just before posting); the refresh token lasts a year.
+  - The card shows the account, followers, the privacy options TikTok offers it, audit status, Check connection, Switch account, and Disconnect (deletes the tokens).
+- **Also post to TikTok** on any Instagram post or story:
+  - Photos are re-framed to 1080×1920 without cropping (fitted over a soft blurred fill; story frames pass straight through).
+  - The caption is rewritten the TikTok way: a hook line, 3–5 hashtags, and a title of up to 90 characters. It's safety-checked.
+  - The TikTok version waits in Reviews with its own **TikTok settings**: who can view, comments, "promotes her own business", and the AI label (always on).
+  - Only one TikTok version per post; the two pages link to each other.
+- **Publishing** (photo posts via the Content Posting API, Direct Post):
+  - TikTok downloads the photos from `<TIKTOK_MEDIA_BASE_URL>/tiktok-media/<post>/<n>-<hash>.jpg`, served straight by the web service with no redirects. Only TikTok frames are served there.
+  - The creator's current options are queried before every post, as TikTok requires.
+  - **Until the app is audited, every post is Only me (private).** After the audit, the chosen privacy is used if the account allows it.
+  - `is_aigc` is always true, with automatic music.
+  - Duplicate-proof: the publish ID is saved before waiting, so a retry checks status instead of posting again. A failed publish can be retried cleanly.
+  - TikTok's 19-digit post IDs are read without rounding (JavaScript can't hold them as numbers).
+- **Disconnection handling** matches Instagram's:
+  - A login TikTok ends is marked **disconnected** once, with one alert.
+  - Posts are held, a banner shows on every page, and logging in again brings held posts back to Reviews.
+- **Platform plumbing:**
+  - `posts.platform` (instagram | tiktok) and `source_post_id`.
+  - TikTok posts never block Instagram planning.
+  - Posts gets a **TikTok** tab; review cards say "TikTok post".
+- **Public legal pages** at `/legal/terms` and `/legal/privacy`, with the company name and contact from Config.
+- **Controls:** TikTok on/off, default privacy, allow comments.
+- Tests: 313.
+
 ## v1.0.17: Handle Meta ending an account's session (code 190)
 
 **Incident, 2026-09-28/29:** Meta ended the sessions of all four accounts at the same moment (code 190: "the user changed their password or Facebook has changed the session for security reasons"). With every influencer in autonomous mode:

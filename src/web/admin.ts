@@ -9,6 +9,7 @@ import { registerProfile } from "./pages/profile.js";
 import { registerCreate } from "./pages/create.js";
 import { registerTrends } from "./pages/trends.js";
 import { registerStandard } from "./pages/standard.js";
+import { registerTikTok } from "./pages/tiktok.js";
 
 export { selectedInfluencer } from "./console.js";
 export { rerunInteraction } from "./pages/operate.js";
@@ -29,6 +30,7 @@ export function registerAdmin(app: FastifyInstance): void {
   registerCreate(app);
   registerTrends(app);
   registerStandard(app);
+  registerTikTok(app);
   registerHatch(app);
   app.get("/admin/logout", async (_req, reply) => {
     reply.header("set-cookie", "aia_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
