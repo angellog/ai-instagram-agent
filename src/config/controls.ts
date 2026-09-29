@@ -27,6 +27,11 @@ export const controlsSchema = z.object({
   tiktok_enabled: z.boolean().default(true),
   tiktok_default_privacy: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("PUBLIC_TO_EVERYONE"),
   tiktok_allow_comments: z.boolean().default(true),
+  // X (Twitter). Phase 1 is read-only: mentions every 15 minutes, post metrics daily.
+  // X bills per item read, so reads have their own daily count and USD caps.
+  x_enabled: z.boolean().default(true),
+  x_daily_read_cap: z.number().int().min(0).default(500),
+  daily_x_api_budget_usd: z.number().min(0).default(0.5),
   // Instagram Story updates (separate from feed posts and their limits).
   stories_enabled: z.boolean().default(true),
   stories_per_day: z.number().int().min(0).max(10).default(3),

@@ -42,10 +42,17 @@ Never put links in post text ($0.20 vs $0.015) — links live in bio.
 
 | Phase | Scope | Ships |
 |---|---|---|
-| **1** | `src/x/client.ts` + mentions poll + metrics; read-only, writes nothing | Mentions land in the admin queue; daily metrics |
+| **1** ✅ v1.0.19 | `src/x/client.ts` + mentions poll + metrics; app-only bearer token, so X itself refuses writes | Mentions land on the X page; daily metrics |
 | **2** | Replies through the existing conversation agent, `human_approval` mode | You approve each reply in the admin UI |
 | **3** | Postiz bridge: library → X rewrite → queued posts, weekly report | Calendar fills itself |
 | **4** | Lead search + flagging; optional `autonomous` mode for replies only | Account finds customers |
+
+## Phase 1 notes
+
+- Reads use the app-only bearer token ($0.005/post). Owned Reads ($0.001) require user-context auth as the
+  app owner, which phase 2 introduces anyway for replies — switching then cuts read costs about 5×.
+- Mentions live in `x_mentions`, not `interactions`: `conversation/send.ts` and `web/reviews.ts` still send
+  every reply through Instagram. Phase 2 must add an X branch there before X mentions enter the pipeline.
 
 ## Operator blockers
 

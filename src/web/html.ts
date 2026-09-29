@@ -46,6 +46,7 @@ const PILL: Record<string, string> = {
   publishing: "info",
   processing: "info",
   draft: "info",
+  new: "info",
   info: "info",
   warn: "warn",
   red: "bad",

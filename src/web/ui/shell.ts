@@ -46,6 +46,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
       ["stories", "/admin/stories", "Stories", "phone"],
       ["content", "/admin/content", "Content brain", "brain"],
       ["conversations", "/admin/conversations", "Conversations", "message"],
+      ["x", "/admin/x", "X (Twitter)", "message"],
       ["people", "/admin/people", "People & memory", "users"],
     ],
   ],

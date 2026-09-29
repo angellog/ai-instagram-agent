@@ -12,6 +12,7 @@ import { MockAdapter } from "../../src/generation/adapters/mock.js";
 import { setPollDelays } from "../../src/generation/service.js";
 import { setLLM } from "../../src/llm/llm.js";
 import { createDevLLM } from "../../src/llm/devMock.js";
+import { setXFetch } from "../../src/x/accounts.js";
 
 let migrated = false;
 
@@ -39,6 +40,7 @@ export async function resetState(controls: Partial<Controls> = {}): Promise<void
   setFallbackInfluencer(await loadInfluencer(1, true));
   setInstagramClient(undefined);
   setGenerationFetch(undefined);
+  setXFetch(undefined);
   setPollDelays([1]);
   MockAdapter.reset();
   setLLM(createDevLLM());

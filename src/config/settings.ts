@@ -11,7 +11,7 @@ import { env } from "./env.js";
  * environment-only and are deliberately absent from this catalog.
  */
 
-export type SettingGroup = "llm" | "generation" | "storage" | "instagram" | "tiktok" | "openreply" | "alerts";
+export type SettingGroup = "llm" | "generation" | "storage" | "instagram" | "tiktok" | "x" | "openreply" | "alerts";
 
 export interface SettingDef {
   key: string;
@@ -61,6 +61,8 @@ export const SETTINGS: SettingDef[] = [
   { key: "TIKTOK_APP_AUDITED", label: "App audited", group: "tiktok", secret: false, help: "yes once TikTok approves the app. Until then every post is private (only the account sees it).", choices: ["no", "yes"] },
   { key: "LEGAL_COMPANY_NAME", label: "Company name (legal pages)", group: "tiktok", secret: false, help: "Shown on /legal/terms and /legal/privacy, which TikTok's app review needs.", placeholder: "FeetBit Group" },
   { key: "LEGAL_CONTACT_EMAIL", label: "Contact email (legal pages)", group: "tiktok", secret: false, help: "Where people can reach you about data and terms." },
+  // X (Twitter)
+  { key: "X_BEARER_TOKEN", label: "X bearer token", group: "x", secret: true, help: "console.x.com → your app → Keys and tokens → Bearer Token. Read-only: it can read mentions and metrics but can never post." },
   // OpenReply
   { key: "OPENREPLY_RELAY_SECRET", label: "OpenReply relay secret", group: "openreply", secret: true, help: "Must equal AGENT_RELAY_SECRET on OpenReply." },
   { key: "OPENREPLY_DEFER_KEYWORDS", label: "Keywords OpenReply answers", group: "openreply", secret: false, help: "Comma-separated campaign keywords; the agent stays silent on them.", placeholder: "LINK, GUIDE" },

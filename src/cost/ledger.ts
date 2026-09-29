@@ -47,17 +47,20 @@ export interface SpendSummary {
   today: number;
   todayLlm: number;
   todayImage: number;
+  /** X API spend today (provider = 'x'). */
+  todayX: number;
   week: number;
   month: number;
 }
 
 /** Spend for one influencer, or the whole platform when influencerId is "all". */
 export async function spendSummary(influencerId: number | "all" = maybeInfluencer()?.id ?? "all"): Promise<SpendSummary> {
-  const r = await one<{ today: number; today_llm: number; today_image: number; week: number; month: number }>(`
+  const r = await one<{ today: number; today_llm: number; today_image: number; today_x: number; week: number; month: number }>(`
     SELECT
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now())), 0)                          AS today,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now()) AND category = 'llm'), 0)     AS today_llm,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now()) AND category = 'image'), 0)   AS today_image,
+      coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('day', now()) AND provider = 'x'), 0)       AS today_x,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= now() - interval '7 days'), 0)                         AS week,
       coalesce(sum(cost_usd) FILTER (WHERE occurred_at >= date_trunc('month', now())), 0)                        AS month
     FROM cost_ledger WHERE ($1::bigint IS NULL OR influencer_id = $1)`, [influencerId === "all" ? null : influencerId]);
@@ -65,6 +68,7 @@ export async function spendSummary(influencerId: number | "all" = maybeInfluence
     today: Number(r?.today ?? 0),
     todayLlm: Number(r?.today_llm ?? 0),
     todayImage: Number(r?.today_image ?? 0),
+    todayX: Number(r?.today_x ?? 0),
     week: Number(r?.week ?? 0),
     month: Number(r?.month ?? 0),
   };
@@ -74,7 +78,7 @@ export async function spendSummary(influencerId: number | "all" = maybeInfluence
  * Refuse work that would push spend past a configured limit. Called *before*
  * the money is spent, with a conservative estimate.
  */
-export async function assertBudget(category: CostCategory, estimateUsd: number): Promise<void> {
+export async function assertBudget(category: CostCategory, estimateUsd: number, provider?: string): Promise<void> {
   const [c, s, platform, total] = await Promise.all([getControls(), spendSummary(), getControls(false, PLATFORM), spendSummary("all")]);
   if (over(total.today, estimateUsd, platform.platform_daily_budget_usd)) {
     throw new BudgetExceededError(`Platform daily budget $${platform.platform_daily_budget_usd} reached across all influencers`);
@@ -93,6 +97,9 @@ export async function assertBudget(category: CostCategory, estimateUsd: number):
   }
   if (category === "image" && over(s.todayImage, estimateUsd, c.daily_image_budget_usd)) {
     throw new BudgetExceededError(`Daily image budget $${c.daily_image_budget_usd} reached`);
+  }
+  if (provider === "x" && over(s.todayX, estimateUsd, c.daily_x_api_budget_usd)) {
+    throw new BudgetExceededError(`Daily X API budget $${c.daily_x_api_budget_usd} reached (spent $${s.todayX.toFixed(4)})`);
   }
 }
 

@@ -8,6 +8,8 @@ import { runCreate } from "../content/create.js";
 import { planStory } from "../content/stories.js";
 import { standardize } from "../influencers/standard.js";
 import { refreshTikTokTokens } from "../tiktok/accounts.js";
+import { collectXMetrics } from "../x/metrics.js";
+import { pollMentions } from "../x/poll.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
@@ -96,6 +98,9 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.contentCreate]: scoped((j) => runCreate(String(j.data.runId))),
   [JOBS.trendsRefresh]: (j) => (j.data?.influencerId ? scoped(() => refreshTrends())(j) : forEachActiveInfluencer("trends", () => refreshTrends())),
   [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
+  // X (read-only in phase 1): each is a no-op for influencers without an X account.
+  [JOBS.xPoll]: () => forEachActiveInfluencer("x mentions", pollMentions),
+  [JOBS.xMetrics]: () => forEachActiveInfluencer("x metrics", collectXMetrics),
   [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
   // A hatching influencer has no persona yet: loose context, so costs and events are still theirs.
   [JOBS.hatchPersona]: (j) => withInfluencerLoose(ownerOf(j), () => composePersonaForHatch(ownerOf(j), String(j.data.batch ?? ""))),
@@ -256,6 +261,9 @@ export async function upsertSchedulers(): Promise<void> {
     ["analytics", "trends-refresh", { pattern: "5 5,11,17,23 * * *" }, JOBS.trendsRefresh],
     ["maintenance", "reviews-expire", { pattern: "5 * * * *" }, JOBS.reviewsExpire],
     ["maintenance", "sweep", { every: 10 * 60_000 }, JOBS.sweep],
+    ["maintenance", "x-poll", { every: 15 * 60_000 }, JOBS.xPoll],
+    // 04:40 UTC = 07:40 in Kampala: yesterday's posts have had a full evening.
+    ["analytics", "x-metrics", { pattern: "40 4 * * *" }, JOBS.xMetrics],
   ];
   for (const [q, id, repeat, name] of s) {
     await queue(q).upsertJobScheduler(id, repeat.pattern ? { pattern: repeat.pattern, tz: "UTC" } : { every: repeat.every! }, {

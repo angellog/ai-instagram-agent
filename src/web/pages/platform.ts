@@ -24,6 +24,7 @@ const GROUPS: Array<[SettingGroup, string, string]> = [
   ["instagram", "Instagram / Meta app", "Needed for Connect Instagram and direct webhooks."],
   ["openreply", "OpenReply relay", "When OpenReply owns the Meta webhook and relays events here."],
   ["tiktok", "TikTok", "Log in with TikTok, photo posting and the legal pages TikTok's review needs. Setup guide: docs/TIKTOK_SETUP.md."],
+  ["x", "X (Twitter)", "Read-only for now: mentions and post metrics for the connected X account. Connect it on the X page."],
   ["alerts", "Alerts", "Where the agent pings you about reviews and failures."],
 ];
 

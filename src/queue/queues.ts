@@ -32,6 +32,8 @@ export const JOBS = {
   accountCollect: "account.collect",
   tokenRefresh: "token.refresh",
   tiktokRefresh: "tiktok.refresh",
+  xPoll: "x.poll",
+  xMetrics: "x.metrics",
   memoryExpire: "memory.expire",
   reviewsExpire: "reviews.expire",
   calendarRecap: "calendar.recap",

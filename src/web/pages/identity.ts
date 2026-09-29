@@ -22,6 +22,7 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Features", "Switch whole capabilities on or off.", ["conversation_enabled", "content_enabled", "image_generation_enabled", "carousel_generation_enabled"]],
   ["Posting cadence", "Hours are in the persona's local time.", ["max_posts_per_day", "min_hours_between_posts", "posting_window_start_hour", "posting_window_end_hour"]],
   ["TikTok", "Defaults for TikTok posts; each post can be changed before it goes out. Private until TikTok approves the app.", ["tiktok_enabled", "tiktok_default_privacy", "tiktok_allow_comments"]],
+  ["X (Twitter)", "Read-only for now: mentions every 15 minutes and daily post metrics. X bills per item read ($0.005 a post, $0.01 an account), so reads have their own caps.", ["x_enabled", "x_daily_read_cap", "daily_x_api_budget_usd"]],
   ["Stories", "Instagram Story updates: 1-3 a day from her life, separate from feed posts. Same posting window and review rules.", ["stories_enabled", "stories_per_day", "min_hours_between_stories"]],
   ["Conversation limits", "", ["max_comment_replies_per_hour", "max_dms_per_hour", "optional_reply_rate"]],
   ["Budgets (this influencer)", "Hard caps checked before every paid call.", ["daily_budget_usd", "monthly_budget_usd", "daily_llm_budget_usd", "daily_image_budget_usd", "max_retries_per_image"]],

@@ -3,6 +3,17 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.19: X (Twitter), Phase 1 (read-only: mentions and metrics)
+
+X is a third channel, for FeetBit's own brand account. Phase 1 only reads; replies come in phase 2. Plan: `docs/X_AGENT_PLAN.md`.
+
+- **Read-only by construction.** The agent authenticates with the app-only bearer token (Config & keys → X), which X accepts for reads and refuses for any write. There is no posting code in `src/x/`.
+- **Connect by username** on the new **X (Twitter)** page. No login needed while read-only.
+- **Mentions every 15 minutes** (`x.poll`) into their own inbox (`x_mentions`), with a `since_id` cursor so each mention is read once. The first poll backfills one page; later polls page through up to 100 new mentions. Mentions stay out of the conversation pipeline for now, because its send path is Instagram-only.
+- **Daily metrics** (`x.metrics`, 07:40 Kampala): followers, and views/likes/replies/reposts/saves for every post from the last 7 days, one row per post per day.
+- **Costs and caps.** X bills per item read. Every read is recorded in the cost ledger (`provider = 'x'`) with its item counts. New controls: `x_enabled`, `x_daily_read_cap` (500 items) and `daily_x_api_budget_usd` ($0.50). When a cap is reached the poll skips and says why on the X page instead of failing every 15 minutes.
+- **Errors.** 429 waits until X's `x-rate-limit-reset`; depleted credits (402) fail once with a "top up at console.x.com" message; a revoked token fails as an auth error. 19-digit ids are stored as text.
+
 ## v1.0.18: TikTok, Phase 1 (connect, adapt, publish photo posts)
 
 TikTok is a second platform next to Instagram. Setup guide for the operator: `docs/TIKTOK_SETUP.md` (developer app, Login Kit + Direct Post, salesgen.com media domain, legal pages, Business accounts, audit).
