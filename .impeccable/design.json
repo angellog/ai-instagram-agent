@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T10:05:07.664840+00:00",
+  "title": "Design System: Influencer OS",
+  "extensions": {
+    "colorMeta": {
+      "signal-orange": {
+        "role": "primary",
+        "displayName": "Signal Orange",
+        "canonical": "#ff5a1f",
+        "tonalRamp": [
+          "oklch(15% 0.19 41)",
+          "oklch(25% 0.19 41)",
+          "oklch(35% 0.19 41)",
+          "oklch(45% 0.19 41)",
+          "oklch(58% 0.19 41)",
+          "oklch(72% 0.19 41)",
+          "oklch(85% 0.19 41)",
+          "oklch(95% 0.19 41)"
+        ]
+      },
+      "ember-action": {
+        "role": "primary",
+        "displayName": "Ember Action",
+        "canonical": "#c8410e",
+        "tonalRamp": [
+          "oklch(15% 0.17 40)",
+          "oklch(25% 0.17 40)",
+          "oklch(35% 0.17 40)",
+          "oklch(45% 0.17 40)",
+          "oklch(58% 0.17 40)",
+          "oklch(72% 0.17 40)",
+          "oklch(85% 0.17 40)",
+          "oklch(95% 0.17 40)"
+        ]
+      },
+      "signal-orange-wash": {
+        "role": "primary",
+        "displayName": "Orange Wash",
+        "canonical": "#fff0ea"
+      },
+      "focus-blue": {
+        "role": "secondary",
+        "displayName": "Focus Blue",
+        "canonical": "#2563eb",
+        "tonalRamp": [
+          "oklch(15% 0.2 263)",
+          "oklch(25% 0.2 263)",
+          "oklch(35% 0.2 263)",
+          "oklch(45% 0.2 263)",
+          "oklch(58% 0.2 263)",
+          "oklch(72% 0.2 263)",
+          "oklch(85% 0.2 263)",
+          "oklch(95% 0.2 263)"
+        ]
+      },
+      "studio-floor": {
+        "role": "neutral",
+        "displayName": "Studio Floor",
+        "canonical": "#f6f6f8",
+        "tonalRamp": [
+          "oklch(15% 0.006 285)",
+          "oklch(25% 0.006 285)",
+          "oklch(35% 0.006 285)",
+          "oklch(45% 0.006 285)",
+          "oklch(58% 0.006 285)",
+          "oklch(72% 0.006 285)",
+          "oklch(85% 0.006 285)",
+          "oklch(95% 0.006 285)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#12141a"
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "#636878"
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e3e4ea"
+      },
+      "night-floor": {
+        "role": "neutral",
+        "displayName": "Night Floor",
+        "canonical": "#0d0e12"
+      },
+      "ok": {
+        "role": "semantic",
+        "displayName": "OK"
+      },
+      "warn": {
+        "role": "semantic",
+        "displayName": "Warn"
+      },
+      "bad": {
+        "role": "semantic",
+        "displayName": "Bad"
+      },
+      "info": {
+        "role": "semantic",
+        "displayName": "Info"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles, one per page; 22px under 640px."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Config panels, readiness heading, dialog titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles and field labels."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All running text; tabular figures."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Help text, timestamps, secondary lines."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase nav group headings, table headers, source badges only."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Keys, IDs, masked secrets, YAML."
+      }
+    },
+    "shadows": [
+      {
+        "name": "rest",
+        "value": "0 1px 2px rgb(16 18 26/.06), 0 1px 3px rgb(16 18 26/.05)",
+        "purpose": "Cards and KPI tiles at rest."
+      },
+      {
+        "name": "lifted",
+        "value": "0 12px 32px rgb(16 18 26/.14)",
+        "purpose": "Menus, dialogs, toasts, mobile drawer."
+      },
+      {
+        "name": "glass",
+        "value": "inset 0 1px 0 rgb(255 255 255/.85), inset 0 -1px 0 rgb(16 18 26/.04), 0 1px 1px rgb(16 18 26/.04), 0 8px 28px -6px rgb(16 18 26/.12)",
+        "purpose": "Glass panels and the sticky section bar."
+      },
+      {
+        "name": "glass-material",
+        "value": "background: color-mix(in srgb, var(--surface) 64%, transparent); backdrop-filter: blur(22px) saturate(1.7)",
+        "purpose": "The glass surface itself (58% in dark). Solid Surface under reduced transparency or without backdrop-filter."
+      },
+      {
+        "name": "light-field",
+        "value": "radial-gradient(38vmax 30vmax at 82% 4%, rgb(255 90 31/.20), transparent 70%), radial-gradient(34vmax 28vmax at 8% 92%, rgb(37 99 235/.12), transparent 70%), radial-gradient(26vmax 22vmax at 48% 55%, rgb(255 170 60/.12), transparent 72%)",
+        "purpose": "Fixed backdrop behind the page so glass has something to refract."
+      }
+    ],
+    "motion": [
+      {
+        "name": "fast",
+        "value": "150ms",
+        "purpose": "Hover, colour and border changes."
+      },
+      {
+        "name": "standard",
+        "value": "220ms",
+        "purpose": "Toast entry, drawer, larger state changes."
+      },
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.2,.8,.2,1)",
+        "purpose": "Default ease-out for all transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "640px"
+      },
+      {
+        "name": "drawer",
+        "value": "1023px"
+      },
+      {
+        "name": "two-column",
+        "value": "1024px"
+      },
+      {
+        "name": "grid-2-stack",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a page or panel.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg>Save</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:6px;font:500 14px var(--font,'Fira Sans',sans-serif);min-height:38px;padding:7px 14px;border-radius:10px;border:1px solid var(--line-2,#d3d5dd);background:var(--surface,#fff);color:var(--ink,#12141a);cursor:pointer;transition:background 150ms,transform 150ms}.ds-btn:active{transform:scale(.98)}.ds-btn:focus-visible{outline:2px solid var(--focus,#2563eb);outline-offset:2px}.ds-btn-primary{background:var(--primary,#c8410e);border-color:var(--primary,#c8410e);color:var(--primary-ink,#fff)}.ds-btn-primary:hover{background:var(--primary-hover,#a93609)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Everything that isn't the primary action.",
+      "html": "<button class=\"ds-btn2\">Cancel</button>",
+      "css": ".ds-btn2{font:500 14px var(--font,'Fira Sans',sans-serif);min-height:38px;padding:7px 14px;border-radius:10px;border:1px solid var(--line-2,#d3d5dd);background:var(--surface,#fff);color:var(--ink,#12141a);cursor:pointer;transition:background 150ms}.ds-btn2:hover{background:var(--surface-2,#f0f1f4)}.ds-btn2:focus-visible{outline:2px solid var(--focus,#2563eb);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Visible label above, help below; 40px tall.",
+      "html": "<label class=\"ds-field\"><span>LLM API key <em class=\"ds-src\">not set</em></span><input class=\"ds-input\" placeholder=\"sk-ant-...\"><small>Anthropic console, API keys.</small></label>",
+      "css": ".ds-field{display:grid;gap:6px;font:600 14px var(--font,'Fira Sans',sans-serif);color:var(--ink,#12141a)}.ds-field small{font-weight:400;font-size:12.5px;color:var(--muted,#636878)}.ds-src{font-style:normal;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:6px;background:var(--surface-2,#f0f1f4);color:var(--muted,#636878);margin-left:6px}.ds-input{font:400 15px var(--font,'Fira Sans',sans-serif);min-height:40px;padding:8px 11px;border-radius:10px;border:1px solid var(--line-2,#d3d5dd);background:var(--surface,#fff);color:var(--ink,#12141a);transition:border-color 150ms,box-shadow 150ms}.ds-input:focus{outline:none;border-color:var(--focus,#2563eb);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus,#2563eb) 22%,transparent)}"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Icon + label rows; active item gets the orange wash and inset bar.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\">Overview</a><a href=\"#\" aria-current=\"page\">Config &amp; keys</a><a href=\"#\">Costs</a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:220px;font:400 14.5px var(--font,'Fira Sans',sans-serif)}.ds-nav a{display:flex;align-items:center;min-height:38px;padding:8px 10px;border-radius:9px;text-decoration:none;color:var(--ink-2,#3b3f4c);transition:background 150ms}.ds-nav a:hover{background:var(--surface-2,#f0f1f4);color:var(--ink,#12141a)}.ds-nav a[aria-current=page]{background:var(--brand-soft,#fff0ea);color:var(--ink,#12141a);font-weight:600;box-shadow:inset 3px 0 0 var(--brand,#ff5a1f)}.ds-nav a:focus-visible{outline:2px solid var(--focus,#2563eb)}"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "pill-ok",
+      "description": "Colour plus a word; never colour alone.",
+      "html": "<span class=\"ds-pill ok\">published</span> <span class=\"ds-pill warn\">awaiting review</span> <span class=\"ds-pill bad\">disconnected</span>",
+      "css": ".ds-pill{display:inline-flex;padding:2px 9px;border-radius:99px;font:600 12px var(--font,'Fira Sans',sans-serif);background:var(--surface-2,#f0f1f4);color:var(--ink-2,#3b3f4c)}.ds-pill.ok{background:var(--ok-bg,#e4f5ea);color:var(--ok,#137a3a)}.ds-pill.warn{background:var(--warn-bg,#fff3d6);color:var(--warn,#8a5300)}.ds-pill.bad{background:var(--bad-bg,#fde6e6);color:var(--bad,#b3141a)}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The solid section unit for working content.",
+      "html": "<section class=\"ds-card\"><h2>Recent posts</h2><p>Solid surface, hairline border, rest shadow.</p></section>",
+      "css": ".ds-card{background:var(--surface,#fff);border:1px solid var(--line,#e3e4ea);border-radius:16px;box-shadow:0 1px 2px rgb(16 18 26/.06),0 1px 3px rgb(16 18 26/.05);padding:14px 20px 20px;font:400 15px/1.55 var(--font,'Fira Sans',sans-serif);color:var(--ink,#12141a)}.ds-card h2{font-size:15px;font-weight:600;margin:0 0 6px}.ds-card p{margin:0;color:var(--muted,#636878)}"
+    },
+    {
+      "name": "Glass Panel",
+      "kind": "custom",
+      "refersTo": "glass-panel",
+      "description": "Floating chrome and Config panels only; solid under reduced transparency.",
+      "html": "<div class=\"ds-field-bg\"><section class=\"ds-glass\"><h2>Media storage</h2><p>Where generated images live so Instagram can fetch them.</p><span class=\"ds-count\">1/4 set</span></section></div>",
+      "css": ".ds-field-bg{padding:24px;border-radius:24px;background:radial-gradient(60% 70% at 85% 10%,rgb(255 90 31/.22),transparent 70%),radial-gradient(60% 70% at 5% 95%,rgb(37 99 235/.14),transparent 70%),var(--bg,#f6f6f8)}.ds-glass{position:relative;border-radius:20px;padding:18px 24px 20px;background:color-mix(in srgb,var(--surface,#fff) 64%,transparent);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);border:1px solid rgb(255 255 255/.7);box-shadow:inset 0 1px 0 rgb(255 255 255/.85),inset 0 -1px 0 rgb(16 18 26/.04),0 1px 1px rgb(16 18 26/.04),0 8px 28px -6px rgb(16 18 26/.12);font:400 15px var(--font,'Fira Sans',sans-serif);color:var(--ink,#12141a)}.ds-glass h2{font-size:17px;font-weight:600;margin:0}.ds-glass p{margin:3px 0 0;font-size:13.5px;color:var(--muted,#636878)}.ds-count{position:absolute;top:18px;right:24px;font-size:12px;font-weight:600;color:var(--muted,#636878)}@media (prefers-reduced-transparency:reduce){.ds-glass{background:var(--surface,#fff);backdrop-filter:none}}"
+    },
+    {
+      "name": "Readiness Ring",
+      "kind": "custom",
+      "description": "Conic progress ring; orange while incomplete, OK green at 100%.",
+      "html": "<div class=\"ds-ring\" style=\"--p:43\" role=\"img\" aria-label=\"3 of 7 ready\"><div><b>3/7</b><small>ready</small></div></div>",
+      "css": ".ds-ring{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(var(--brand,#ff5a1f) calc(var(--p)*1%),rgb(18 20 26/.09) 0);font-family:var(--font,'Fira Sans',sans-serif)}.ds-ring::before{content:'';position:absolute;inset:9px;border-radius:50%;background:var(--surface,#fff)}.ds-ring b{position:relative;display:block;font-size:26px;line-height:1;letter-spacing:-.02em;color:var(--ink,#12141a)}.ds-ring small{position:relative;display:block;text-align:center;font-size:11.5px;color:var(--muted,#636878)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Glass Control Room",
+    "overview": "**Creative North Star: \"The Glass Control Room\"**\n\nInfluencer OS is a control room for one operator running several AI creators. The room is calm and legible: the working surfaces (tables, cards, forms, previews) are solid, and only the controls that float above them are glass. That means the top bar, sidebar, menus, dialogs, toasts and the Config & keys panels. Behind the glass is a faint orange-and-blue light field, like screens glowing in a dim room. It gives the glass something to refract without ever competing with the content.\n\nDensity is moderate and task-first. The same pages must work in a few thumb taps on a phone on the shop floor and in long laptop set-up sessions. FeetBit orange is a signal, not a paint: it marks the one primary action, the active place in the nav, progress and counts. Everything else is ink on quiet neutrals. Light and dark themes are designed together and carry equal weight.\n\nThe feel is precise and quiet. It uses soft corners, hairline borders, one clear primary action per page, and short motion that confirms state rather than decorates.",
+    "keyCharacteristics": [
+      "Solid working surfaces; glass reserved for floating chrome and Config panels.",
+      "Orange used as a rare signal (10% or less of any screen).",
+      "Status always carries words or an icon as well as colour.",
+      "Light and dark designed as a pair; tabular figures everywhere.",
+      "Motion from 150 to 220ms, off under reduced motion; glass off under reduced transparency."
+    ],
+    "rules": [
+      {
+        "name": "The Rare Signal Rule",
+        "body": "Orange covers 10% or less of any screen: one primary button, the active nav item, progress, badges. If a second element wants orange, it probably wants ink or a semantic colour instead.",
+        "section": "colors"
+      },
+      {
+        "name": "The Colour-Plus-Words Rule",
+        "body": "No state is shown by colour alone. Every dot, pill, ring and tint has text or an icon next to it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number uses tabular figures (`tnum`), so counts, costs and times never jitter as they update.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sparse Caps Rule",
+        "body": "Uppercase tracking is for nav group headings, table headers and small source badges. It is never a kicker above every section.",
+        "section": "typography"
+      },
+      {
+        "name": "The Floating Glass Rule",
+        "body": "Glass is for surfaces that float over content (top bar, sidebar, menus, dialogs, toasts, sticky section bars) and for Config & keys panels. Tables, lists, previews and ordinary cards stay solid. If it doesn't float, it isn't glass.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Solid Fallback Rule",
+        "body": "Every glass surface has a solid twin. Without backdrop-filter support, or under `prefers-reduced-transparency` or `prefers-contrast: more`, glass becomes solid Surface, the light field disappears, and borders strengthen to Hairline Strong.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep orange to one primary action per page plus navigation, progress and badges (the Rare Signal Rule).",
+      "Do pair every status colour with a word or icon, and keep body text at 4.5:1 or better in both themes.",
+      "Do use glass only for floating chrome and Config panels, and give every glass surface its solid fallback.",
+      "Do design light and dark together, and check both before shipping.",
+      "Do make the daily jobs (approve, edit, see what broke) work one-handed at 375px, with 38–40px targets.",
+      "Do use Fira Code for anything copyable: keys, IDs, masked secrets, YAML."
+    ],
+    "donts": [
+      "Don't make tables, lists, previews or ordinary content cards glass.",
+      "Don't use orange for body text, large fills or decorative gradients.",
+      "Don't put uppercase tracked eyebrows above every section, or use gradient text.",
+      "Don't use side-stripe accent borders on cards or callouts. The nav's inset active bar is the one sanctioned exception.",
+      "Don't nest cards, or rely on hover alone for any action.",
+      "Don't animate longer than 220ms or animate layout; everything must still work under reduced motion."
+    ]
+  }
+}
