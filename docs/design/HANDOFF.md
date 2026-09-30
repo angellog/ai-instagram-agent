@@ -78,3 +78,9 @@ Type: Fira Sans (UI) and Fira Code (code/YAML). Body is 15px/1.55, H1 is 26px, t
 | Drawer | Menu | translateX | 220ms ease-out |
 | Toast | Appear | fade + 8px rise | 220ms |
 | KPI tile | Hover | 1px lift | 150ms |
+
+## Liquid glass material
+One translucent material (`--glass`, `--glass-strong`, `--glass-edge`, `--glass-hi`, `--glass-blur`) for surfaces that float over content: top bar, sidebar, mode/switcher menus, dialogs, toasts, and the Config & keys panels (`.glass`). A fixed, low-alpha brand light field (`body::before`, `--field-a/b/c`) sits behind the page so the glass has something to refract. Regular content cards stay solid.
+Fallbacks: no `backdrop-filter` support → solid `--surface`; `prefers-reduced-transparency` or `prefers-contrast: more` → solid surfaces, no light field.
+
+Config & keys (`/admin/config`): readiness ring + checklist (missing items first, each links to its section), a sticky glass section nav with per-section status dots and scroll-spy, and one glass panel per settings group with inset fields and a footer (encryption note, Test buttons, Save).

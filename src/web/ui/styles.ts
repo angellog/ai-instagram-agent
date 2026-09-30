@@ -33,6 +33,7 @@ main :where(a.btn,a.kpi,.thumbs a,.tabs a){color:inherit;text-decoration:none}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
 .skip{position:absolute;left:-999px;top:8px;background:var(--surface);padding:8px 12px;border-radius:8px;z-index:100}.skip:focus{left:8px}
 .i{flex:none;vertical-align:-3px}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 code,.mono,pre,kbd{font-family:var(--mono);font-size:.86em}
 /* ---------------------------------------------------------------- shell */
 .app{display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);min-height:100dvh}.col{min-width:0}main{min-width:0}
@@ -150,7 +151,7 @@ details summary{cursor:pointer;color:var(--ink-2)}
 .callout p{margin:0}.callout a{color:inherit}
 .kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0;font-size:14px}.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 12px;text-align:center}.stats div{background:var(--surface-2);border-radius:10px;padding:8px 4px;display:grid}.stats b{font-size:18px;font-variant-numeric:tabular-nums}.stats span{font-size:12px;color:var(--muted)}
-.secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.secret-row:not(:has(button)){grid-template-columns:minmax(0,1fr)}
 .src{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:6px;background:var(--surface-2);color:var(--muted)}
 .src.app{background:var(--ok-bg);color:var(--ok)}.src.env{background:var(--info-bg);color:var(--info)}
 /* ---------------------------------------------------------------- overlays */
@@ -175,6 +176,84 @@ dialog .dh{padding:18px 20px 0;font-weight:700;font-size:17px;flex:none}.dialog-
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi{padding:12px}.kpi-h{font-size:11.5px}
   .banner{padding:8px 16px;font-size:13px}.ph-actions{width:100%}.grid{grid-template-columns:minmax(0,1fr)}
   .cr-card{padding:16px}.ph h1{font-size:22px}.slides img{height:260px}.kpi-v{font-size:22px}th,td{padding:8px 6px}.card-b{padding:12px 14px 16px}.card-h{padding:12px 14px 0}.tw{margin:0 -14px;padding:0 14px}}
+/* ---------------------------------------------------------------- liquid glass
+   One material, used where depth means something: the chrome that floats over
+   content (top bar, section nav, menus, dialogs, toasts) and the Config panels.
+   A soft brand-tinted light field sits behind the page so the glass has
+   something to refract. Solid fallbacks: no backdrop-filter support,
+   prefers-reduced-transparency, and prefers-contrast:more. */
+:root{
+  --glass:color-mix(in srgb,var(--surface) 64%,transparent);--glass-strong:color-mix(in srgb,var(--surface) 80%,transparent);
+  --glass-edge:rgb(255 255 255/.7);--glass-line:rgb(16 18 26/.08);--glass-hi:inset 0 1px 0 rgb(255 255 255/.85),inset 0 -1px 0 rgb(16 18 26/.04);
+  --glass-blur:blur(22px) saturate(1.7);--glass-shadow:0 1px 1px rgb(16 18 26/.04),0 8px 28px -6px rgb(16 18 26/.12);
+  --field-a:rgb(255 90 31/.20);--field-b:rgb(37 99 235/.12);--field-c:rgb(255 170 60/.12);
+}
+:root[data-theme=dark]{--glass:color-mix(in srgb,var(--surface) 58%,transparent);--glass-strong:color-mix(in srgb,var(--surface) 78%,transparent);
+  --glass-edge:rgb(255 255 255/.14);--glass-line:rgb(255 255 255/.07);--glass-hi:inset 0 1px 0 rgb(255 255 255/.10),inset 0 -1px 0 rgb(0 0 0/.3);
+  --glass-shadow:0 1px 1px rgb(0 0 0/.3),0 12px 36px -8px rgb(0 0 0/.6);--field-a:rgb(255 106 51/.22);--field-b:rgb(90 120 255/.15);--field-c:rgb(255 150 60/.07)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--glass:color-mix(in srgb,var(--surface) 58%,transparent);--glass-strong:color-mix(in srgb,var(--surface) 78%,transparent);
+  --glass-edge:rgb(255 255 255/.14);--glass-line:rgb(255 255 255/.07);--glass-hi:inset 0 1px 0 rgb(255 255 255/.10),inset 0 -1px 0 rgb(0 0 0/.3);
+  --glass-shadow:0 1px 1px rgb(0 0 0/.3),0 12px 36px -8px rgb(0 0 0/.6);--field-a:rgb(255 106 51/.22);--field-b:rgb(90 120 255/.15);--field-c:rgb(255 150 60/.07)}}
+body::before{content:"";position:fixed;inset:-10vmax;z-index:-1;pointer-events:none;
+  background:radial-gradient(38vmax 30vmax at 82% 4%,var(--field-a),transparent 70%),radial-gradient(34vmax 28vmax at 8% 92%,var(--field-b),transparent 70%),radial-gradient(26vmax 22vmax at 48% 55%,var(--field-c),transparent 72%)}
+.glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+.glass{border:1px solid var(--glass-edge);box-shadow:var(--glass-hi),var(--glass-shadow)}
+.top{border-bottom:1px solid var(--glass-line);box-shadow:var(--glass-hi)}
+.side{border-right:1px solid var(--glass-line)}
+.mode-menu,.switch .menu,dialog{background:var(--glass-strong);border-color:var(--glass-edge);box-shadow:var(--glass-hi),var(--shadow-lg)}
+dialog::backdrop{background:rgb(10 12 16/.32);-webkit-backdrop-filter:blur(6px) saturate(1.2);backdrop-filter:blur(6px) saturate(1.2)}
+.dialog-f{background:transparent;border-top-color:var(--glass-line)}
+.toast{-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);background:color-mix(in srgb,var(--ink) 88%,transparent);box-shadow:inset 0 1px 0 rgb(255 255 255/.12),var(--shadow-lg)}
+.toast.bad{background:color-mix(in srgb,var(--bad) 92%,transparent)}
+.glass input,.glass select,.glass textarea{background:color-mix(in srgb,var(--surface) 72%,transparent);border-color:var(--glass-line);box-shadow:inset 0 1px 2px rgb(16 18 26/.06)}
+.glass input:hover,.glass select:hover{border-color:var(--line-2)}
+.glass input:focus,.glass select:focus,.glass textarea:focus{background:var(--surface);border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
+.glass .btn:not(.primary){background:color-mix(in srgb,var(--surface) 55%,transparent);border-color:var(--glass-line);box-shadow:var(--glass-hi)}
+.glass .btn:not(.primary):hover{background:var(--surface)}
+.glass .btn.primary{box-shadow:inset 0 1px 0 rgb(255 255 255/.28),0 6px 16px -6px color-mix(in srgb,var(--primary) 70%,transparent)}
+/* ---------------------------------------------------------------- config & keys */
+.cfg-ready{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s5) var(--s6);align-items:center;padding:var(--s5) var(--s6);border-radius:22px;margin-bottom:var(--s4)}
+.ring{--p:0;width:104px;height:104px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(var(--brand) calc(var(--p)*1%),color-mix(in srgb,var(--ink) 9%,transparent) 0)}
+.ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--glass-strong);box-shadow:var(--glass-hi)}
+.ring b{position:relative;font-size:26px;letter-spacing:-.02em;line-height:1}.ring small{position:relative;display:block;font-size:11.5px;color:var(--muted);text-align:center;margin-top:2px}
+.ring.full{background:conic-gradient(var(--ok) 100%,transparent 0)}
+.cfg-ready h2{margin:0;font-size:18px;letter-spacing:-.01em;text-wrap:balance}.cfg-ready>div>p{margin:4px 0 12px;color:var(--muted);font-size:14px;max-width:62ch}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.checks li{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 50%,transparent);border:1px solid var(--glass-line);font-size:13.5px}
+.checks li:has(>a){padding:0}.checks li>a{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;flex:1;border-radius:inherit;color:inherit;text-decoration:none;transition:background var(--t-fast)}.checks li>a:hover{background:color-mix(in srgb,var(--warn-bg) 60%,var(--surface))}.checks li>a>svg{color:var(--warn)}
+.checks li b{display:block;font-weight:600;color:var(--ink)}.checks li span.meta{display:block;line-height:1.4}
+.checks li.ok>svg{color:var(--ok)}.checks li.todo{background:color-mix(in srgb,var(--warn-bg) 70%,transparent);border-color:color-mix(in srgb,var(--warn) 22%,transparent)}.checks li.todo>svg{color:var(--warn)}
+.cfg-nav{position:sticky;top:61px;z-index:15;display:flex;gap:4px;padding:5px;margin:0 0 var(--s4);border-radius:16px;border:1px solid var(--glass-edge);box-shadow:var(--glass-hi),var(--glass-shadow);overflow-x:auto;scrollbar-width:none}
+.cfg-nav::-webkit-scrollbar{display:none}
+.cfg-nav a{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:11px;white-space:nowrap;text-decoration:none;color:var(--ink-2);font-size:14px;font-weight:500;transition:background var(--t-fast) var(--ease),color var(--t-fast)}
+.cfg-nav a:hover{background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--ink)}
+.cfg-nav a.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(16 18 26/.08),var(--glass-hi)}
+.cfg-nav .dot{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex:none}.cfg-nav .dot.ok{background:var(--ok)}.cfg-nav .dot.part{background:var(--warn)}
+.cfg-group{border-radius:20px;margin-bottom:var(--s4);scroll-margin-top:124px}
+.cfg-group .card-h{padding:18px var(--s6) 0;align-items:flex-start}.cfg-group .card-h h2{font-size:17px;letter-spacing:-.01em}
+.cfg-group .card-h .sub{margin:3px 0 0;color:var(--muted);font-size:13.5px;max-width:70ch}
+.cfg-group .card-b{padding:14px var(--s6) var(--s5)}
+.cfg-group .count{font-size:12px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cfg-group .cols{gap:4px 20px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.cfg-group .field{padding:12px 14px;margin:0 0 10px;border-radius:14px;background:color-mix(in srgb,var(--surface) 38%,transparent);border:1px solid var(--glass-line);transition:border-color var(--t-fast),background var(--t-fast)}
+.cfg-group .field:focus-within{background:color-mix(in srgb,var(--surface) 70%,transparent);border-color:color-mix(in srgb,var(--focus) 40%,transparent)}
+.cfg-group .field>label{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.cfg-group .field>label code{margin-left:auto;font-size:11.5px;padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.cfg-group .foot{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-top:6px;padding-top:14px;border-top:1px solid var(--glass-line)}
+.cfg-group .foot .meta{display:inline-flex;gap:6px;align-items:center}
+.src{border:1px solid transparent}.glass .src{background:color-mix(in srgb,var(--ink) 6%,transparent)}.glass .src.app{background:var(--ok-bg);color:var(--ok)}.glass .src.env{background:var(--info-bg);color:var(--info)}
+@media (max-width:1023px){.cfg-nav{top:57px}.cfg-group{scroll-margin-top:116px}}
+@media (max-width:640px){.cfg-ready{grid-template-columns:1fr;justify-items:start;padding:var(--s4)}.ring{width:84px;height:84px}.ring b{font-size:21px}
+  .cfg-group .card-h{padding:14px var(--s4) 0}.cfg-group .card-b{padding:12px var(--s4) var(--s4)}.cfg-group .cols{grid-template-columns:minmax(0,1fr)}.cfg-nav{border-radius:14px}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--surface)}.toast{background:var(--ink)}.toast.bad{background:var(--bad)}}
+@media (prefers-reduced-transparency:reduce),(prefers-contrast:more){
+  body::before{display:none}
+  .glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.toast{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .glass,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.ring::before{background:var(--surface)}.top{background:var(--bg)}
+  .toast{background:var(--ink)}.toast.bad{background:var(--bad)}
+  .glass,.cfg-nav{border-color:var(--line-2)}.cfg-group .field,.checks li{background:var(--surface-2);border-color:var(--line)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.side,.top,.toasts{display:none}.app{display:block}}
 `;

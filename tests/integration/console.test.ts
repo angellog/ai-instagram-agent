@@ -42,7 +42,7 @@ describe("Config page", () => {
     const page = await app.inject({ url: "/admin/config" });
     expect(page.body).toContain("fal-••••7890");
     expect(page.body).not.toContain("fal-abcdef-1234567890");
-    expect(page.body).toMatch(/Setup checklist/);
+    expect(page.body).toMatch(/aria-label="\d of \d+ ready"/);
     const cleared = await form("/admin/config", { _group: "generation", clear: "FAL_KEY" });
     expect(flash(cleared)).toBe("Saved 1 setting");
     expect(await setting("FAL_KEY")).toBeUndefined();

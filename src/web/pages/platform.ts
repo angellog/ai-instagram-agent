@@ -133,37 +133,55 @@ ${
       const has = (k: string) => view.find((v) => v.key === k)?.source !== "unset";
       const imageProviders = [...adapters().values()].filter((a) => a.id !== "mock" && a.credentialKeys.length && a.credentialKeys.every((k) => has(k)));
       const e = env();
-      const checklist: Array<[boolean, string, string]> = [
+      const checklist: Array<[boolean, string, string, string?]> = [
         [Boolean(e.ENCRYPTION_KEY), "Encryption key", "Set ENCRYPTION_KEY on the service (env only) so secrets saved here are encrypted."],
         [Boolean(e.ADMIN_TOKEN), "Console password", "Set ADMIN_TOKEN on the service (env only)."],
-        [has("LLM_API_KEY"), "Language model key", "Add your Anthropic (or compatible) key below."],
-        [imageProviders.length > 0, "An image provider", imageProviders.length ? `${imageProviders.map((a) => a.displayName).join(", ")}` : "Add at least one: kie.ai is the cheapest start."],
-        [has("SUPABASE_URL") && has("SUPABASE_SERVICE_ROLE_KEY") || has("IMGBB_API_KEY"), "Public media storage", "Supabase (preferred) or imgbb."],
-        [has("INSTAGRAM_APP_ID") && has("INSTAGRAM_APP_SECRET"), "Instagram app", "Needed for Connect Instagram and verifying webhooks."],
-        [has("OPENREPLY_RELAY_SECRET") || has("WEBHOOK_VERIFY_TOKEN"), "Webhook route", "OpenReply relay secret, or a verify token for direct Meta webhooks."],
+        [has("LLM_API_KEY"), "Language model key", "Add your Anthropic (or compatible) key below.", "llm"],
+        [imageProviders.length > 0, "An image provider", imageProviders.length ? `${imageProviders.map((a) => a.displayName).join(", ")}` : "Add at least one: kie.ai is the cheapest start.", "generation"],
+        [has("SUPABASE_URL") && has("SUPABASE_SERVICE_ROLE_KEY") || has("IMGBB_API_KEY"), "Public media storage", "Supabase (preferred) or imgbb.", "storage"],
+        [has("INSTAGRAM_APP_ID") && has("INSTAGRAM_APP_SECRET"), "Instagram app", "Needed for Connect Instagram and verifying webhooks.", "instagram"],
+        [has("OPENREPLY_RELAY_SECRET") || has("WEBHOOK_VERIFY_TOKEN"), "Webhook route", "OpenReply relay secret, or a verify token for direct Meta webhooks.", "openreply"],
       ];
       const done_ = checklist.filter((c) => c[0]).length;
+      const pct = Math.round((done_ / checklist.length) * 100);
+      const groups = GROUPS.map(([g, title, sub]) => {
+        const items = view.filter((v) => v.group === g);
+        return { g, title, sub, items, set: items.filter((i) => i.source !== "unset").length };
+      });
+      const state = (set: number, total: number) => (set === 0 ? "" : set >= total ? "ok" : "part");
       const body = `${header("Config & keys", {
         sub: "Set up every service in one place. Values saved here are encrypted, override environment variables, and apply to web and worker within ~15 seconds — no redeploy.",
       })}
-${card(
-  `<div class="row" style="margin-bottom:8px"><b>${done_}/${checklist.length} ready</b></div>${bar(done_, checklist.length)}
-  <ul class="list">${checklist.map(([ok, t, h]) => `<li>${ok ? `<span style="color:var(--ok)">${icon("check", 18, "done")}</span>` : `<span style="color:var(--warn)">${icon("alert", 18, "missing")}</span>`}<div><b>${esc(t)}</b><div class="meta">${esc(h)}</div></div></li>`).join("")}</ul>`,
-  { title: "Setup checklist" },
-)}
-${tabs(GROUPS.map(([g, t]) => ({ href: `#${g}`, label: t })))}
-${GROUPS.map(([g, title, sub]) => {
-  const items = view.filter((v) => v.group === g);
-  const providers = [...new Set(items.map((i) => i.provider).filter((p): p is string => Boolean(p) && TESTABLE.has(p!)))];
-  const tests = providers
-    .map((p) => `<form method="post" action="/admin/config/test/${p}" data-async class="inline">${button(`Test ${p}`, { small: true, icon: "zap", variant: "ghost" })}</form>`)
-    .join("");
-  return card(`<p class="meta" style="margin-top:0">${esc(sub)}</p><form method="post" action="/admin/config#${g}" autocomplete="off"><input type="hidden" name="_group" value="${g}"><div class="cols">${items.map(settingRow).join("")}</div>${button("Save", { variant: "primary", icon: "check" })}</form>`, {
-    title,
-    id: g,
-    actions: tests,
-  });
-}).join("")}`;
+<section class="cfg-ready glass" aria-labelledby="ready-h">
+  <div class="ring${done_ === checklist.length ? " full" : ""}" style="--p:${pct}" role="img" aria-label="${done_} of ${checklist.length} ready"><div><b>${done_}/${checklist.length}</b><small>ready</small></div></div>
+  <div><h2 id="ready-h">${done_ === checklist.length ? "Everything the engine needs is in place" : `${checklist.length - done_} thing${checklist.length - done_ === 1 ? "" : "s"} left before the engine can run on its own`}</h2>
+  <p>Missing items come first. Tap one to jump to where you add it.</p>
+  <ul class="checks">${[...checklist]
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([ok, t, h, g]) => {
+      const inner = `${ok ? icon("check", 18, "done") : icon("alert", 18, "missing")}<div><b>${esc(t)}</b><span class="meta">${esc(h)}</span></div>`;
+      return `<li class="${ok ? "ok" : "todo"}">${g && !ok ? `<a href="#${g}">${inner}</a>` : inner}</li>`;
+    })
+    .join("")}</ul></div>
+</section>
+<nav class="cfg-nav" aria-label="Config sections">${groups
+        .map(({ g, title, items, set }) => `<a href="#${g}" data-spy="${g}"><span class="dot ${state(set, items.length)}" aria-hidden="true"></span>${esc(title)}<span class="visually-hidden">: ${set} of ${items.length} set</span></a>`)
+        .join("")}</nav>
+${groups
+  .map(({ g, title, sub, items, set }) => {
+    const providers = [...new Set(items.map((i) => i.provider).filter((p): p is string => Boolean(p) && TESTABLE.has(p!)))];
+    const tests = providers
+      .map((p) => `<form method="post" action="/admin/config/test/${p}" data-async class="inline">${button(`Test ${p}`, { small: true, icon: "zap", variant: "ghost" })}</form>`)
+      .join("");
+    return `<section class="card cfg-group glass" id="${g}" aria-labelledby="h-${g}"><div class="card-h"><div><h2 id="h-${g}">${esc(title)}</h2><p class="sub">${esc(sub)}</p></div><span class="count">${set}/${items.length} set</span></div>
+<div class="card-b"><form method="post" action="/admin/config#${g}" autocomplete="off"><input type="hidden" name="_group" value="${g}"><div class="cols">${items.map(settingRow).join("")}</div>
+<div class="foot"><span class="meta">${icon("lock", 14)} Encrypted at rest. Empty fields keep their current value.</span><div class="row">${tests}${button("Save", { variant: "primary", icon: "check" })}</div></div></form></div></section>`;
+  })
+  .join("")}
+<script>(function(){var links=[].slice.call(document.querySelectorAll(".cfg-nav a")),secs=links.map(function(a){return document.getElementById(a.dataset.spy)}).filter(Boolean),cur,tick;if(!secs.length)return;
+function spy(){tick=0;var id=secs[0].id;secs.forEach(function(s){if(s.getBoundingClientRect().top<=150)id=s.id});if(innerHeight+scrollY>=document.documentElement.scrollHeight-2)id=secs[secs.length-1].id;if(id===cur)return;cur=id;
+links.forEach(function(a){var m=a.dataset.spy===id;a.classList.toggle("on",m);if(m){a.setAttribute("aria-current","true");a.parentNode.scrollTo({left:a.offsetLeft-a.parentNode.clientWidth/2+a.clientWidth/2,behavior:"smooth"})}else a.removeAttribute("aria-current")})}
+addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{passive:true});addEventListener("hashchange",spy);spy()})();</script>`;
       return render(req, reply, { title: "Config & keys", active: "config", body });
     },
     { platform: true },
