@@ -110,11 +110,20 @@ export class OpenAICompatibleProvider implements LLMProvider {
     return tier === "fast" ? this.cfg.fastModel : this.cfg.model;
   }
 
+  /** OpenAI's own API (not OpenRouter & co.): newer models take max_completion_tokens and may think before answering. */
+  private get isOpenAI(): boolean {
+    return /(^|\.)openai\.com$/.test(safeHost(this.cfg.baseURL));
+  }
+
   async complete(req: CompletionRequest): Promise<CompletionResult> {
     const model = this.modelFor(req.tier);
+    const openai = this.isOpenAI;
     const body: Record<string, unknown> = {
       model,
-      max_tokens: req.maxTokens,
+      // Hidden reasoning counts against the completion budget on OpenAI; pad it so a
+      // short answer (a 900-token story plan) is not starved into an empty reply.
+      // Only tokens actually used are billed.
+      ...(openai ? { max_completion_tokens: Math.max(req.maxTokens * 2, req.maxTokens + 4000) } : { max_tokens: req.maxTokens }),
       messages: [{ role: "system", content: req.system }, ...withImagesOpenAI(req)],
       ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
     };
@@ -124,33 +133,55 @@ export class OpenAICompatibleProvider implements LLMProvider {
         json_schema: { name: req.jsonSchema.name, schema: z.toJSONSchema(req.jsonSchema.schema), strict: false },
       };
     }
-    const ctrl = AbortSignal.timeout(req.timeoutMs ?? this.cfg.timeoutMs);
-    let res: Response;
+    let res = await this.post(body, req);
+    let text = await res.text();
+    // Some models accept only the default temperature; retry once without it.
+    if (res.status === 400 && "temperature" in body && /temperature/i.test(text)) {
+      delete body.temperature;
+      res = await this.post(body, req);
+      text = await res.text();
+    }
+    if (res.status === 429) throw new RateLimitedError("llm rate limited", 30_000);
+    if (res.status >= 500) throw new TransientError(`llm ${res.status}: ${text.slice(0, 200)}`);
+    if (res.status === 401) throw new PermanentError(`llm 401: the API key was refused (${model}). Check the key on Config & keys.`);
+    if (!res.ok) throw new PermanentError(`llm ${res.status}: ${text.slice(0, 300)}`);
+    const json = JSON.parse(text) as {
+      model?: string;
+      choices?: Array<{ message?: { content?: string | null; refusal?: string | null }; finish_reason?: string }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    const choice = json.choices?.[0];
+    const content = choice?.message?.content ?? "";
+    if (!content && choice?.message?.refusal) throw new PermanentError(`llm refused: ${choice.message.refusal.slice(0, 200)}`);
+    if (!content && choice?.finish_reason === "length") throw new TransientError(`llm ${model}: ran out of tokens before answering (reasoning used the budget)`);
+    return {
+      text: content,
+      model: json.model ?? model,
+      inputTokens: json.usage?.prompt_tokens ?? 0,
+      outputTokens: json.usage?.completion_tokens ?? 0,
+      stopReason: choice?.finish_reason,
+    };
+  }
+
+  private async post(body: Record<string, unknown>, req: CompletionRequest): Promise<Response> {
     try {
-      res = await this.fetchImpl(`${this.cfg.baseURL.replace(/\/$/, "")}/chat/completions`, {
+      return await this.fetchImpl(`${this.cfg.baseURL.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${this.cfg.apiKey}` },
         body: JSON.stringify(body),
-        signal: ctrl,
+        signal: AbortSignal.timeout(req.timeoutMs ?? this.cfg.timeoutMs),
       });
     } catch (e) {
       throw new TransientError(`llm connection: ${(e as Error).message}`);
     }
-    const text = await res.text();
-    if (res.status === 429) throw new RateLimitedError("llm rate limited", 30_000);
-    if (res.status >= 500) throw new TransientError(`llm ${res.status}: ${text.slice(0, 200)}`);
-    if (!res.ok) throw new PermanentError(`llm ${res.status}: ${text.slice(0, 300)}`);
-    const json = JSON.parse(text) as {
-      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-    return {
-      text: json.choices?.[0]?.message?.content ?? "",
-      model,
-      inputTokens: json.usage?.prompt_tokens ?? 0,
-      outputTokens: json.usage?.completion_tokens ?? 0,
-      stopReason: json.choices?.[0]?.finish_reason,
-    };
+  }
+}
+
+function safeHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
   }
 }
 
@@ -253,6 +284,7 @@ export function providerFromConfig(c: LLMConfig): LLMProvider {
  */
 export class SettingsProvider implements LLMProvider {
   private current?: { fingerprint: string; provider: LLMProvider };
+  private readonly built = new Map<string, LLMProvider>();
   private last?: LLMConfig;
 
   constructor(
@@ -273,8 +305,15 @@ export class SettingsProvider implements LLMProvider {
     const c = await this.resolve();
     this.last = c;
     const fingerprint = JSON.stringify([c.provider, c.apiKey, c.baseURL, c.model, c.fastModel, c.timeoutMs]);
-    if (!this.current || this.current.fingerprint !== fingerprint) this.current = { fingerprint, provider: this.build(c) };
-    return this.current.provider;
+    // One client per distinct config (Claude influencers and OpenAI influencers alternate).
+    let provider = this.built.get(fingerprint);
+    if (!provider) {
+      provider = this.build(c);
+      if (this.built.size >= 8) this.built.clear();
+      this.built.set(fingerprint, provider);
+    }
+    this.current = { fingerprint, provider };
+    return provider;
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {

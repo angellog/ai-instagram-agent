@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.22: OpenAI as a second brain, chosen per influencer
+
+- **Language model brain** in each influencer's Controls: Claude (Anthropic) or OpenAI (GPT). Everyone else keeps their own setting, so the two can run side by side. Platform-level calls stay on the default.
+- **Config & keys → Language model:** OpenAI API key, reasoning model (default `gpt-6.1-sol`, $2/$10 per million tokens) and fast model (default `gpt-6-luna`, $0.10/$0.50). **Test openai** checks both models and that the reasoning model can read images (photo checks need it).
+- **OpenAI-ready provider:** uses `max_completion_tokens` with room for hidden reasoning on api.openai.com, retries once without `temperature` when a model only allows the default, and turns an empty reasoning-starved reply or a refused key into a clear error.
+- **Costs:** OpenAI prices in the ledger, including dated snapshots (`gpt-6.1-sol-2026-08-12`). New **Claude vs OpenAI (14 days)** table: brain, models used, calls, LLM spend, cost per post plan, repair rate (wrong-shape replies that had to be re-asked) and replies decided.
+- **Safe fallback:** an influencer set to OpenAI with no OpenAI key stays on Claude and logs a warning (once an hour), instead of failing its posts and replies.
+
 ## v1.0.21: Direct "Create a post now"
 
 - **Direction box** on Create a post now: a few words (a product, place, occasion or mood, up to 300 characters) that the content director must build the post or story around. Example chips fill it in one tap. Leave it empty to let the influencer pick, as before.

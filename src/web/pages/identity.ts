@@ -19,6 +19,7 @@ import { action, ago, avatar, button, card, empty, esc, field, header, icon, inp
 
 const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Operating mode", "What is allowed to go out.", ["mode", "paused", "require_review_for_yellow"]],
+  ["Language model brain", "Which AI writes this influencer's plans, captions, replies and checks. Everyone else keeps their own setting, so you can compare side by side on Costs.", ["llm_brain"]],
   ["Features", "Switch whole capabilities on or off.", ["conversation_enabled", "content_enabled", "image_generation_enabled", "carousel_generation_enabled"]],
   ["Posting cadence", "Hours are in the persona's local time.", ["max_posts_per_day", "min_hours_between_posts", "posting_window_start_hour", "posting_window_end_hour"]],
   ["TikTok", "Defaults for TikTok posts; each post can be changed before it goes out. Private until TikTok approves the app.", ["tiktok_enabled", "tiktok_default_privacy", "tiktok_allow_comments"]],
@@ -51,6 +52,7 @@ function tiktokCard(tk: TikTokAccountRow | undefined, appReady: boolean, audited
 }
 
 const HELP: Partial<Record<keyof Controls, string>> = {
+  llm_brain: "OpenAI uses the OpenAI key and models on Config & keys (Test openai there first). Without a key this influencer stays on Claude and a warning is logged.",
   mode: "development: no external writes · dry_run: full pipeline, nothing sent · human_approval: everything waits for you · autonomous: green goes out on its own",
   optional_reply_rate: "0–1. Chance of answering comments that don't strictly need a reply.",
   repetition_threshold: "0–1. Higher = stricter about repeating past posts.",
@@ -242,6 +244,7 @@ ${card(
       const v = c[k];
       if (k === "mode") return select("mode", ["development", "dry_run", "human_approval", "autonomous"], v);
       if (typeof v === "boolean") return select(k, [["true", "On"], ["false", "Off"]], String(v));
+      if (k === "llm_brain") return select(k, [["claude", "Claude (Anthropic)"], ["openai", "OpenAI (GPT)"]], String(v));
       if (k === "tiktok_default_privacy")
         return select(k, [["PUBLIC_TO_EVERYONE", "Everyone"], ["FOLLOWER_OF_CREATOR", "Followers"], ["MUTUAL_FOLLOW_FRIENDS", "Friends"], ["SELF_ONLY", "Only me"]], String(v));
       return input(k, v, { type: "number", attrs: 'step="any" inputmode="decimal"' });
@@ -249,7 +252,7 @@ ${card(
     const body = `${header("Controls", { sub: `Operating rules for ${esc(currentInfluencer().name)}. Changes apply within seconds; no deploy.` })}
 <form method="post" action="/admin/controls">
 ${CONTROL_GROUPS.map(([title, sub, keys]) =>
-  card(`${sub ? `<p class="meta" style="margin-top:0">${esc(sub)}</p>` : ""}<div class="cols">${keys.map((k) => field(k.replace(/_/g, " "), control(k), { help: HELP[k] })).join("")}</div>`, { title }),
+  card(`${sub ? `<p class="meta" style="margin-top:0">${esc(sub)}</p>` : ""}<div class="cols">${keys.map((k) => field(k.replace(/_/g, " "), control(k), { help: HELP[k] })).join("")}</div>`, { title, id: keys.includes("llm_brain") ? "brain" : undefined }),
 ).join("")}
 <div class="row">${button("Save controls", { variant: "primary", icon: "check" })}${link("Platform budgets", "/admin/costs#platform", { variant: "ghost" })}</div>
 </form>`;

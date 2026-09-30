@@ -6,6 +6,9 @@ import { PermanentError } from "../lib/errors.js";
 import { logger } from "../lib/logger.js";
 import { SettingsProvider, type LLMConfig } from "./providers.js";
 import { setting } from "../config/settings.js";
+import { getControls } from "../config/controls.js";
+import { maybeInfluencer } from "../context.js";
+import { recordEvent } from "../lib/events.js";
 import type { ChatMessage, InputImage, LLMProvider, Tier } from "./types.js";
 
 export class MalformedOutputError extends PermanentError {
@@ -202,9 +205,47 @@ export function llm(): LLM {
   return instance;
 }
 
-/** LLM config: Config page (app_settings) first, then environment. */
+export const OPENAI_BASE_URL = "https://api.openai.com/v1";
+export const OPENAI_DEFAULT_MODEL = "gpt-6.1-sol";
+export const OPENAI_DEFAULT_FAST_MODEL = "gpt-6-luna";
+
+/** Last time each influencer was warned that it wants OpenAI but has no key (one event per hour). */
+const warned = new Map<number, number>();
+
+/** Which brain an influencer is set to, and whether it can actually run it. */
+export async function brainFor(influencerId?: number): Promise<{ wanted: "claude" | "openai"; active: "claude" | "openai"; reason?: string }> {
+  const id = influencerId ?? maybeInfluencer()?.id;
+  if (!id) return { wanted: "claude", active: "claude" };
+  const wanted = (await getControls(false, id)).llm_brain;
+  if (wanted === "openai" && !(await setting("OPENAI_API_KEY"))) return { wanted, active: "claude", reason: "no OpenAI API key on Config & keys" };
+  return { wanted, active: wanted };
+}
+
+/**
+ * LLM config for the current influencer: Config page (app_settings) first, then
+ * environment. An influencer whose Controls pick the OpenAI brain runs on the
+ * OpenAI key and models; everyone else (and platform-level calls) on the default.
+ */
 export async function llmConfig(): Promise<LLMConfig> {
   const e = env();
+  const brain = await brainFor();
+  if (brain.active === "openai") {
+    return {
+      provider: "openai_compatible",
+      apiKey: await setting("OPENAI_API_KEY"),
+      baseURL: OPENAI_BASE_URL,
+      model: (await setting("OPENAI_MODEL")) ?? OPENAI_DEFAULT_MODEL,
+      fastModel: (await setting("OPENAI_FAST_MODEL")) ?? OPENAI_DEFAULT_FAST_MODEL,
+      timeoutMs: e.LLM_TIMEOUT_MS,
+    };
+  }
+  if (brain.reason) {
+    const id = maybeInfluencer()!.id;
+    if (Date.now() - (warned.get(id) ?? 0) > 3600_000) {
+      warned.set(id, Date.now());
+      await recordEvent("warn", "llm", `Set to the OpenAI brain but running on Claude: ${brain.reason}`, {});
+    }
+  }
   return {
     provider: (await setting("LLM_PROVIDER")) ?? e.LLM_PROVIDER,
     apiKey: await setting("LLM_API_KEY"),

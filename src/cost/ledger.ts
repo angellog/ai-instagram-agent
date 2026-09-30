@@ -23,13 +23,29 @@ export const LLM_PRICES: Record<string, { input: number; output: number }> = {
   "claude-haiku-4-5": { input: 1, output: 5 },
   "claude-opus-5-5": { input: 4, output: 20 },
   "claude-opus-5": { input: 4, output: 20 },
+  // OpenAI, standard tier (developers.openai.com/api/docs/pricing, checked 2026-09-30).
+  "gpt-6.1-sol": { input: 2, output: 10 },
+  "gpt-6-sol": { input: 2, output: 10 },
+  "gpt-6-luna": { input: 0.1, output: 0.5 },
+  "gpt-6-astra": { input: 10, output: 50 },
+  "gpt-5.6-sol": { input: 4, output: 20 },
+  "gpt-5.6-terra": { input: 2, output: 12 },
+  "gpt-5.6-luna": { input: 0.2, output: 1.2 },
+  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
+  "gpt-5-mini": { input: 0.25, output: 2 },
+  "gpt-4o": { input: 2.5, output: 10 },
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
   mock: { input: 0, output: 0 },
 };
 
 export function llmCostUsd(model: string, inputTokens: number, outputTokens: number): number {
   // Unknown models (e.g. an OpenRouter slug) are priced like Sonnet so budgets
   // stay conservative rather than silently free.
-  const key = Object.keys(LLM_PRICES).find((k) => model === k || model.endsWith(`/${k}`));
+  // Exact id, an OpenRouter-style "vendor/id", or a dated snapshot ("gpt-6.1-sol-2026-08-12"); longest match wins.
+  const bare = model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+  const key = Object.keys(LLM_PRICES)
+    .filter((k) => bare === k || bare.startsWith(`${k}-`))
+    .sort((a, b) => b.length - a.length)[0];
   const p = key ? LLM_PRICES[key] : LLM_PRICES["claude-sonnet-5"];
   return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
 }

@@ -32,6 +32,9 @@ export const SETTINGS: SettingDef[] = [
   { key: "LLM_BASE_URL", label: "LLM base URL", group: "llm", secret: false, help: "Only for openai_compatible, e.g. https://openrouter.ai/api/v1.", provider: "llm" },
   { key: "LLM_MODEL", label: "Reasoning model", group: "llm", secret: false, help: "Planning, replies, vision QC. Default claude-sonnet-5.", placeholder: "claude-sonnet-5" },
   { key: "LLM_FAST_MODEL", label: "Fast model", group: "llm", secret: false, help: "Classification, moderation, memory. Default claude-haiku-4-5-20251001.", placeholder: "claude-haiku-4-5-20251001" },
+  { key: "OPENAI_API_KEY", label: "OpenAI API key", group: "llm", secret: true, help: "platform.openai.com → API keys. Only used by influencers whose Controls → Language model brain is set to OpenAI.", placeholder: "sk-proj-…", provider: "openai" },
+  { key: "OPENAI_MODEL", label: "OpenAI reasoning model", group: "llm", secret: false, help: "Planning, replies, vision QC for OpenAI influencers. Default gpt-6.1-sol.", placeholder: "gpt-6.1-sol" },
+  { key: "OPENAI_FAST_MODEL", label: "OpenAI fast model", group: "llm", secret: false, help: "Classification, moderation, memory for OpenAI influencers. Default gpt-6-luna.", placeholder: "gpt-6-luna" },
   // Generation providers
   { key: "KIE_API_KEY", label: "kie.ai key", group: "generation", secret: true, help: "kie.ai → API keys. The default image provider.", provider: "kie" },
   { key: "KIE_API_KEY_2", label: "kie.ai key 2 (failover)", group: "generation", secret: true, help: "Used when key 1 is out of credits (402).", provider: "kie" },

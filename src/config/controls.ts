@@ -14,6 +14,9 @@ export const controlsSchema = z.object({
   // autonomous: GREEN goes out automatically, YELLOW per require_review_for_yellow
   mode: z.enum(["development", "dry_run", "human_approval", "autonomous"]).default("human_approval"),
   paused: z.boolean().default(false),
+  // Which language model runs this influencer's planning, replies and checks.
+  // "openai" needs OPENAI_API_KEY; without it the influencer stays on Claude (with a warning).
+  llm_brain: z.enum(["claude", "openai"]).default("claude"),
 
   conversation_enabled: z.boolean().default(true),
   content_enabled: z.boolean().default(true),

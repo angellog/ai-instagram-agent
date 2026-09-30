@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import sharp from "sharp";
 import { getControls, PLATFORM, setControls } from "../../config/controls.js";
 import { env } from "../../config/env.js";
-import { clearSetting, setSetting, settingsView, SETTINGS, type SettingGroup, type SettingView } from "../../config/settings.js";
+import { clearSetting, setSetting, setting, settingsView, SETTINGS, type SettingGroup, type SettingView } from "../../config/settings.js";
 import { maybeInfluencer, withInfluencer } from "../../context.js";
 import { syncProfile } from "../../instagram/profileSync.js";
 import { costByOperation, costReport, spendSummary } from "../../cost/ledger.js";
@@ -10,7 +10,9 @@ import { many, one } from "../../db/pool.js";
 import { adapters } from "../../generation/adapters/index.js";
 import { validateProvider } from "../../generation/registry.js";
 import { allInfluencers, setStatus } from "../../influencers/manage.js";
-import { llm } from "../../llm/llm.js";
+import { brainFor, llm, OPENAI_BASE_URL, OPENAI_DEFAULT_FAST_MODEL, OPENAI_DEFAULT_MODEL } from "../../llm/llm.js";
+import { OpenAICompatibleProvider } from "../../llm/providers.js";
+import type { CompletionRequest } from "../../llm/types.js";
 import { notify } from "../../notify/telegram.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
 import { hostImage } from "../../storage/host.js";
@@ -28,7 +30,7 @@ const GROUPS: Array<[SettingGroup, string, string]> = [
   ["alerts", "Alerts", "Where the agent pings you about reviews and failures."],
 ];
 
-const TESTABLE = new Set(["llm", "supabase", "imgbb", "telegram", ...["kie", "higgsfield", "fal", "replicate", "runway", "luma", "topview"]]);
+const TESTABLE = new Set(["llm", "openai", "supabase", "imgbb", "telegram", ...["kie", "higgsfield", "fal", "replicate", "runway", "luma", "topview"]]);
 
 function settingRow(s: SettingView): string {
   const id = `set-${s.key}`;
@@ -40,6 +42,45 @@ function settingRow(s: SettingView): string {
   return `<div class="field"><label for="${id}">${esc(s.label)} <span class="src ${s.source}">${s.source === "app" ? "set here" : s.source === "env" ? "from env" : "not set"}</span>${
     s.display && s.secret ? ` <code class="meta">${esc(s.display)}</code>` : s.display && s.source === "env" ? ` <code class="meta">${esc(s.display)}</code>` : ""
   }</label>${control}<p class="help">${esc(s.help)}${s.source === "app" ? ` <label class="small"><input type="checkbox" name="clear" value="${s.key}"> clear (fall back to env)</label>` : ""}</p></div>`;
+}
+
+/** Config → Test openai: both models answer, and the reasoning model can see an image (photo checks need it). */
+async function testOpenAI(): Promise<string> {
+  const key = await setting("OPENAI_API_KEY");
+  if (!key) throw new Error("add the OpenAI API key first");
+  const model = (await setting("OPENAI_MODEL")) ?? OPENAI_DEFAULT_MODEL;
+  const fastModel = (await setting("OPENAI_FAST_MODEL")) ?? OPENAI_DEFAULT_FAST_MODEL;
+  const provider = new OpenAICompatibleProvider({ apiKey: key, baseURL: OPENAI_BASE_URL, model, fastModel, timeoutMs: 60_000 });
+  const ask = (tier: "smart" | "fast", images?: CompletionRequest["images"]) =>
+    provider.complete({ operation: "config.test", tier, maxTokens: 20, system: "Reply with exactly: OK", messages: [{ role: "user", content: images ? "What colour is this square? One word." : "ping" }], images });
+  const [smart, fast] = await Promise.all([ask("smart"), ask("fast")]);
+  const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: { r: 255, g: 90, b: 31 } } }).png().toBuffer();
+  const vision = await ask("smart", [{ mediaType: "image/png", data: png.toString("base64") }])
+    .then((r) => `images OK (${r.text.trim().slice(0, 20)})`)
+    .catch((e) => `images FAILED: ${(e as Error).message.slice(0, 120)}. Photo checks need a model that reads images.`);
+  return `OpenAI answered: ${smart.model} "${smart.text.trim().slice(0, 10)}", ${fast.model} "${fast.text.trim().slice(0, 10)}"; ${vision}`;
+}
+
+/** Per-influencer language-model use for the brain comparison on Costs. */
+async function brainComparison(days: number): Promise<Array<{ name: string; brain: string; active: string; models: string[]; calls: number; usd: number; plans: number; planUsd: number; repairs: number; replies: number }>> {
+  const rows = await many<{ id: number; name: string; models: string[] | null; calls: number; usd: number; plans: number; plan_usd: number; repairs: number; replies: number }>(
+    `SELECT i.id, i.name,
+       array_remove(array_agg(DISTINCT c.model), NULL) AS models,
+       count(c.*)::int AS calls, coalesce(sum(c.cost_usd), 0)::float AS usd,
+       count(*) FILTER (WHERE c.operation IN ('content.plan', 'story.plan'))::int AS plans,
+       coalesce(sum(c.cost_usd) FILTER (WHERE c.operation LIKE 'content.plan%' OR c.operation LIKE 'story.plan%'), 0)::float AS plan_usd,
+       count(*) FILTER (WHERE c.operation LIKE '%.repair')::int AS repairs,
+       count(*) FILTER (WHERE c.operation = 'conversation.decide')::int AS replies
+     FROM influencers i LEFT JOIN cost_ledger c ON c.influencer_id = i.id AND c.category = 'llm' AND c.occurred_at > now() - make_interval(days => $1)
+     GROUP BY i.id, i.name ORDER BY i.id`,
+    [days],
+  );
+  return Promise.all(
+    rows.map(async (r) => {
+      const b = await brainFor(r.id);
+      return { name: r.name, brain: b.wanted, active: b.active, models: r.models ?? [], calls: r.calls, usd: r.usd, plans: r.plans, planUsd: r.plan_usd, repairs: r.repairs, replies: r.replies };
+    }),
+  );
 }
 
 export function registerPlatform(app: FastifyInstance): void {
@@ -217,6 +258,8 @@ addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{
         if (p === "llm") {
           const out = await llm().generate({ operation: "config.test", tier: "fast", maxTokens: 10, system: "Reply with exactly: OK", prompt: "ping" });
           msg = `LLM answered: ${out.trim().slice(0, 40)}`;
+        } else if (p === "openai") {
+          msg = await testOpenAI();
         } else if (p === "supabase" || p === "imgbb") {
           const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: { r: 255, g: 90, b: 31 } } }).jpeg().toBuffer();
           const r = await hostImage(png, `system/config-check-${p}.jpg`, { order: [p] });
@@ -261,6 +304,7 @@ addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{
           : Promise.resolve([]),
         inf ? getControls() : Promise.resolve(undefined),
       ]);
+      const brains = await brainComparison(14);
       const body = `${header("Costs", { sub: "Every paid call is budget-checked before it runs and recorded after." })}
 <div class="kpis">
 ${kpi("Platform today", usd(all.today), { icon: "wallet", hint: `cap ${usd(platform.platform_daily_budget_usd)}` })}
@@ -278,6 +322,24 @@ ${card(
 )}
 ${card(table(["Influencer", "Today", "Month"], perInf.map((p) => [esc(p.name), usd(p.today), usd(p.month)])), { title: "By influencer" })}
 </div>
+${card(
+  `<p class="meta" style="margin-top:0">Language-model spend and output per influencer over the last 14 days, to compare Claude and OpenAI. A <b>repair</b> is a reply that came back in the wrong shape and had to be asked again; fewer is better. Choose each influencer's brain in its <a href="/admin/controls#brain">Controls</a>.</p>
+  ${table(
+    ["Influencer", "Brain", "Models used", "Calls", "LLM USD", "Per post plan", "Repairs", "Replies decided"],
+    brains.map((b) => [
+      esc(b.name),
+      b.brain === "openai" ? (b.active === "openai" ? `<span class="pill info">OpenAI</span>` : `<span class="pill warn">OpenAI (no key: on Claude)</span>`) : `<span class="pill">Claude</span>`,
+      b.models.length ? b.models.map((m) => `<code>${esc(m)}</code>`).join(" ") : `<span class="muted">—</span>`,
+      String(b.calls),
+      usd(b.usd),
+      b.plans ? usd(b.planUsd / b.plans) : `<span class="muted">—</span>`,
+      b.calls ? `${b.repairs} (${Math.round((b.repairs / Math.max(b.calls - b.repairs, 1)) * 100)}%)` : "0",
+      String(b.replies),
+    ]),
+    "No language-model calls in the last 14 days.",
+  )}`,
+  { title: "Claude vs OpenAI (14 days)", id: "brains" },
+)}
 ${
   inf && c
     ? `<div class="grid">${card(table(["Category", "Operation", "Calls", "USD"], byOp.map((o) => [esc(o.category), `<code>${esc(o.operation)}</code>`, String(o.n), usd(o.usd)])), { title: `${inf.name}: by operation (30d)` })}
