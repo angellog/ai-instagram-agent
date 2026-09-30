@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { billingBlocks } from "../llm/billing.js";
 import { getControls } from "../config/controls.js";
 import { env } from "../config/env.js";
 import { loadInfluencer, maybeInfluencer, runInContext, withInfluencerLoose, type InfluencerContext } from "../context.js";
@@ -116,6 +117,7 @@ export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
     pending = (await one<{ n: number }>("SELECT count(*)::int AS n FROM safety_reviews WHERE status = 'pending' AND influencer_id = $1", [ctx.id]))?.n ?? 0;
   }
   const flash = typeof req.query?.flash === "string" ? req.query.flash : undefined;
+  const outOfCredit = await billingBlocks();
   return reply.type("text/html").send(
     shell({
       ...p,
@@ -126,6 +128,7 @@ export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
       paused,
       disconnected,
       tiktokDisconnected,
+      outOfCredit,
       pendingReviews: pending,
       openAccess: !env().ADMIN_TOKEN,
     }),

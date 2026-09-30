@@ -26,6 +26,7 @@ export interface ShellContext {
   disconnected?: { username: string; since: Date | null };
   /** The current influencer's TikTok login was ended. */
   tiktokDisconnected?: { username: string; since: Date | null };
+  outOfCredit?: Array<{ brain: "claude" | "openai"; since: string; message: string }>;
   pendingReviews?: number;
   openAccess?: boolean;
   head?: string;
@@ -163,6 +164,11 @@ export function shell(o: ShellContext): string {
     .join("")}<div class="sep"></div><a href="/admin/hatch" role="menuitem">${icon("egg", 18)}<span>Hatch a new influencer</span></a></div></details></div>`;
 
   const banners = [
+    ...(o.outOfCredit ?? []).map((b) => {
+      const name = b.brain === "openai" ? "OpenAI" : "Claude (Anthropic)";
+      const where = b.brain === "openai" ? `<a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener">platform.openai.com → Billing</a>` : `<a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">console.anthropic.com → Plans &amp; Billing</a>`;
+      return `<div class="banner bad" role="alert">${icon("alert", 16)}<span><b>${name} is out of credit since ${esc(b.since.slice(0, 16).replace("T", " "))} UTC.</b> Nothing is planned, posted or answered for influencers on ${b.brain === "openai" ? "OpenAI" : "Claude"}. Top up at ${where}; comments and DMs held in the last 24 hours are answered automatically once it works again.</span></div>`;
+    }),
     o.openAccess ? `<div class="banner">${icon("alert", 16)}<span>Development mode: the console has no password. Set ADMIN_TOKEN before exposing it.</span></div>` : "",
     o.disconnected && cur
       ? `<div class="banner bad">${icon("alert", 16)}<span><b>Instagram is disconnected for ${esc(cur.name)} (@${esc(o.disconnected.username)})${

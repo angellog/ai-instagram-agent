@@ -3,6 +3,15 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.23: Say so loudly when the LLM account is out of credit
+
+On 2026-09-30 the Anthropic account ran out of credit. For about three hours every plan, story, Create-now run and reply failed with a raw 400 buried in Events & jobs.
+
+- **Out-of-credit is its own error** (`LLMBillingError`) for Anthropic ("credit balance is too low") and OpenAI (429 `insufficient_quota`, which used to be retried as a rate limit).
+- **Red banner on every console page** while a brain is out of credit, with the billing link, plus one error event and one Telegram alert (not one per failed call).
+- **Self-healing:** the first successful call clears the banner and re-queues comments and DMs that failed for this reason in the last 24 hours.
+- Create a post now shows "LLM out of credit: … top up at console.anthropic.com → Plans & Billing" instead of the raw API response.
+
 ## v1.0.22: OpenAI as a second brain, chosen per influencer
 
 - **Language model brain** in each influencer's Controls: Claude (Anthropic) or OpenAI (GPT). Everyone else keeps their own setting, so the two can run side by side. Platform-level calls stay on the default.

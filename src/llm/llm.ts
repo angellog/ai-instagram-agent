@@ -2,7 +2,8 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { assertBudget, llmCostUsd, recordCost } from "../cost/ledger.js";
 import { withTimeout } from "../lib/async.js";
-import { PermanentError } from "../lib/errors.js";
+import { LLMBillingError, PermanentError } from "../lib/errors.js";
+import { clearBillingBlock, markBillingBlocked } from "./billing.js";
 import { logger } from "../lib/logger.js";
 import { SettingsProvider, type LLMConfig } from "./providers.js";
 import { setting } from "../config/settings.js";
@@ -128,11 +129,20 @@ export class LLM {
     const estimate = llmCostUsd(model, estimateTokens(o.system, messages) + (o.images?.length ?? 0) * 1600, maxTokens);
     await assertBudget("llm", estimate);
     const started = Date.now();
-    const res = await withTimeout(
-      provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation, timeoutMs: o.timeoutMs }),
-      o.timeoutMs ?? this.timeoutMs,
-      `llm ${o.operation}`,
-    );
+    const brain = provider.name === "openai_compatible" ? "openai" : "claude";
+    let res: Awaited<ReturnType<LLMProvider["complete"]>>;
+    try {
+      res = await withTimeout(
+        provider.complete({ system: o.system, messages, images: o.images, tier, maxTokens, temperature: o.temperature, jsonSchema, operation: o.operation, timeoutMs: o.timeoutMs }),
+        o.timeoutMs ?? this.timeoutMs,
+        `llm ${o.operation}`,
+      );
+    } catch (e) {
+      // An empty account stops everything on that brain: say so once, loudly, everywhere.
+      if (e instanceof LLMBillingError) await markBillingBlocked(e.brain, e.message);
+      throw e;
+    }
+    if (provider.name !== "mock") await clearBillingBlock(brain);
     const cost = llmCostUsd(res.model, res.inputTokens, res.outputTokens);
     await recordCost({
       category: "llm",

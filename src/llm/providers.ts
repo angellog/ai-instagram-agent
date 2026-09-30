@@ -3,7 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { Env } from "../config/env.js";
 import type { FetchLike } from "../lib/async.js";
-import { PermanentError, RateLimitedError, TransientError } from "../lib/errors.js";
+import { LLMBillingError, PermanentError, RateLimitedError, TransientError } from "../lib/errors.js";
 import type { CompletionRequest, CompletionResult, LLMProvider, Tier } from "./types.js";
 
 export class AnthropicProvider implements LLMProvider {
@@ -81,7 +81,8 @@ export function withImagesAnthropic(req: CompletionRequest): Anthropic.MessagePa
   return msgs;
 }
 
-function classifyAnthropicError(e: unknown): Error {
+export function classifyAnthropicError(e: unknown): Error {
+  if (e instanceof Anthropic.APIError && /credit balance is too low/i.test(e.message)) return new LLMBillingError("claude");
   if (e instanceof Anthropic.RateLimitError) return new RateLimitedError(`anthropic rate limited: ${e.message}`, 30_000);
   if (e instanceof Anthropic.APIConnectionTimeoutError) return new TransientError(`anthropic timeout: ${e.message}`);
   if (e instanceof Anthropic.APIConnectionError) return new TransientError(`anthropic connection: ${e.message}`);
@@ -141,6 +142,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
       res = await this.post(body, req);
       text = await res.text();
     }
+    // OpenAI answers an empty account with 429 insufficient_quota: not a rate limit, retrying won't help.
+    if (res.status === 429 && /insufficient_quota|exceeded your current quota/i.test(text)) throw new LLMBillingError("openai");
     if (res.status === 429) throw new RateLimitedError("llm rate limited", 30_000);
     if (res.status >= 500) throw new TransientError(`llm ${res.status}: ${text.slice(0, 200)}`);
     if (res.status === 401) throw new PermanentError(`llm 401: the API key was refused (${model}). Check the key on Config & keys.`);
