@@ -3,6 +3,13 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.21: Direct "Create a post now"
+
+- **Direction box** on Create a post now: a few words (a product, place, occasion or mood, up to 300 characters) that the content director must build the post or story around. Example chips fill it in one tap. Leave it empty to let the influencer pick, as before.
+- The direction outranks the day plan, trends and the director's own preference, and it can't "wait". It never outranks the persona, the safety rules or verified business facts. An outfit you name is kept even if the wardrobe rotation would have swapped it. Repetition retries keep the subject and change the angle.
+- **Direct it** link next to the one-tap buttons on Overview, Posts and Stories. The progress page shows "Your direction", Try again keeps it, and Change direction reopens the box. Recent runs list each run's direction.
+- Migration `012_create_direction.sql` adds `create_runs.direction`.
+
 ## v1.0.20: Liquid-glass console, redesigned Config & keys
 
 - **Glass material** for the chrome that floats over content: top bar, sidebar, mode and influencer menus, dialogs and toasts, over a soft brand-tinted light field. Regular content cards stay solid. Solid fallbacks when the browser lacks `backdrop-filter`, and under `prefers-reduced-transparency` or `prefers-contrast: more`.

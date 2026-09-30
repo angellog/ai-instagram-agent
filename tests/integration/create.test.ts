@@ -3,6 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { setControls } from "../../src/config/controls.js";
 import { createProgress } from "../../src/content/create.js";
+import { createDevLLM, createDevMockProvider } from "../../src/llm/devMock.js";
+import { LLM, setLLM } from "../../src/llm/llm.js";
 import { many, one } from "../../src/db/pool.js";
 import { setInstagramClient } from "../../src/instagram/accounts.js";
 import { JOBS, queue } from "../../src/queue/queues.js";
@@ -26,6 +28,7 @@ afterAll(async () => {
   await teardown();
 });
 
+const form = (b: Record<string, string>) => ({ payload: new URLSearchParams(b).toString(), headers: { "content-type": "application/x-www-form-urlencoded" } });
 const run = async (runId: string) => HANDLERS[JOBS.contentCreate]({ name: JOBS.contentCreate, data: { influencerId: 1, runId } } as unknown as Job);
 
 describe("Create a post now", () => {
@@ -56,6 +59,38 @@ describe("Create a post now", () => {
     const page = await app.inject({ url: `/admin/create/${id}` });
     expect(page.body).toContain('role="progressbar"');
     expect(page.body).toContain("cr-postnow");
+  });
+
+  it("carries the operator's direction into the director, the run and the retry", async () => {
+    const mock = createDevMockProvider();
+    setLLM(new LLM(mock, 90_000));
+    try {
+      const r = await app.inject({ method: "POST", url: "/admin/create", ...form({ direction: "  Jordan 4 Black Cat\n at the shop  " }) });
+      const id = String(r.headers.location).split("/").pop()!.split("?")[0];
+      expect(await one("SELECT direction FROM create_runs WHERE id = $1", [id])).toEqual({ direction: "Jordan 4 Black Cat at the shop" });
+      expect(await run(id)).toBe("awaiting_review");
+      const plan = mock.calls.find((c) => c.operation === "content.plan")!;
+      const prompt = plan.messages.map((m) => m.content).join("\n");
+      expect(prompt).toContain('OPERATOR DIRECTION (must follow): the operator asked for this post to be about: "Jordan 4 Black Cat at the shop"');
+      const page = await app.inject({ url: `/admin/create/${id}` });
+      expect(page.body).toContain("Your direction:");
+      expect(page.body).toContain('name="direction" value="Jordan 4 Black Cat at the shop"'); // Try again keeps it
+      const list = await app.inject({ url: "/admin/create" });
+      expect(list.body).toContain('id="direction"');
+      expect(list.body).toContain("Jordan 4 Black Cat at the shop");
+
+      // Stories take a direction too.
+      const s = await app.inject({ method: "POST", url: "/admin/create", ...form({ kind: "story", direction: "rainy evening" }) });
+      const sid = String(s.headers.location).split("/").pop()!.split("?")[0];
+      await run(sid);
+      const story = mock.calls.find((c) => c.operation === "story.plan")!;
+      expect(story.messages.map((m) => m.content).join("\n")).toContain('about: "rainy evening"');
+      // Empty direction means none.
+      const e = await app.inject({ method: "POST", url: "/admin/create", payload: new URLSearchParams({ direction: "   " }).toString(), headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" } });
+      expect(await one("SELECT direction FROM create_runs WHERE id = $1", [e.json().id])).toEqual({ direction: null });
+    } finally {
+      setLLM(createDevLLM());
+    }
   });
 
   it("is refused while paused or with image generation off, and reports planner failures", async () => {

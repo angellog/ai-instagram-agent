@@ -31,6 +31,7 @@ export interface CreateRun {
   status: "queued" | "running" | "done" | "failed";
   stage: Stage;
   post_id: string | null;
+  direction: string | null;
   outcome: string | null;
   message: string | null;
   created_at: Date;
@@ -48,14 +49,24 @@ async function setRun(id: string, patch: Partial<Pick<CreateRun, "status" | "sta
   );
 }
 
+/** Longest direction accepted: a few keywords or one sentence, not a script. */
+export const DIRECTION_MAX = 300;
+
+/** Tidy operator direction: one line, no control characters, capped. Empty means none. */
+export function cleanDirection(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, DIRECTION_MAX).trim();
+  return t || undefined;
+}
+
 /** Start a run for the current influencer; at most one active run of each kind at a time. */
-export async function startCreate(by: string, kind: CreateKind = "post"): Promise<{ id: string; existing: boolean }> {
+export async function startCreate(by: string, kind: CreateKind = "post", direction?: string): Promise<{ id: string; existing: boolean }> {
   const active = await one<{ id: string }>(
     "SELECT id FROM create_runs WHERE influencer_id = $1 AND kind = $2 AND status IN ('queued','running') AND updated_at > now() - interval '30 minutes' ORDER BY created_at DESC LIMIT 1",
     [influencerId(), kind],
   );
   if (active) return { id: active.id, existing: true };
-  const run = await one<{ id: string }>("INSERT INTO create_runs (influencer_id, created_by, kind) VALUES ($1, $2, $3) RETURNING id", [influencerId(), by, kind]);
+  const run = await one<{ id: string }>("INSERT INTO create_runs (influencer_id, created_by, kind, direction) VALUES ($1, $2, $3, $4) RETURNING id", [influencerId(), by, kind, cleanDirection(direction) ?? null]);
   await queue("content").add(JOBS.contentCreate, { influencerId: influencerId(), runId: run!.id }, { jobId: jobId("create", run!.id), attempts: 1 });
   return { id: run!.id, existing: false };
 }
@@ -67,7 +78,8 @@ export async function runCreate(runId: string): Promise<string> {
   try {
     await setRun(runId, { status: "running", stage: "planning" });
     const story = run.kind === "story";
-    const plan = story ? await planStory(new Date(), { operator: true }) : await planContent(new Date(), { operator: true });
+    const opts = { operator: true, direction: run.direction ?? undefined };
+    const plan = story ? await planStory(new Date(), opts) : await planContent(new Date(), opts);
     if (plan.status !== "accepted") {
       const why = "reason" in plan && plan.reason ? plan.reason : plan.status;
       const friendly =
@@ -110,6 +122,7 @@ export interface Progress {
   slides: { done: number; total: number; urls: string[] };
   topic: string | null;
   caption: string | null;
+  direction: string | null;
   elapsedMs: number;
 }
 
@@ -179,7 +192,7 @@ export async function createProgress(runId: string, now = Date.now()): Promise<P
             : stage === "checking"
               ? "Checking identity, anatomy, text and safety…"
               : (run.message ?? "Ready");
-  return { id: run.id, kind: run.kind ?? "post", status: run.status, stage, pct, steps, detail, postId: run.post_id, outcome: run.outcome ?? postStatus, message: run.message, slides: { done, total, urls }, topic, caption, elapsedMs };
+  return { id: run.id, kind: run.kind ?? "post", status: run.status, stage, pct, steps, detail, postId: run.post_id, outcome: run.outcome ?? postStatus, message: run.message, slides: { done, total, urls }, topic, caption, direction: run.direction ?? null, elapsedMs };
 }
 
 export async function recentRuns(limit = 5): Promise<CreateRun[]> {

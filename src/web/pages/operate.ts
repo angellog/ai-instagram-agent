@@ -12,7 +12,7 @@ import { forgetUser } from "../../memory/store.js";
 import { assessText } from "../../safety/safety.js";
 import { deletePost, editCaption, EDITABLE, editStoryText, moveSlide, removeSlide } from "../../content/edit.js";
 import { recentStories } from "../../content/stories.js";
-import { createButton, storyButton } from "./create.js";
+import { createButton, directLink, storyButton } from "./create.js";
 import { persona } from "../../persona/loader.js";
 import { JOBS, jobId, queue, queueCounts } from "../../queue/queues.js";
 import { listEvents } from "../../calendar/events.js";
@@ -144,7 +144,7 @@ export function registerOperate(app: FastifyInstance): void {
     const body = `${header(inf.name, {
       eyebrow: `${p.identity.location} · ${localTime(p.identity.timezone)}`,
       sub: acct ? `@${esc(acct.username ?? acct.ig_user_id)} · ${esc(p.identity.occupation)}` : esc(p.identity.occupation),
-      actions: `${createButton()}${storyButton()}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
+      actions: `${createButton()}${storyButton()}${directLink()}${link("Calendar", "/admin/calendar", { icon: "calendar" })}`,
     })}
 ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) => `<p>${s}</p>`).join("")}</div></div>` : ""}
 <div class="kpis">
@@ -282,7 +282,7 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
        ORDER BY p.created_at DESC LIMIT 120`,
       [influencerId(), filter],
     );
-    const body = `${header("Posts", { sub: "Feed posts. Open one to edit its caption, reorder or remove slides, or delete it before it's approved.", actions: `${createButton()}${link("Stories", "/admin/stories", { icon: "phone" })}` })}
+    const body = `${header("Posts", { sub: "Feed posts. Open one to edit its caption, reorder or remove slides, or delete it before it's approved.", actions: `${createButton()}${directLink()}${link("Stories", "/admin/stories", { icon: "phone" })}` })}
 ${tabs([
   { href: "/admin/posts", label: "All", active: filter === "all" },
   { href: "/admin/posts?status=published", label: "Published", active: filter === "published" },
@@ -317,7 +317,7 @@ ${card(
     const checks = hours.split(",").filter((h) => /^\d+$/.test(h)).map((h) => `${h.padStart(2, "0")}:${mins.padStart(2, "0")}`).join(", ");
     const body = `${header("Stories", {
       sub: "Light, in-the-moment frames from her day, separate from feed posts. They stop for review like posts do; open one to change its words or delete it.",
-      actions: `${storyButton("Create a story now", true)}${link("Settings", "/admin/controls", { icon: "sliders", variant: "ghost" })}`,
+      actions: `${storyButton("Create a story now", true)}${directLink("story")}${link("Settings", "/admin/controls", { icon: "sliders", variant: "ghost" })}`,
     })}
 ${
   c.stories_enabled

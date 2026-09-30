@@ -16,7 +16,7 @@ import { SLOTS } from "../persona/schema.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { trendsForPrompt } from "../trends/trends.js";
 import { ensureDayPlan } from "./activities.js";
-import { COMPOSITIONS, operatorGate, type Idea } from "./director.js";
+import { COMPOSITIONS, directionBlock, operatorGate, type Idea } from "./director.js";
 import { recentContent } from "./history.js";
 import type { VisualState } from "./history.js";
 import { planOutfits } from "./wardrobe.js";
@@ -105,7 +105,7 @@ export function shopLine(): string | undefined {
   return entry ? entry.must_include!.join(", ") : undefined;
 }
 
-export async function planStory(now = new Date(), opts: { operator?: boolean } = {}): Promise<StoryOutcome> {
+export async function planStory(now = new Date(), opts: { operator?: boolean; direction?: string } = {}): Promise<StoryOutcome> {
   const c = await getControls();
   const p = persona();
   const gate = await storyGate(c, p, now, Boolean(opts.operator));
@@ -144,6 +144,7 @@ export async function planStory(now = new Date(), opts: { operator?: boolean } =
       `RECENT STORIES (newest first; don't repeat):\n${stories.map((s) => `- ${s.kind}: ${s.shot.slice(0, 90)}${s.text ? ` / text "${s.text}"` : ""}`).join("\n") || "- none yet"}`,
       trends ? `TRENDS AND NEWS (reference only if it fits; never add details beyond the headline):\n${trends}` : "",
       opts.operator ? "OPERATOR REQUEST: the operator wants a story right now. Do not wait: pick the best moment." : "",
+      directionBlock(opts.direction, "story"),
     ]
       .filter(Boolean)
       .join("\n\n"),

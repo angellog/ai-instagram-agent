@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createProgress, recentRuns, startCreate, STAGES } from "../../content/create.js";
+import { cleanDirection, createProgress, DIRECTION_MAX, recentRuns, startCreate, STAGES } from "../../content/create.js";
 import { operatorGate } from "../../content/director.js";
 import { getControls } from "../../config/controls.js";
 import { currentInfluencer } from "../../context.js";
@@ -7,14 +7,43 @@ import { primaryAccount } from "../../instagram/accounts.js";
 import { consoleRouter, done, isUuid, render, reviewer, type Req } from "../console.js";
 import { ago, card, esc, header, icon, link, pill, table } from "../ui/kit.js";
 
+const keep = (direction?: string | null) => (direction ? `<input type="hidden" name="direction" value="${esc(direction)}">` : "");
+
 /** The one-tap button used on Overview, Posts and after launching a new influencer. */
-export function createButton(label = "Create a post now", small = false): string {
-  return `<form class="inline" method="post" action="/admin/create"><button class="btn primary${small ? " sm" : ""}" type="submit">${icon("zap", 16)}<span>${esc(label)}</span></button></form>`;
+export function createButton(label = "Create a post now", small = false, direction?: string | null): string {
+  return `<form class="inline" method="post" action="/admin/create">${keep(direction)}<button class="btn primary${small ? " sm" : ""}" type="submit">${icon("zap", 16)}<span>${esc(label)}</span></button></form>`;
 }
 
 /** One tap: plan and make a story right now (held for review). */
-export function storyButton(label = "Create a story now", primary = false): string {
-  return `<form class="inline" method="post" action="/admin/create"><input type="hidden" name="kind" value="story"><button class="btn${primary ? " primary" : ""}" type="submit">${icon("sparkles", 16)}<span>${esc(label)}</span></button></form>`;
+export function storyButton(label = "Create a story now", primary = false, direction?: string | null): string {
+  return `<form class="inline" method="post" action="/admin/create"><input type="hidden" name="kind" value="story">${keep(direction)}<button class="btn${primary ? " primary" : ""}" type="submit">${icon("sparkles", 16)}<span>${esc(label)}</span></button></form>`;
+}
+
+/** Link to the Create page's direction box, shown next to the one-tap buttons. */
+export function directLink(kind: "post" | "story" = "post"): string {
+  return `<a class="btn ghost" href="/admin/create${kind === "story" ? "?kind=story" : ""}#direct" title="Tell the director what this ${kind} should be about">${icon("pencil", 16)}<span>Direct it</span></a>`;
+}
+
+const EXAMPLES = ["Jordan 4 Black Cat at the shop", "rainy evening, cosy fit", "Pioneer Mall weekend drop", "gym morning, running shoes", "date night, clean white sneakers"];
+
+/** The direction box: a few words, then Create a post or Create a story. */
+function directForm(kind: "post" | "story", value = ""): string {
+  return `<section class="card" id="direct" aria-labelledby="direct-h"><div class="card-b">
+<form method="post" action="/admin/create" class="direct-form">
+  <div class="field"><label id="direct-h" for="direction">Direction <span class="meta">(optional)</span></label>
+    <textarea id="direction" name="direction" maxlength="${DIRECTION_MAX}" rows="2" placeholder="A few words: a product, place, occasion or mood" aria-describedby="direction-help">${esc(value)}</textarea>
+    <p class="help" id="direction-help">The director builds the idea around these words. Leave it empty to let her pick. She still stays in character, keeps to the safety rules, and only states business facts from the knowledge base. <span class="counter" data-count-for="direction">0/${DIRECTION_MAX}</span></p>
+  </div>
+  <div class="chips" role="group" aria-label="Examples">${EXAMPLES.map((e) => `<button type="button" class="chip" data-fill="${esc(e)}">${esc(e)}</button>`).join("")}</div>
+  <div class="row" style="margin-top:14px">
+    <button class="btn${kind === "post" ? " primary" : ""}" type="submit" name="kind" value="post">${icon("zap", 16)}<span>Create a post</span></button>
+    <button class="btn${kind === "story" ? " primary" : ""}" type="submit" name="kind" value="story">${icon("sparkles", 16)}<span>Create a story</span></button>
+  </div>
+</form></div></section>
+<script>(function(){var t=document.getElementById("direction"),c=document.querySelector("[data-count-for=direction]");if(!t)return;
+function n(){c.textContent=t.value.length+"/${DIRECTION_MAX}"}t.addEventListener("input",n);n();
+document.querySelectorAll(".direct-form [data-fill]").forEach(function(b){b.onclick=function(){t.value=t.value.trim()?t.value.trim().replace(/[,;]?$/,", ")+b.dataset.fill:b.dataset.fill;t.value=t.value.slice(0,${DIRECTION_MAX});n();t.focus()}});
+if(location.hash==="#direct")t.focus()})();</script>`;
 }
 
 const CSS = `<style>
@@ -49,6 +78,7 @@ const CSS = `<style>
 .cr-shot img{width:100%;height:100%;object-fit:cover;display:block;animation:cr-in .5s ease-out}
 @keyframes cr-shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
 @keyframes cr-in{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
+.cr-dir{display:flex;gap:8px;align-items:flex-start;margin:0 0 14px;padding:8px 12px;border-radius:10px;background:var(--surface-2);font-size:14px;color:var(--ink-2)}.cr-dir svg{color:var(--muted);margin-top:2px}
 .cr-final{display:none;margin-top:18px}.cr-done .cr-final,.cr-failed .cr-final{display:block}
 @media (max-width:640px){.cr-steps li{font-size:11.5px}.cr-pct{font-size:28px}}
 @media (prefers-reduced-motion:reduce){.cr-fill,.cr-dot{transition:none}.cr-fill::after,.cr-fill::before,.cr-steps .active .cr-dot::after,.cr-shot.wait::after{animation:none}}
@@ -62,7 +92,7 @@ export function registerCreate(app: FastifyInstance): void {
     const c = await getControls();
     const block = operatorGate(c) ?? (kind === "story" && !c.stories_enabled ? "stories are turned off in Controls" : undefined);
     if (block) return done(req, reply, kind === "story" ? "/admin/stories" : "/admin", `Can't create a ${kind}: ${block}`, false);
-    const run = await startCreate(reviewer(req), kind);
+    const run = await startCreate(reviewer(req), kind, cleanDirection(req.body?.direction));
     if (String(req.headers.accept ?? "").includes("application/json")) return reply.send({ ok: true, id: run.id, existing: run.existing, kind });
     return reply.redirect(`/admin/create/${run.id}${run.existing ? `?flash=${encodeURIComponent(`A ${kind} is already being created: here it is`)}` : ""}`, 303);
   });
@@ -75,11 +105,14 @@ export function registerCreate(app: FastifyInstance): void {
 
   r.get("/admin/create", async (req: Req, reply) => {
     const runs = await recentRuns(10);
-    const body = `${header("Create a post now", { sub: "One tap runs the whole pipeline for this influencer (idea → photos → quality and safety checks) and stops so you can look before it goes out.", actions: `${createButton()}${storyButton()}` })}
+    const q = req.query as Record<string, string | undefined>;
+    const kind = q.kind === "story" ? "story" : "post";
+    const body = `${header("Create a post now", { sub: "One tap runs the whole pipeline for this influencer (idea → photos → quality and safety checks) and stops so you can look before it goes out. Add a direction to steer what it's about." })}
+${directForm(kind, cleanDirection(q.direction) ?? "")}
 ${card(
   table(
-    ["When", "Kind", "Status", "Result", ""],
-    runs.map((x) => [ago(x.created_at), esc(x.kind ?? "post"), pill(x.status === "done" ? "done" : x.status), esc(x.outcome ?? x.stage), `<a href="/admin/create/${x.id}">Open</a>`]),
+    ["When", "Kind", "Direction", "Status", "Result", ""],
+    runs.map((x) => [ago(x.created_at), esc(x.kind ?? "post"), x.direction ? esc(x.direction) : `<span class="muted">—</span>`, pill(x.status === "done" ? "done" : x.status), esc(x.outcome ?? x.stage), `<a href="/admin/create/${x.id}">Open</a>`]),
     "No runs yet.",
   ),
   { title: "Recent runs" },
@@ -96,10 +129,12 @@ ${card(
     const story = p.kind === "story";
     const noun = story ? "story" : "post";
     const again = story ? storyButton("Make another") : createButton("Make another", false).replace("btn primary", "btn");
-    const retry = story ? storyButton("Try again", true) : createButton("Try again");
+    const retry = story ? storyButton("Try again", true, p.direction) : createButton("Try again", false, p.direction);
+    const edit = link("Change direction", `/admin/create?${new URLSearchParams({ ...(story ? { kind: "story" } : {}), direction: p.direction ?? "" }).toString()}#direct`, { variant: "ghost", icon: "pencil" });
     const body = `${header(`Creating a ${noun} for ${inf.name}`, { eyebrow: story ? "Create a story now" : "Create a post now", actions: link("All runs", "/admin/create", { variant: "ghost", small: true }) })}
 <section class="card cr-card${story ? " cr-story" : ""}" id="cr" data-id="${esc(p.id)}" data-noun="${noun}" aria-busy="true">
   <div class="cr-top"><div><div class="cr-pct" id="cr-pct">0%</div><div class="meta" id="cr-topic">${esc(p.topic ?? "Thinking of an idea…")}</div></div><div class="cr-time" id="cr-time">0:00</div></div>
+  ${p.direction ? `<p class="cr-dir">${icon("pencil", 16)}<span><b>Your direction:</b> ${esc(p.direction)}</span></p>` : ""}
   <div class="cr-bar" role="progressbar" aria-label="Post creation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="cr-bar"><div class="cr-fill" id="cr-fill"></div></div>
   <ol class="cr-steps" id="cr-steps">${STAGES.map((s) => `<li data-key="${s.key}"><span class="cr-dot">${icon("check", 16)}</span><span>${esc(s.label)}</span></li>`).join("")}</ol>
   <p class="cr-detail" id="cr-detail" aria-live="polite">${esc(p.detail)}</p>
@@ -117,7 +152,7 @@ ${card(
     </div>
     <div id="cr-bad" hidden>
       <div class="callout bad">${icon("alert")}<p id="cr-bad-msg" style="white-space:pre-line"></p></div>
-      <div class="row">${retry}<a class="btn ghost" id="cr-open-bad" hidden>${icon("image", 16)}<span>Open ${noun}</span></a></div>
+      <div class="row">${retry}${edit}<a class="btn ghost" id="cr-open-bad" hidden>${icon("image", 16)}<span>Open ${noun}</span></a></div>
     </div>
   </div>
 </section>`;

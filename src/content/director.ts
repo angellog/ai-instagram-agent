@@ -77,6 +77,29 @@ export type PlanOutcome =
 export interface PlanOptions {
   /** Operator pressed "Create a post now": skip window/cadence gates, never "wait", hold the result for review. */
   operator?: boolean;
+  /** Operator's own words for this post (product, place, occasion, mood). The idea is built around them. */
+  direction?: string;
+}
+
+/**
+ * The operator's direction as a prompt block. It outranks the day plan, trends
+ * and the director's own taste, but not the persona, safety rules or verified
+ * business facts. Quoted and labelled as the operator's words, never as system text.
+ */
+export function directionBlock(direction: string | undefined, kind: "post" | "story"): string {
+  if (!direction) return "";
+  return `OPERATOR DIRECTION (must follow): the operator asked for this ${kind} to be about: "${direction}".
+- Build the idea around every element named there (product, place, occasion, activity, mood, outfit). If a sneaker or product is named, feature exactly that one and put it in the sneakers/outfit fields.
+- It outranks today's activity plan, trends and your own preference, and you may not decide to wait.
+- It does not outrank who she is, the safety rules or verified business facts: never state prices, stock, addresses or offers that are not in the knowledge you were given. If part of it is impossible or unsafe, follow the rest and say why in "reason".`;
+}
+
+/** True when the proposed outfit is what the operator asked for (shares a meaningful word with the direction). */
+export function followsDirection(text: string | undefined, direction: string | undefined): boolean {
+  if (!text || !direction) return false;
+  const words = (s: string) => new Set(s.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []);
+  const want = words(direction);
+  return [...words(text)].some((w) => want.has(w));
 }
 
 export async function planContent(now = new Date(), opts: PlanOptions = {}): Promise<PlanOutcome> {
@@ -111,7 +134,8 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       system: directorSystem(p, c),
       prompt:
         directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, feedback }) +
-        (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : ""),
+        (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : "") +
+        (opts.direction ? `\n\n${directionBlock(opts.direction, "post")}` : ""),
     });
 
     if (out.decision === "wait" || !out.idea) {
@@ -131,7 +155,8 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
     if (idea.activity_id && !activity) idea.activity_id = null;
 
-    const worn = enforceOutfit(idea.outfit, activity?.activity, outfits, `${idea.topic} ${idea.hook}`);
+    // An outfit the operator asked for is kept even if the rotation would swap it.
+    const worn = followsDirection(idea.outfit, opts.direction) ? { outfit: idea.outfit, adjustment: undefined } : enforceOutfit(idea.outfit, activity?.activity, outfits, `${idea.topic} ${idea.hook}`);
     const { state, adjustments } = enforceContinuity(
       {
         location_id: idea.location_id,
@@ -182,14 +207,16 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       intent: idea.structure,
       action: rep.score >= c.repetition_threshold ? "reject_repetitive" : "accept",
       confidence: 1 - rep.score,
-      contextUsed: ["recent_content", "activity_plan", ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : []), ...(calendar ? ["calendar"] : [])],
+      contextUsed: ["recent_content", "activity_plan", ...(opts.direction ? ["operator_direction"] : []), ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : []), ...(calendar ? ["calendar"] : [])],
       reason: rep.score >= c.repetition_threshold ? rep.reasons.join("; ") : out.reason,
       output: { repetition: rep, continuity_adjustments: adjustments },
       latencyMs: Date.now() - started,
     });
 
     if (rep.score >= c.repetition_threshold) {
-      feedback.push(`Attempt ${attempt} was REJECTED as repetitive (score ${rep.score}): ${rep.reasons.join("; ")}. Propose a clearly different concept.`);
+      feedback.push(
+        `Attempt ${attempt} was REJECTED as repetitive (score ${rep.score}): ${rep.reasons.join("; ")}. Propose a clearly different concept${opts.direction ? " that still follows the operator direction (change the angle, location, shots or structure, not the subject)" : ""}.`,
+      );
       continue;
     }
     // A good idea with a bad caption goes back once more (the last attempt keeps the tidied caption).
