@@ -3,6 +3,12 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.20: Liquid-glass console, redesigned Config & keys
+
+- **Glass material** for the chrome that floats over content: top bar, sidebar, mode and influencer menus, dialogs and toasts, over a soft brand-tinted light field. Regular content cards stay solid. Solid fallbacks when the browser lacks `backdrop-filter`, and under `prefers-reduced-transparency` or `prefers-contrast: more`.
+- **Config & keys:** readiness ring with a checklist (missing items first, each links to its section), a sticky section bar with per-section status dots and scroll highlighting, and one glass panel per settings group with a "set" count, inset fields, and Test/Save in a footer.
+- `PRODUCT.md` records the product context for design work; `docs/design/HANDOFF.md` documents the glass tokens.
+
 ## v1.0.19: X (Twitter), Phase 1 (read-only: mentions and metrics)
 
 X is a third channel, for FeetBit's own brand account. Phase 1 only reads; replies come in phase 2. Plan: `docs/X_AGENT_PLAN.md`.
