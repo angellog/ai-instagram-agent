@@ -13,7 +13,7 @@ import { allInfluencers, setStatus } from "../../influencers/manage.js";
 import { brainFor, llm, OPENAI_BASE_URL, OPENAI_DEFAULT_FAST_MODEL, OPENAI_DEFAULT_MODEL } from "../../llm/llm.js";
 import { OpenAICompatibleProvider } from "../../llm/providers.js";
 import type { CompletionRequest } from "../../llm/types.js";
-import { notify } from "../../notify/telegram.js";
+import { detectChatId, notify, sendTelegram } from "../../notify/telegram.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
 import { hostImage } from "../../storage/host.js";
 import { attempt, consoleRouter, done, render, reviewer, selectCookie, type Req } from "../console.js";
@@ -214,7 +214,7 @@ ${groups
     const tests = providers
       .map((p) => `<form method="post" action="/admin/config/test/${p}" data-async class="inline">${button(`Test ${p}`, { small: true, icon: "zap", variant: "ghost" })}</form>`)
       .join("");
-    return `<section class="card cfg-group glass" id="${g}" aria-labelledby="h-${g}"><div class="card-h"><div><h2 id="h-${g}">${esc(title)}</h2><p class="sub">${esc(sub)}</p></div><span class="count">${set}/${items.length} set</span></div>
+    return `<section class="card cfg-group glass" id="${g}" aria-labelledby="h-${g}"><div class="card-h"><div><h2 id="h-${g}">${esc(title)}</h2><p class="sub">${esc(sub)}</p></div><div class="row">${g === "alerts" ? `<form method="post" action="/admin/config/telegram/detect" class="inline">${button("Find my chat ID", { small: true, icon: "search", variant: "ghost" })}</form>` : ""}<span class="count">${set}/${items.length} set</span></div></div>
 <div class="card-b"><form method="post" action="/admin/config#${g}" autocomplete="off"><input type="hidden" name="_group" value="${g}"><div class="cols">${items.map(settingRow).join("")}</div>
 <div class="foot"><span class="meta">${icon("lock", 14)} Encrypted at rest. Empty fields keep their current value.</span><div class="row">${tests}${button("Save", { variant: "primary", icon: "check" })}</div></div></form></div></section>`;
   })
@@ -265,8 +265,11 @@ addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{
           const r = await hostImage(png, `system/config-check-${p}.jpg`, { order: [p] });
           msg = `${p} works: ${r.url}`;
         } else if (p === "telegram") {
-          await notify("✅ Test alert from the Influencer OS console");
-          msg = "Test message sent (check Telegram)";
+          const [token, chatId] = [await setting("TELEGRAM_BOT_TOKEN"), await setting("TELEGRAM_CHAT_ID")];
+          if (!token) throw new Error("add the bot token first");
+          if (!chatId) throw new Error("no chat ID yet: message your bot, then click Find my chat ID");
+          await sendTelegram(token, chatId, "✅ Test alert from Influencer OS. Alerts for reviews, failures and disconnects will arrive here.");
+          msg = "Test message sent: check Telegram";
         } else {
           const v = await validateProvider(p);
           return done(req, reply, "/admin/config", `${p}: ${v.detail}`, v.ok);
@@ -276,6 +279,20 @@ addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{
         return done(req, reply, "/admin/config", `${p} failed: ${(e as Error).message}`, false);
       }
     },
+    { platform: true },
+  );
+
+  r.post(
+    "/admin/config/telegram/detect",
+    async (req: Req, reply) =>
+      attempt(req, reply, "/admin/config#alerts", async () => {
+        const token = await setting("TELEGRAM_BOT_TOKEN");
+        if (!token) throw new Error("paste the bot token from @BotFather and Save first");
+        const found = await detectChatId(token);
+        await setSetting("TELEGRAM_CHAT_ID", found.chatId, reviewer(req));
+        await sendTelegram(token, found.chatId, `✅ Influencer OS is connected to ${found.bot}. Alerts for reviews, failures, disconnects and billing will arrive here.`);
+        return `Connected: alerts go to ${found.who} via ${found.bot}. A confirmation was sent to Telegram.`;
+      }),
     { platform: true },
   );
 

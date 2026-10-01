@@ -70,8 +70,8 @@ export const SETTINGS: SettingDef[] = [
   { key: "OPENREPLY_RELAY_SECRET", label: "OpenReply relay secret", group: "openreply", secret: true, help: "Must equal AGENT_RELAY_SECRET on OpenReply." },
   { key: "OPENREPLY_DEFER_KEYWORDS", label: "Keywords OpenReply answers", group: "openreply", secret: false, help: "Comma-separated campaign keywords; the agent stays silent on them.", placeholder: "LINK, GUIDE" },
   // Alerts
-  { key: "TELEGRAM_BOT_TOKEN", label: "Telegram bot token", group: "alerts", secret: true, help: "@BotFather token for review/failure alerts.", provider: "telegram" },
-  { key: "TELEGRAM_CHAT_ID", label: "Telegram chat ID", group: "alerts", secret: false, help: "Your chat id (send /start to the bot, then check getUpdates).", provider: "telegram" },
+  { key: "TELEGRAM_BOT_TOKEN", label: "Telegram bot token", group: "alerts", secret: true, help: "In Telegram, message @BotFather → /newbot → pick a name → copy the token it gives you. Use a bot just for these alerts.", provider: "telegram" },
+  { key: "TELEGRAM_CHAT_ID", label: "Telegram chat ID", group: "alerts", secret: false, help: "Filled in for you: message your new bot (tap Start), then click Find my chat ID above.", provider: "telegram" },
 ];
 
 const DEFS = new Map(SETTINGS.map((s) => [s.key, s]));

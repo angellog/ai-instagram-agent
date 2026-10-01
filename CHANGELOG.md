@@ -3,6 +3,12 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.24: One-click Telegram alerts setup
+
+- **Find my chat ID** on Config & keys → Alerts: after you message your new bot, it reads the bot's latest private chat, saves `TELEGRAM_CHAT_ID` and sends a confirmation. No getUpdates URL by hand.
+- **Test telegram** now really checks: it reports a missing token or chat ID, a refused token, or a bot another app already reads (409), instead of always saying "sent".
+- Clearer help text for creating the bot with @BotFather.
+
 ## v1.0.23: Say so loudly when the LLM account is out of credit
 
 On 2026-09-30 the Anthropic account ran out of credit. For about three hours every plan, story, Create-now run and reply failed with a raw 400 buried in Events & jobs.
