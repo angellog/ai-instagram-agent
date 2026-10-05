@@ -84,7 +84,7 @@ describe("LLM failures", () => {
     setLLM(new LLM(mock));
     await setControls({ daily_llm_budget_usd: 0 });
     const id = await ingest(dmPayload({ mid: "mid.b1", text: "hey, quick question about suede" }));
-    await expect(runJob(job(JOBS.conversationProcess, { interactionId: id }))).rejects.toThrow(/budget/i);
+    await expect(runJob(job(JOBS.conversationProcess, { influencerId: 1, interactionId: id }))).rejects.toThrow(/budget/i);
     expect(mock.calls).toHaveLength(0);
   });
 });

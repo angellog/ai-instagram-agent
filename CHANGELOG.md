@@ -3,6 +3,27 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.25: Every influencer is its own creator (independent brains, UGC brand pull, isolation)
+
+All influencers ran on Zuri's architecture with her world baked in: a required `sneakers` field on every idea, "sneakers clearly visible" in the image framing, FeetBit in the reply prompts, "she" everywhere, and Zuri's whole persona as the hatch template.
+
+**Independent brains**
+- Persona gains `identity.pronouns` (asked at hatch, never inferred from the name) and a `brand` block: name, category, products that can appear naturally, natural moments from this person's own day, curiosity hooks, and a mention rate.
+- **Brand pull, not ads:** the post and story directors make everyday UGC ("a breakfast post is about breakfast"); one item from the brand's category may sit naturally in the frame (`featured_item`, replacing `sneakers`) so followers ask about it. Naming the brand is limited to the influencer's mention rate, counted from their own recent captions; a caption that names it off-turn goes back for a rewrite.
+- Image framings are neutral (no "head to sneakers"); the featured item is placed naturally, never posed with.
+- Story kinds: moment, look, brand, trend, question. A brand story carries the store line only on a turn the brand may be named.
+- Reply brain, safety reviewer, impersonation rule and memory examples are built from the influencer's own occupation, interests and brand; `sneaker_talk` is now `niche_talk`; "the FeetBit team" is the influencer's own brand.
+- Hatching uses a neutral structural template (`config/persona.template.yaml`), never another influencer's persona. Zuri's own file gains her FeetBit brand profile.
+- Standard: new checks **Pronouns** (manual) and **Brand pull** (AI fix drafts it from the affiliation and the influencer's own business knowledge).
+
+**Isolation**
+- A job without an influencer id fails instead of running as influencer #1.
+- Memory expiry, review approve/reject and post edits are scoped to their own influencer; approving another influencer's review from the wrong page is refused.
+- Influencer pages show only their own events and job runs (Events has "<name> only", "Platform" and "Everything"); per-influencer failures are logged in that influencer's context; boot events no longer name Zuri.
+- Dashboard copy and Create direction examples come from the current influencer's own life; no Zuri-only Instagram fallback.
+- New media is stored under `influencers/i<id>/…` (slugs can change or be reused); existing files keep their paths.
+- Telegram alerts say which influencer they're about.
+
 ## v1.0.24: One-click Telegram alerts setup
 
 - **Find my chat ID** on Config & keys → Alerts: after you message your new bot, it reads the bot's latest private chat, saves `TELEGRAM_CHAT_ID` and sends a confirmation. No getUpdates URL by hand.

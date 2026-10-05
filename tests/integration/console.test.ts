@@ -128,7 +128,7 @@ describe("Hatch: brief → persona → soul → Instagram → launch", () => {
     const state = (await one<{ hatch_state: { faces: Array<{ url: string }>; faces_status: string } }>("SELECT hatch_state FROM influencers WHERE id = $1", [id]))!.hatch_state;
     expect(state.faces_status).toBe("done");
     expect(state.faces).toHaveLength(3);
-    expect(state.faces[0].url).toContain("/influencers/nova/gen/");
+    expect(state.faces[0].url).toMatch(/\/influencers\/i\d+\/gen\//);
     const soulPage = await app.inject({ url: `/admin/hatch/${id}?step=soul`, headers: { cookie } });
     expect(soulPage.body).toContain("Face option 1");
     const soul = await form(`/admin/hatch/${id}/soul`, { faces: [state.faces[1].url], soul_id: "soul_nova_prime" }, cookie);
@@ -244,7 +244,7 @@ describe("Profile kit", () => {
     expect(kit.text.highlights.every((h) => [...h].length <= 15)).toBe(true);
     expect(kit.text.bios.every((b) => [...b.text].length <= 150 && /\bAI\b/i.test(b.text))).toBe(true);
     expect(kit.pictures.map((p) => p.kind)).toEqual(["generated", "crop"]);
-    expect(kit.pictures[1].url).toContain("/influencers/zuri/profile/pp-crop-");
+    expect(kit.pictures[1].url).toContain("/influencers/i1/profile/pp-crop-");
     const page = await app.inject({ url: "/admin/profile" });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("pp-circle");

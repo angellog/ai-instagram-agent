@@ -121,18 +121,18 @@ export function createDevMockProvider(): MockProvider {
       const u = lastUser(r);
       const act = u.match(/^- (\d+) \| (\w+) \| ([^|]+) \| ([\w-]+)/m);
       const seen = ((u.split("RECENT STORIES")[1] ?? "").split("\n\n")[0].match(/^- (?!none yet)/gm) ?? []).length;
-      const shop = /- shop:/.test(r.system);
+      const shop = /- brand:/.test(r.system);
       const plans = [
         { kind: "moment", include_character: false, composition: "detail", shot: "Fresh white laces being threaded into a clean pair on a wooden table", text: "Sunday laces ritual" },
-        { kind: "outfit", include_character: true, composition: "mirror", shot: "Quick mirror fit check by the front door", text: "" },
-        ...(shop ? [{ kind: "shop", include_character: false, composition: "detail", shot: "A new pair on the shop wall under warm spotlights", text: "Just landed at the shop" }] : []),
+        { kind: "look", include_character: true, composition: "mirror", shot: "Quick mirror fit check by the front door", text: "" },
+        ...(shop ? [{ kind: "brand", include_character: false, composition: "detail", shot: "A new pair on the shop wall under warm spotlights", text: "Just landed at the shop" }] : []),
         { kind: "question", include_character: false, composition: "flat_lay", shot: "Two pairs side by side on the floor, top-down", text: "Which pair for Saturday?" },
       ];
       const pick = plans[seen % plans.length];
       return {
         decision: "post",
         reason: "A light moment worth a story.",
-        story: { ...pick, activity_id: act ? Number(act[1]) : null, location_id: act?.[4] && act[4] !== "-" ? act[4] : null, time_of_day: "morning", sneakers: "clean white leather low-tops", alt_text: pick.shot },
+        story: { ...pick, activity_id: act ? Number(act[1]) : null, location_id: act?.[4] && act[4] !== "-" ? act[4] : null, time_of_day: "morning", featured_item: "", alt_text: pick.shot },
       };
     })
     .on("content.plan", (r) => {
@@ -181,7 +181,7 @@ export function createDevMockProvider(): MockProvider {
           location_id: act?.[4] && act[4] !== "-" && !recentBlock.includes(`loc=${act[4]}`) ? act[4] : freshLoc,
           time_of_day: "morning",
           outfit: "cream ribbed knit crop top with light-wash wide-leg denim",
-          sneakers: "white leather low-top sneakers",
+          featured_item: "",
           slides: Array.from({ length: carousel ? 4 : 1 }, (_, i) => slide(i)),
           caption: `${line} ${["Which pair would you pick?", "Tell me your go-to this week.", "Rate the fit 1–10."][attempt % 3]}`,
           hashtags: ["#sneakers", "#kampala"],

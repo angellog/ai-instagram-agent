@@ -104,7 +104,7 @@ describe("production with kie.ai", () => {
     expect(soul!.soul.soul_id).toMatch(/^soul_zuri/);
     expect(fk.createCalls[0].input.image_input).toEqual(soul!.identityRefs);
     // …as our durable, influencer-scoped copy, never the provider's expiring URL.
-    expect(fk.createCalls[1].input.image_input.at(-1)).toMatch(/\/influencers\/zuri\/gen\//);
+    expect(fk.createCalls[1].input.image_input.at(-1)).toMatch(/\/influencers\/i1\/gen\//);
     expect(fk.createCalls[0].input).toMatchObject({ aspect_ratio: "4:5", output_format: "jpg" });
     const cost = await one<{ usd: number }>("SELECT sum(cost_usd)::float AS usd FROM cost_ledger WHERE category = 'image' AND ref_id = $1", [postId]);
     expect(cost!.usd).toBeCloseTo(slides * 18 * 0.005, 6);

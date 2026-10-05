@@ -86,16 +86,17 @@ describe("Create a story now", () => {
 describe("story house rules", () => {
   const base: StoryPlan = {
     kind: "moment", activity_id: null, shot: "x", composition: "detail", include_character: false, location_id: null,
-    time_of_day: "morning", sneakers: "", text: "Morning laces", alt_text: "x",
+    time_of_day: "morning", featured_item: "", text: "Morning laces", alt_text: "x",
   };
   it("strips text from photos of her, adds the true shop line, and drops unverified numbers", async () => {
     await withInfluencer(1, async () => {
       const p = persona();
       expect(normalizeStory({ ...base, include_character: true }, p, undefined).text).toBe("");
-      const shop = normalizeStory({ ...base, kind: "shop", include_character: true, text: "Fresh drop" }, p, "Pioneer Mall, Level 5, Shop PH-100, Kampala");
+      const shop = normalizeStory({ ...base, kind: "brand", include_character: true, text: "Fresh drop" }, p, "Pioneer Mall, Level 5, Shop PH-100, Kampala");
       expect(shop).toMatchObject({ include_character: false, text: "Fresh drop", footer: "Pioneer Mall, Level 5, Shop PH-100, Kampala" });
       expect(normalizeStory({ ...base, text: "Only 3 pairs left at 250k" }, p, undefined)).toMatchObject({ text: "", adjustments: [expect.stringMatching(/unverified numbers/)] });
-      expect(normalizeStory({ ...base, kind: "shop" }, p, undefined)).toMatchObject({ kind: "moment" });
+      // Off a naming turn (no shop line passed) a brand story keeps the brand's world but carries no store line.
+      expect(normalizeStory({ ...base, kind: "brand" }, p, undefined)).toMatchObject({ kind: "brand", footer: "" });
     });
   });
 });

@@ -69,7 +69,7 @@ describe("generation engine", () => {
   it("routes, submits, stores a durable influencer-owned asset and records everything", async () => {
     const r = await generate(await request());
     expect(r).toMatchObject({ provider: "mock", model: "mock-image", attempts: 1 });
-    expect(r.assets[0].url).toMatch(/\/influencers\/zuri\/gen\//);
+    expect(r.assets[0].url).toMatch(/\/influencers\/i1\/gen\//);
     const asset = await one<{ influencer_id: number; mime_type: string; request_id: string }>("SELECT influencer_id, mime_type, generation_request_id AS request_id FROM assets WHERE id = $1", [r.assets[0].assetId]);
     expect(asset).toMatchObject({ influencer_id: 1, mime_type: "image/jpeg", request_id: r.requestId });
     const row = await one<{ status: string; route: { candidates: Array<{ model: string }> } }>("SELECT status, route FROM generation_requests WHERE id = $1", [r.requestId]);

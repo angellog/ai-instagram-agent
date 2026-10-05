@@ -132,7 +132,7 @@ describe("two influencers on one platform", () => {
     expect(refs.some((r) => r.includes("zuri"))).toBe(false);
     const urls = await many<{ public_url: string }>("SELECT public_url FROM post_assets WHERE post_id = $1", [plan.postId]);
     expect(urls.length).toBeGreaterThan(0);
-    expect(urls.every((u) => u.public_url.includes("/influencers/amara/posts/"))).toBe(true);
+    expect(urls.every((u) => u.public_url.includes(`/influencers/i${amara}/posts/`))).toBe(true);
     expect(await one("SELECT count(*)::int AS n FROM assets WHERE influencer_id <> $1", [amara])).toEqual({ n: 0 });
   });
 
@@ -167,7 +167,9 @@ describe("two influencers on one platform", () => {
     const [rev] = await listReviews("pending", 10, amara);
     expect(rev).toBeDefined();
     const { approveReview } = await import("../../src/web/reviews.js");
-    expect((await approveReview(rev.id, "tester")).ok).toBe(true);
+    // Approving from another influencer's page is refused; from the owner's page it goes through.
+    expect((await withInfluencer(1, () => approveReview(rev.id, "tester"))).message).toBe("review not found");
+    expect((await withInfluencer(amara, () => approveReview(rev.id, "tester"))).ok).toBe(true);
     expect(fakeAmara.replies).toHaveLength(1);
     expect(fakeZuri.replies).toHaveLength(0);
   });
