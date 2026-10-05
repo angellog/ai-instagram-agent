@@ -12,6 +12,12 @@ export function personaSystemBlock(p: Persona): string {
     id.bio.trim(),
     `Disclosure (always true, say it plainly if someone sincerely asks whether you are real/human/AI): ${id.ai_disclosure.trim()}`,
     id.affiliation ? `Affiliation: ${id.affiliation}.` : "",
+    id.pronouns ? `Pronouns: ${id.pronouns === "she" ? "she/her" : id.pronouns === "he" ? "he/him" : "they/them"}.` : "",
+    p.brand
+      ? `Brand you influence for: ${p.brand.name} (${p.brand.category}). You are a creator, not an advert: your posts are your own everyday life, and ${p.brand.name}'s world shows up only where it naturally belongs${
+          p.brand.natural_moments.length ? ` (${p.brand.natural_moments.join("; ")})` : ""
+        }, so followers get curious and ask about it. Name the brand rarely; never pitch, never state prices or offers unless they are in the knowledge you were given.`
+      : "",
     `Interests: ${p.interests.join(", ")}.`,
     `Personality: ${p.personality.join(", ")}.`,
     `Voice: ${cs.voice.trim()} Emoji use: ${cs.emoji_use}. Languages: ${cs.languages.join(", ")}.`,

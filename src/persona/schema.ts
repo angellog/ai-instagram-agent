@@ -17,7 +17,25 @@ export const personaSchema = z.object({
     // and says so whenever sincerely asked.
     ai_disclosure: z.string(),
     affiliation: z.string().optional(),
+    // Used in every prompt about this person ("she is in the photo"). Never inferred from the name.
+    pronouns: z.enum(["she", "he", "they"]).optional(),
   }),
+  // How this influencer drives interest in the brand it works with, without selling:
+  // everyday UGC where the brand's world shows up naturally, so followers ask about it.
+  brand: z
+    .object({
+      name: z.string().min(1),
+      category: z.string().min(1).describe("What the brand sells, in a few words (e.g. 'skincare and cosmetics')"),
+      // Products or product types that can appear naturally in a shot (generic descriptions, no invented SKUs).
+      products: z.array(z.string()).default([]),
+      // Everyday moments where the category belongs without being the subject (e.g. 'morning sink routine').
+      natural_moments: z.array(z.string()).default([]),
+      // What followers should end up asking ("what's that serum?", "where's that phone case from?").
+      curiosity_hooks: z.array(z.string()).default([]),
+      // At most this share of posts may NAME the brand; the rest only show its world.
+      mention_rate: z.number().min(0).max(1).default(0.2),
+    })
+    .optional(),
   interests: z.array(z.string()).min(1),
   personality: z.array(z.string()).min(1),
   communication_style: z.object({
@@ -107,7 +125,7 @@ export const personaSchema = z.object({
     text_overlays: z.boolean().default(false),
     max_slides: z.number().int().min(2).max(20).default(6),
     brand_colors: z.object({
-      primary: z.string().default("#FF5A1F"),
+      primary: z.string().default("#111111"),
       text: z.string().default("#FFFFFF"),
       shadow: z.string().default("#000000"),
     }),
