@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     await server.listen({ port: e.PORT, host: "0.0.0.0" });
     logger.info({ port: e.PORT, url: e.PUBLIC_BASE_URL }, "web listening");
   }
-  await recordEvent("info", "boot", `Started v${VERSION} (${e.ROLE})`, { ...boot, influencers: (await listInfluencers(["active"])).length });
+  await recordEvent("info", "boot", `Started v${VERSION} (${e.ROLE})`, { models: boot.models, influencers: (await listInfluencers(["active"])).length });
 
   let stopping = false;
   const shutdown = async (signal: string) => {

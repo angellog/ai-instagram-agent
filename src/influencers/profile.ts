@@ -8,7 +8,7 @@ import { PermanentError } from "../lib/errors.js";
 import { llm } from "../llm/llm.js";
 import { persona } from "../persona/loader.js";
 import { activeSoul, soulContext } from "../souls/souls.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 
 /**
  * Profile kit. Instagram's API cannot change a profile's name, bio or photo,
@@ -111,7 +111,7 @@ export async function squareProfile(bytes: Buffer): Promise<Buffer> {
 }
 
 async function store(bytes: Buffer, kind: ProfilePicture["kind"]): Promise<ProfilePicture> {
-  const { url } = await hostImage(bytes, `influencers/${currentInfluencer().slug}/profile/pp-${kind}-${sha256(bytes).slice(0, 12)}.jpg`);
+  const { url } = await hostImage(bytes, `${mediaPrefix(currentInfluencer().id)}/profile/pp-${kind}-${sha256(bytes).slice(0, 12)}.jpg`);
   const pic: ProfilePicture = { url, kind, created_at: new Date().toISOString() };
   const cur = await getKit();
   await saveKit({ pictures: [pic, ...(cur.pictures ?? []).filter((x) => x.url !== url)].slice(0, 6) });

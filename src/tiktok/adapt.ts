@@ -10,7 +10,7 @@ import { llm } from "../llm/llm.js";
 import { persona } from "../persona/loader.js";
 import { personaSystemBlock } from "../persona/prompt.js";
 import { assessText, openReview } from "../safety/safety.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import { tiktokFrame } from "./media.js";
 
 /**
@@ -108,7 +108,7 @@ export async function adaptToTikTok(sourceId: string, by: string): Promise<{ ok:
   for (const a of assets) {
     const { jpeg } = await tiktokFrame(await download(a.public_url));
     const sha = sha256(jpeg);
-    const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/tiktok/${tmpId}/${a.position + 1}-${sha.slice(0, 10)}.jpg`);
+    const hosted = await hostImage(jpeg, `${mediaPrefix(currentInfluencer().id)}/tiktok/${tmpId}/${a.position + 1}-${sha.slice(0, 10)}.jpg`);
     frames.push({ position: a.position, url: hosted.url, provider: hosted.provider, sha, bytes: jpeg.length, alt: a.overlay?.alt_text });
   }
   const postId = await tx(async (client) => {

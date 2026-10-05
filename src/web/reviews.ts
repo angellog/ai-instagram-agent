@@ -1,5 +1,5 @@
 import { getControls } from "../config/controls.js";
-import { withInfluencer } from "../context.js";
+import { maybeInfluencer, withInfluencer } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { sendApprovedReply } from "../conversation/agent.js";
 import { schedulePublish } from "../content/produce.js";
@@ -38,7 +38,7 @@ export function listReviews(status: ReviewRow["status"] | "all" = "pending", lim
  * post schedules it for the next posting window. RED items cannot be approved.
  */
 export async function approveReview(id: number, reviewer: string, editedText?: string): Promise<{ ok: boolean; message: string }> {
-  const r = await one<ReviewRow>("SELECT * FROM safety_reviews WHERE id = $1", [id]);
+  const r = await ownReview(id);
   if (!r) return { ok: false, message: "review not found" };
   if (r.status !== "pending") return { ok: false, message: `review is ${r.status}` };
   if (r.level === "red") return { ok: false, message: "RED items are never automated; handle them manually in Instagram" };
@@ -64,7 +64,7 @@ async function approveInContext(r: ReviewRow, id: number, reviewer: string, edit
   if (editedText?.trim()) {
     const a = await assessText(editedText, { direction: "outbound", skipLlm: true });
     if (a.level === "red") return { ok: false, message: `edited caption is red: ${a.categories.join(", ")}` };
-    await one("UPDATE posts SET caption = $2 WHERE id = $1", [post.id, editedText.trim()]);
+    await one("UPDATE posts SET caption = $2 WHERE id = $1 AND influencer_id = $3", [post.id, editedText.trim(), r.influencer_id]);
   }
   await one("UPDATE posts SET status = 'approved', reviewed_by = $2, reviewed_at = now(), updated_at = now() WHERE id = $1", [post.id, reviewer]);
   await one("UPDATE safety_reviews SET status = 'approved', reviewer = $2, reviewed_at = now() WHERE id = $1", [id, reviewer]);
@@ -73,19 +73,27 @@ async function approveInContext(r: ReviewRow, id: number, reviewer: string, edit
   return { ok: true, message: `Approved; publishing ${at.getTime() <= Date.now() + 60_000 ? "now" : `at ${at.toISOString()}`}` };
 }
 
+/** A review, only if it belongs to the influencer in context (when there is one). */
+async function ownReview(id: number): Promise<ReviewRow | undefined> {
+  const ctx = maybeInfluencer();
+  const r = await one<ReviewRow>("SELECT * FROM safety_reviews WHERE id = $1 AND ($2::int IS NULL OR influencer_id = $2)", [id, ctx?.id ?? null]);
+  return r ?? undefined;
+}
+
 export async function rejectReview(id: number, reviewer: string, note?: string): Promise<{ ok: boolean; message: string }> {
-  const r = await one<ReviewRow>("SELECT * FROM safety_reviews WHERE id = $1", [id]);
+  const r = await ownReview(id);
   if (!r) return { ok: false, message: "review not found" };
   if (r.status !== "pending") return { ok: false, message: `review is ${r.status}` };
   await one("UPDATE safety_reviews SET status = 'rejected', reviewer = $2, reviewed_at = now(), reason = coalesce($3, reason) WHERE id = $1", [id, reviewer, note ?? null]);
   if (r.subject_type === "reply") {
     const messageId = Number(r.subject_id.replace(/^message-/, ""));
-    if (Number.isFinite(messageId)) await one("UPDATE messages SET status = 'rejected' WHERE id = $1 AND status = 'pending_review'", [messageId]);
+    if (Number.isFinite(messageId)) await one("UPDATE messages SET status = 'rejected' WHERE id = $1 AND influencer_id = $2 AND status = 'pending_review'", [messageId, r.influencer_id]);
   } else {
-    await one("UPDATE posts SET status = 'rejected', reviewed_by = $2, reviewed_at = now(), last_error = $3, updated_at = now() WHERE id = $1", [
+    await one("UPDATE posts SET status = 'rejected', reviewed_by = $2, reviewed_at = now(), last_error = $3, updated_at = now() WHERE id = $1 AND influencer_id = $4", [
       r.subject_id,
       reviewer,
       note ?? "rejected by reviewer",
+      r.influencer_id,
     ]);
   }
   await withInfluencer(Number(r.influencer_id), () =>

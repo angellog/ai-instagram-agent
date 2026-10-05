@@ -15,7 +15,7 @@ import type { Persona } from "../persona/schema.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { composeSlide, FEED, inspectImage, STORY, type Overlay } from "../render/compose.js";
 import { assessText, gate, openReview } from "../safety/safety.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import type { Idea } from "./director.js";
 import type { VisualState } from "./history.js";
 import { structuralQc, visionQc, visionVerdict } from "./qc.js";
@@ -201,7 +201,7 @@ export async function composeAndHost(p: Persona, post: PostRow, slide: Slide, in
   const overlay = overlayFor(p, post, slide);
   const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors, post.media_type === "STORY" ? STORY : FEED);
   const digest = sha256(jpeg);
-  const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/${post.media_type === "STORY" ? "stories" : "posts"}/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
+  const hosted = await hostImage(jpeg, `${mediaPrefix(currentInfluencer().id)}/${post.media_type === "STORY" ? "stories" : "posts"}/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);
   await one(
     `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc, asset_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)

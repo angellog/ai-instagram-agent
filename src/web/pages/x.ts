@@ -27,7 +27,7 @@ export function registerX(app: FastifyInstance): void {
             link("Open Config & keys", "/admin/config#x", { variant: "primary" }),
           )
         : `<form method="post" action="/admin/x/connect" class="stack">
-             ${field("X username", input("username", "", { placeholder: "feetbitsneakers" }), { help: "The account to watch. No login needed while the agent is read-only.", required: true })}
+             ${field("X username", input("username", "", { placeholder: "brand or creator handle" }), { help: "The account to watch. No login needed while the agent is read-only.", required: true })}
              <button class="btn primary" type="submit">Connect</button>
            </form>`;
       const body = `${header("X (Twitter)", { sub: "Read-only for now: the agent reads mentions every 15 minutes and your posts' metrics once a day. It cannot post or reply." })}

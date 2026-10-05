@@ -7,7 +7,7 @@ import { recordDecision } from "../lib/decisions.js";
 import { persona } from "../persona/loader.js";
 import { composeSlide, sanitizeOverlayText, STORY, type Overlay } from "../render/compose.js";
 import { assessText } from "../safety/safety.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import { MAX_CAPTION, MAX_HASHTAGS } from "./caption.js";
 import { clearPublishJobs } from "./schedule.js";
 
@@ -144,7 +144,7 @@ export async function editStoryText(postId: string, headingRaw: string, by: stri
   const p = persona();
   const { jpeg, width, height } = await composeSlide(await download(row.generated_url), overlay, p.carousel.brand_colors, STORY);
   const digest = sha256(jpeg);
-  const hosted = await hostImage(jpeg, `influencers/${currentInfluencer().slug}/stories/${postId}/1-${digest.slice(0, 10)}.jpg`);
+  const hosted = await hostImage(jpeg, `${mediaPrefix(currentInfluencer().id)}/stories/${postId}/1-${digest.slice(0, 10)}.jpg`);
   await one(
     `UPDATE post_assets SET overlay = $2, public_url = $3, storage_provider = $4, width = $5, height = $6, sha256 = $7,
        qc = qc || jsonb_build_object('bytes', $8::int), updated_at = now() WHERE post_id = $1 AND position = 0`,

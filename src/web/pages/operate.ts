@@ -54,7 +54,7 @@ function tiktokSettingsCard(id: string, t: Record<string, any>, canEdit: boolean
       ${field("Title", input("title", t.title ?? "", { attrs: 'maxlength="90"' }), { help: "Shown on the photo post; up to 90 characters." })}
       ${field("Who can view", select("privacy", PRIVACY_CHOICES, t.privacy ?? "PUBLIC_TO_EVERYONE"), { help: "Until TikTok audits the app, posts go up as Only me whatever you pick." })}
       <label class="row small" style="margin:6px 0"><input type="checkbox" name="allow_comments" value="1"${t.allow_comments === false ? "" : " checked"}> Allow comments</label>
-      <label class="row small" style="margin:6px 0"><input type="checkbox" name="promotes_own_business" value="1"${t.promotes_own_business ? " checked" : ""}> Promotes her own business (e.g. FeetBit): shown as promotional content</label>
+      <label class="row small" style="margin:6px 0"><input type="checkbox" name="promotes_own_business" value="1"${t.promotes_own_business ? " checked" : ""}> Promotes the influencer's own business: shown as promotional content</label>
       <label class="row small muted" style="margin:6px 0 12px"><input type="checkbox" checked disabled> AI-generated label (always on)</label>
       ${button("Save TikTok settings", { icon: "check" })}</form>${used}`,
     { title: "TikTok settings", id: "tiktok" },
@@ -119,7 +119,7 @@ export function registerOperate(app: FastifyInstance): void {
         [id],
       ),
       many<{ level: string; source: string; message: string; created_at: Date }>(
-        "SELECT level, source, message, created_at FROM system_events WHERE level IN ('warn','error') AND (influencer_id = $1 OR influencer_id IS NULL) ORDER BY id DESC LIMIT 6",
+        "SELECT level, source, message, created_at FROM system_events WHERE level IN ('warn','error') AND influencer_id = $1 ORDER BY id DESC LIMIT 6",
         [id],
       ),
       one<{ total: number; replied: number; ignored: number }>(
@@ -171,7 +171,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
     `<form method="post" action="/admin/simulate" class="cols">
       ${field("Kind", select("kind", [["comment", "Comment"], ["dm", "Direct message"]], "comment"))}
       ${field("From", input("username", "test_follower"))}
-      <div style="grid-column:1/-1">${field("Message", input("text", "Which pair should I get for everyday wear?"), { help: "Runs the full pipeline (classify, memory, reasoning, safety). Recorded, never sent to Instagram." })}</div>
+      <div style="grid-column:1/-1">${field("Message", input("text", persona().brand?.curiosity_hooks[0] ?? "love this! what are you up to today?"), { help: "Runs the full pipeline (classify, memory, reasoning, safety). Recorded, never sent to Instagram." })}</div>
       <div>${button("Run through the agent", { icon: "send" })}</div></form>`,
     { title: "Simulate an interaction" },
   )}
@@ -316,7 +316,7 @@ ${card(
     const mins = (process.env.STORY_PLAN_CRON ?? "50 9,13,17,20 * * *").split(" ")[0] ?? "0";
     const checks = hours.split(",").filter((h) => /^\d+$/.test(h)).map((h) => `${h.padStart(2, "0")}:${mins.padStart(2, "0")}`).join(", ");
     const body = `${header("Stories", {
-      sub: "Light, in-the-moment frames from her day, separate from feed posts. They stop for review like posts do; open one to change its words or delete it.",
+      sub: "Light, in-the-moment frames from their day, separate from feed posts. They stop for review like posts do; open one to change its words or delete it.",
       actions: `${storyButton("Create a story now", true)}${directLink("story")}${link("Settings", "/admin/controls", { icon: "sliders", variant: "ghost" })}`,
     })}
 ${
@@ -334,13 +334,13 @@ ${card(
             <div class="meta">${s.text ? `"${esc(s.text.slice(0, 40))}" · ` : ""}${s.published_at ? `up ${ago(s.published_at)}` : s.status === "approved" && s.scheduled_for ? `scheduled ${esc(localLabel(new Date(s.scheduled_for), tz))}` : `made ${ago(s.created_at)}`}</div></a>`,
         )
         .join("")}</div>`
-    : empty("No stories yet", "Make one now to see how her stories look.", storyButton("Create a story now", true)),
+    : empty("No stories yet", "Make one now to see how their stories look.", storyButton("Create a story now", true)),
 )}
 ${card(
   `<ul class="small" style="margin:0;padding-left:18px;display:grid;gap:6px">
-    <li>Kinds: a moment from her day, a fit check, a shop drop (with the store address from the business knowledge), a trend reaction, or a question followers answer by replying.</li>
-    <li>No text on photos of her; words only on shots without her, never with numbers the business knowledge doesn't have.</li>
-    <li>Instagram's API can't add link stickers, polls, mentions or music, so the words are part of the image. Replies to a story arrive as DMs and she answers them like any DM.</li>
+    <li>Kinds: a moment from their day, a look, a brand moment (the brand's world in a natural shot; the store line from the business knowledge only on a turn the brand may be named), a trend reaction, or a question followers answer by replying.</li>
+    <li>No text on photos of the influencer; words only on shots without them, never with numbers the business knowledge doesn't have.</li>
+    <li>Instagram's API can't add link stickers, polls, mentions or music, so the words are part of the image. Replies to a story arrive as DMs and are answered like any DM.</li>
     <li>Stories disappear after 24 hours on Instagram; they stay listed here.</li></ul>`,
   { title: "How stories work" },
 )}`;
@@ -431,7 +431,7 @@ ${card(
     const textCard = isStory
       ? card(
           storyHasHer
-            ? `<p class="muted">${icon("info", 14)} She's in this photo, so it stays text-free (house rule: no text on photos of her).</p>`
+            ? `<p class="muted">${icon("info", 14)} The influencer is in this photo, so it stays text-free (house rule: no text on photos of them).</p>`
             : canEdit
               ? `<form method="post" action="/admin/posts/${id}/story-text">${field("Words on the image", input("text", storyText, { attrs: 'maxlength="90" id="story-text"', placeholder: "Leave empty for a plain photo" }), {
                   help: `Plain words, no emoji. The image is re-rendered from the original photo.${assets[0]?.overlay?.body ? ` The line "${esc(String(assets[0].overlay.body))}" underneath comes from the business knowledge and stays.` : ""}`,
@@ -722,7 +722,7 @@ ${card(table(["When", "", "Channel", "Text", "Status"], msgs.map((m) => [ago(m.c
   r.post("/admin/simulate", async (req: Req, reply) =>
     attempt(req, reply, "/admin/conversations", async () => {
       const acct = await primaryAccount();
-      const accountId = acct?.ig_user_id ?? (influencerId() === 1 ? env().INSTAGRAM_ACCOUNT_ID : undefined);
+      const accountId = acct?.ig_user_id;
       if (!accountId) throw new Error("attach an Instagram account first (simulations are routed by account)");
       const username = (req.body?.username || "test_follower").replace(/[^\w.]/g, "").slice(0, 30);
       const senderId = `sim_${username}`;

@@ -387,28 +387,33 @@ ${card(table(["Day", "LLM", "Images"], daily.map((d) => [esc(d.day), usd(d.llm),
   r.get(
     "/admin/events",
     async (req: Req, reply) => {
-      const scope = req.query.scope === "all" || !maybeInfluencer() ? "all" : "mine";
+      // An influencer's page shows only its own rows; platform rows (no influencer) have their own tab.
+      const q = String(req.query.scope ?? "");
+      const scope = !maybeInfluencer() || q === "all" ? "all" : q === "platform" ? "platform" : "mine";
       const id = maybeInfluencer()?.id ?? null;
+      const where = "($1 = 'all' OR ($1 = 'mine' AND influencer_id = $2) OR ($1 = 'platform' AND influencer_id IS NULL))";
       const [events, runs, failures] = await Promise.all([
         many<{ level: string; source: string; message: string; data: unknown; created_at: Date; influencer_id: number | null }>(
-          "SELECT * FROM system_events WHERE ($1 = 'all' OR influencer_id = $2 OR influencer_id IS NULL) ORDER BY id DESC LIMIT 150",
+          `SELECT * FROM system_events WHERE ${where} ORDER BY id DESC LIMIT 150`,
           [scope, id],
         ),
         many<{ queue: string; job_name: string; status: string; attempt: number; duration_ms: number | null; error: string | null; created_at: Date }>(
-          "SELECT * FROM job_runs WHERE ($1 = 'all' OR influencer_id = $2 OR influencer_id IS NULL) ORDER BY id DESC LIMIT 60",
+          `SELECT * FROM job_runs WHERE ${where} ORDER BY id DESC LIMIT 60`,
           [scope, id],
         ),
         many<{ job_name: string; n: number; avg_ms: number | null }>(
-          `SELECT job_name, count(*) FILTER (WHERE status <> 'completed')::int AS n, avg(duration_ms)::int AS avg_ms FROM job_runs WHERE created_at > now() - interval '24 hours' GROUP BY 1 ORDER BY 1`,
+          `SELECT job_name, count(*) FILTER (WHERE status <> 'completed')::int AS n, avg(duration_ms)::int AS avg_ms FROM job_runs WHERE created_at > now() - interval '24 hours' AND ${where} GROUP BY 1 ORDER BY 1`,
+          [scope, id],
         ),
       ]);
       const body = `${header("Events & jobs")}
 ${tabs([
-  { href: "/admin/events", label: "This influencer + platform", active: scope === "mine" },
+  ...(id ? [{ href: "/admin/events", label: `${maybeInfluencer()!.name} only`, active: scope === "mine" }] : []),
+  { href: "/admin/events?scope=platform", label: "Platform", active: scope === "platform" },
   { href: "/admin/events?scope=all", label: "Everything", active: scope === "all" },
 ])}
 <div class="grid">
-${card(table(["Job", "Failures / retries", "Avg ms"], failures.map((f) => [`<code>${esc(f.job_name)}</code>`, String(f.n), String(f.avg_ms ?? "—")])), { title: "Jobs (24h, platform)" })}
+${card(table(["Job", "Failures / retries", "Avg ms"], failures.map((f) => [`<code>${esc(f.job_name)}</code>`, String(f.n), String(f.avg_ms ?? "—")])), { title: scope === "mine" ? "Jobs (24h)" : "Jobs (24h, platform)" })}
 ${card(table(["When", "Job", "Status", "Try", "ms", "Error"], runs.map((x) => [ago(x.created_at), `<code>${esc(x.job_name)}</code>`, pill(x.status), String(x.attempt), String(x.duration_ms ?? ""), `<span class="small">${esc(x.error ?? "")}</span>`])), { title: "Recent job runs" })}
 </div>
 ${card(

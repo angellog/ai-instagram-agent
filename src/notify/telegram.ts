@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import { setting } from "../config/settings.js";
 import type { FetchLike } from "../lib/async.js";
 import { logger } from "../lib/logger.js";
+import { maybeInfluencer } from "../context.js";
 
 let fetchImpl: FetchLike = fetch;
 export function setNotifyFetch(f: FetchLike): void {
@@ -19,6 +20,9 @@ export async function notify(text: string, adminPath?: string): Promise<void> {
   const [token, chatId] = [await setting("TELEGRAM_BOT_TOKEN"), await setting("TELEGRAM_CHAT_ID")];
   if (!token || !chatId) return;
   const link = adminPath ? `\n${e.PUBLIC_BASE_URL.replace(/\/$/, "")}${adminPath}` : "";
+  // One chat serves every influencer: say whose alert it is.
+  const who = maybeInfluencer()?.name;
+  if (who) text = `[${who}] ${text}`;
   try {
     const r = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",

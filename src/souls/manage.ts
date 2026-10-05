@@ -5,7 +5,7 @@ import { adapter } from "../generation/adapters/index.js";
 import { sha256 } from "../lib/crypto.js";
 import { PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import { activeSoul, createSoul, setSoulBinding, type SoulRow } from "./souls.js";
 
 /**
@@ -15,11 +15,6 @@ import { activeSoul, createSoul, setSoulBinding, type SoulRow } from "./souls.js
 
 const MIN_SIDE = 512;
 
-async function slugOf(influencerId: number): Promise<string> {
-  const r = await one<{ slug: string }>("SELECT slug FROM influencers WHERE id = $1", [influencerId]);
-  if (!r) throw new PermanentError(`influencer ${influencerId} not found`);
-  return r.slug;
-}
 
 /** True when the URL is already a durable reference/asset owned by this influencer. */
 async function owned(influencerId: number, url: string): Promise<boolean> {
@@ -49,7 +44,7 @@ export async function rehostReference(influencerId: number, source: string): Pro
   if (!meta?.width || !meta.height) throw new PermanentError("that file is not a readable image");
   if (Math.min(meta.width, meta.height) < MIN_SIDE) throw new PermanentError(`image is too small (${meta.width}×${meta.height}); use at least ${MIN_SIDE}px on the short side`);
   const jpeg = await sharp(bytes).rotate().resize(2048, 2048, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
-  const { url } = await hostImage(jpeg, `influencers/${await slugOf(influencerId)}/refs/${sha256(jpeg).slice(0, 16)}.jpg`);
+  const { url } = await hostImage(jpeg, `${mediaPrefix(influencerId)}/refs/${sha256(jpeg).slice(0, 16)}.jpg`);
   return url;
 }
 

@@ -7,7 +7,7 @@ import { sha256 } from "../lib/crypto.js";
 import { BudgetExceededError, errorMessage, PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
 import { logger } from "../lib/logger.js";
-import { download, hostImage } from "../storage/host.js";
+import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import { adapter } from "./adapters/index.js";
 import { MockAdapter } from "./adapters/mock.js";
 import { listModels, policyFor, providerStates, updateHealth } from "./registry.js";
@@ -253,7 +253,6 @@ async function failRequest(id: string, error: string): Promise<void> {
 /** Copy provider output to durable storage immediately (provider URLs expire). */
 async function storeAssets(req: GenerationRequest, requestId: string, cand: Candidate, urls: string[]): Promise<GeneratedAsset[]> {
   const out: GeneratedAsset[] = [];
-  const slug = (await one<{ slug: string }>("SELECT slug FROM influencers WHERE id = $1", [req.influencerId]))?.slug ?? String(req.influencerId);
   for (const [i, url] of urls.entries()) {
     const isVideo = req.modality.includes("video");
     const bytes = url.startsWith("mock://") ? MockAdapter.images.get(url.slice(7)) : await download(url, isVideo ? 300 * 1024 * 1024 : 30 * 1024 * 1024, isVideo ? "video/" : "image/");
@@ -270,7 +269,7 @@ async function storeAssets(req: GenerationRequest, requestId: string, cand: Cand
     }
     const ext = isVideo ? "mp4" : mime.split("/")[1].replace("jpeg", "jpg");
     const digest = sha256(bytes);
-    const hosted = await hostImage(bytes, `influencers/${slug}/gen/${requestId}/${i}-${digest.slice(0, 10)}.${ext}`, { contentType: mime });
+    const hosted = await hostImage(bytes, `${mediaPrefix(req.influencerId)}/gen/${requestId}/${i}-${digest.slice(0, 10)}.${ext}`, { contentType: mime });
     const row = await one<{ id: string }>(
       `INSERT INTO assets (influencer_id, kind, url, storage_provider, storage_key, mime_type, width, height, sha256, provider, model, generation_request_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,

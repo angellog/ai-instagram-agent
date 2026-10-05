@@ -3,6 +3,7 @@ import { cleanDirection, createProgress, DIRECTION_MAX, recentRuns, startCreate,
 import { operatorGate } from "../../content/director.js";
 import { getControls } from "../../config/controls.js";
 import { currentInfluencer } from "../../context.js";
+import { persona } from "../../persona/loader.js";
 import { primaryAccount } from "../../instagram/accounts.js";
 import { consoleRouter, done, isUuid, render, reviewer, type Req } from "../console.js";
 import { ago, card, esc, header, icon, link, pill, table } from "../ui/kit.js";
@@ -24,7 +25,12 @@ export function directLink(kind: "post" | "story" = "post"): string {
   return `<a class="btn ghost" href="/admin/create${kind === "story" ? "?kind=story" : ""}#direct" title="Tell the director what this ${kind} should be about">${icon("pencil", 16)}<span>Direct it</span></a>`;
 }
 
-const EXAMPLES = ["Jordan 4 Black Cat at the shop", "rainy evening, cosy fit", "Pioneer Mall weekend drop", "gym morning, running shoes", "date night, clean white sneakers"];
+/** Direction ideas from THIS influencer's own life and brand moments (never another influencer's). */
+function examples(): string[] {
+  const p = persona();
+  const pool = [...(p.brand?.natural_moments ?? []), ...p.weekend_ideas, ...p.daily_life.activities.filter((a) => a.postable).map((a) => a.activity)];
+  return [...new Set(pool.map((x) => x.replace(/\s+/g, " ").trim()).filter((x) => x.length > 3 && x.length <= 60))].slice(0, 5);
+}
 
 /** The direction box: a few words, then Create a post or Create a story. */
 function directForm(kind: "post" | "story", value = ""): string {
@@ -32,9 +38,9 @@ function directForm(kind: "post" | "story", value = ""): string {
 <form method="post" action="/admin/create" class="direct-form">
   <div class="field"><label id="direct-h" for="direction">Direction <span class="meta">(optional)</span></label>
     <textarea id="direction" name="direction" maxlength="${DIRECTION_MAX}" rows="2" placeholder="A few words: a product, place, occasion or mood" aria-describedby="direction-help">${esc(value)}</textarea>
-    <p class="help" id="direction-help">The director builds the idea around these words. Leave it empty to let her pick. She still stays in character, keeps to the safety rules, and only states business facts from the knowledge base. <span class="counter" data-count-for="direction">0/${DIRECTION_MAX}</span></p>
+    <p class="help" id="direction-help">The director builds the idea around these words. Leave it empty to let ${esc(currentInfluencer().name)} pick. They still stay in character, keeps to the safety rules, and only states business facts from the knowledge base. <span class="counter" data-count-for="direction">0/${DIRECTION_MAX}</span></p>
   </div>
-  <div class="chips" role="group" aria-label="Examples">${EXAMPLES.map((e) => `<button type="button" class="chip" data-fill="${esc(e)}">${esc(e)}</button>`).join("")}</div>
+  <div class="chips" role="group" aria-label="Examples">${examples().map((e) => `<button type="button" class="chip" data-fill="${esc(e)}">${esc(e)}</button>`).join("")}</div>
   <div class="row" style="margin-top:14px">
     <button class="btn${kind === "post" ? " primary" : ""}" type="submit" name="kind" value="post">${icon("zap", 16)}<span>Create a post</span></button>
     <button class="btn${kind === "story" ? " primary" : ""}" type="submit" name="kind" value="story">${icon("sparkles", 16)}<span>Create a story</span></button>

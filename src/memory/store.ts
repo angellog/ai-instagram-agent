@@ -83,7 +83,8 @@ export async function worldMemories(kinds: string[] = [], limit = 20): Promise<M
 export async function expireMemories(): Promise<number> {
   const r = await many<{ id: number }>(
     `UPDATE memories SET status = 'expired', updated_at = now()
-     WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= now() RETURNING id`,
+     WHERE influencer_id = $1 AND status = 'active' AND expires_at IS NOT NULL AND expires_at <= now() RETURNING id`,
+    [influencerId()],
   );
   return r.length;
 }

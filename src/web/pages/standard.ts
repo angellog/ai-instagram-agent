@@ -101,7 +101,7 @@ ${card(
   ]
     .map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`)
     .join("")}</div>
-   <p class="help" style="margin-top:10px">Plus: openly AI, a soul face, a profile kit (bio + picture), Instagram connected, a news brief under ${STANDARD.trends_max_age_h}h old, replies that know she's AI, and true business facts for any brand she's affiliated with. Business facts are never invented: you add them.</p>`,
+   <p class="help" style="margin-top:10px">Plus: openly AI, a soul face, a profile kit (bio + picture), Instagram connected, a news brief under ${STANDARD.trends_max_age_h}h old, replies that know they're AI, pronouns chosen by you, a brand-pull profile for affiliated influencers, and true business facts for that brand. Business facts are never invented: you add them.</p>`,
   { title: "The standard" },
 )}
 ${reports.length ? `<div class="grid std-grid">${reports.map((rep) => influencerCard(rep, runOf.get(rep.id))).join("")}</div>` : card(empty("No influencers yet"))}`;

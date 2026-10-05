@@ -33,11 +33,12 @@ import { sweep } from "./sweeper.js";
 type Handler = (job: Job) => Promise<unknown>;
 
 /**
- * Jobs created before v1.0.0 carry no influencerId; they all belonged to the
- * first (and then only) influencer.
+ * Every influencer-scoped job carries its owner. A job without one never runs
+ * as some default influencer: it fails loudly instead of borrowing Zuri's brain.
  */
 function ownerOf(job: Job): number {
-  const id = Number(job.data?.influencerId ?? 1);
+  if (job.data?.influencerId === undefined || job.data?.influencerId === null) throw new PermanentError(`job ${job.name} has no influencerId`);
+  const id = Number(job.data.influencerId);
   if (!Number.isInteger(id) || id < 1) throw new PermanentError(`job ${job.name} has invalid influencerId`);
   return id;
 }
@@ -56,7 +57,8 @@ export async function forEachActiveInfluencer<T>(label: string, fn: () => Promis
       out[inf.slug] = await withInfluencer(Number(inf.id), fn);
     } catch (e) {
       out[inf.slug] = { error: errorMessage(e) };
-      await recordEvent("error", "worker", `${label} failed for ${inf.slug}`, { influencerId: inf.id, error: errorMessage(e) });
+      // Logged inside the influencer's own context, so it shows on their pages only.
+      await withInfluencerLoose(Number(inf.id), () => recordEvent("error", "worker", `${label} failed`, { error: errorMessage(e) }));
     }
   }
   return out;
@@ -184,7 +186,7 @@ async function onFinalFailure(job: Job, err: Error): Promise<void> {
   if (job.data?.influencerId) {
     await withInfluencer(ownerOf(job), () => compensate(job, err)).catch((e) => logger.error({ err: e }, "compensation failed"));
   } else {
-    await compensate(job, err);
+    await compensate(job, err).catch((e) => logger.error({ err: e }, "compensation failed"));
   }
 }
 

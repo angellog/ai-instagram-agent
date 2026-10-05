@@ -125,3 +125,12 @@ export async function download(url: string, maxBytes = 30 * 1024 * 1024, expect 
   if (buf.length > maxBytes) throw new Error(`download too large: ${buf.length} bytes`);
   return buf;
 }
+
+/**
+ * Where an influencer's media lives. Keyed by the permanent numeric id: slugs can
+ * be renamed or reused after an archive, which could overwrite another
+ * influencer's files in the shared bucket. Older files keep their old paths.
+ */
+export function mediaPrefix(influencerId: number): string {
+  return `influencers/i${influencerId}`;
+}
