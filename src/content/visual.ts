@@ -7,12 +7,12 @@ type Slide = Idea["slides"][number];
 const COMPOSITION_TEXT: Record<string, string> = {
   close_up: "close-up portrait framing, head and shoulders",
   medium: "medium shot from the waist up",
-  full_body: "full-body shot, head to sneakers, sneakers clearly visible",
-  detail: "tight detail shot (sneakers, hands, textures), shallow depth of field",
+  full_body: "full-body shot, head to toe",
+  detail: "tight detail shot (hands, objects, textures), shallow depth of field",
   flat_lay: "top-down flat lay on a clean surface",
   environment: "wide environmental shot, subject small in the frame, the place tells the story",
   over_shoulder: "over-the-shoulder point of view",
-  mirror: "mirror fit-check shot holding a phone",
+  mirror: "casual mirror shot holding a phone",
 };
 
 const LIGHT_TEXT: Record<string, string> = {
@@ -42,18 +42,19 @@ export function slidePrompt(p: Persona, idea: { format: Idea["format"] | "story"
       `Photograph of the same person shown in the identity reference image(s): keep the face, skin tone, hair, body and proportions identical to the reference.`,
       `Use the reference ONLY for who the person is. Ignore the clothing, background and lighting in the reference photo; dress them exactly as described below.`,
       `Appearance: ${ch.appearance.trim()}. Hair: ${ch.hairstyle}. Skin tone: ${ch.skin_tone}. Build: ${ch.body_type}.`,
-      `Wearing ${state.outfit ?? ch.recurring_clothing_preferences[0]}${state.sneakers ? `, with ${state.sneakers} on their feet` : ""}.${
+      `Wearing ${state.outfit ?? ch.recurring_clothing_preferences[0]}${legacyShoes(state) ? `, with ${legacyShoes(state)} on their feet` : ""}.${
         ch.signature_accessories.length ? ` Accessories: ${ch.signature_accessories.join(", ")}.` : ""
       }`,
     );
     if (ch.face_policy === "faceless") lines.push("The face is not visible: framed from the chin down or turned away.");
   } else {
     lines.push(
-      `No people in frame${state.sneakers ? ` except possibly hands or feet; the focus is ${state.sneakers}` : ""}.`,
+      `No people in frame except possibly hands${item(state) ? `; ${item(state)} sits naturally in the scene` : ""}.`,
       "Same shoot and styling as the rest of the series.",
     );
   }
 
+  if (slide.include_character && state.featured_item) lines.push(`Somewhere natural in the scene (not posed with, not the subject, no visible logo text): ${state.featured_item}.`);
   lines.push(`Shot: ${slide.shot.trim()}`);
   lines.push(`Framing: ${COMPOSITION_TEXT[slide.composition] ?? slide.composition}.`);
   if (loc) lines.push(`Location: ${loc.description}.`);
@@ -68,4 +69,14 @@ export function slidePrompt(p: Persona, idea: { format: Idea["format"] | "story"
   else if (p.carousel.text_overlays && !slide.include_character) lines.push("Leave calm, uncluttered space in the lower third of the frame.");
   if (ph.negative) lines.push(`Avoid: ${ph.negative.trim()}`);
   return lines.join("\n");
+}
+
+/** The brand item in this shot (new featured_item, or a legacy pair of shoes). */
+function item(state: VisualState): string | undefined {
+  return state.featured_item || state.sneakers || undefined;
+}
+
+/** Older posts stored the pair on foot; keep rendering them the same way. */
+function legacyShoes(state: VisualState): string | undefined {
+  return state.featured_item ? undefined : state.sneakers || undefined;
 }

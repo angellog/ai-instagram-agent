@@ -13,7 +13,7 @@ import { SLOTS } from "../persona/schema.js";
 import { outfits } from "../content/wardrobe.js";
 import { activeSoul } from "../souls/souls.js";
 import { latestBrief, refreshTrends } from "../trends/trends.js";
-import { COMPOSE_TIMEOUT_MS } from "./compose.js";
+import { COMPOSE_TIMEOUT_MS, template } from "./compose.js";
 import { getInfluencer, updatePersona } from "./manage.js";
 import { composeProfileText, getKit, profilePictureFromSoul } from "./profile.js";
 
@@ -75,6 +75,7 @@ const SECTION: Record<string, string> = {
   weekend_ideas: "weekend_ideas",
   locations: "visual.locations",
   trends: "trends",
+  brand: "brand",
 };
 
 const isWeekend = (a: Persona["daily_life"]["activities"][number]) => a.weekends_only || a.days.some((d) => d === "saturday" || d === "sunday");
@@ -92,6 +93,27 @@ export function personaChecks(p: Persona): Check[] {
   const q = p.trends.queries;
   const labelled = q.filter((x) => typeof x !== "string").length;
   return [
+    {
+      key: "pronouns",
+      group: "Persona",
+      label: "Pronouns",
+      ok: Boolean(p.identity.pronouns),
+      detail: p.identity.pronouns ? `${p.identity.pronouns}` : "not set: prompts use neutral wording until you choose (never guessed from the name)",
+      fix: "manual",
+      href: "/admin/persona#edit",
+    },
+    {
+      key: "brand",
+      group: "Persona",
+      label: "Brand pull (UGC, not ads)",
+      ok: !p.identity.affiliation || Boolean(p.brand && p.brand.products.length >= 3 && p.brand.natural_moments.length >= 4),
+      detail: p.brand
+        ? `${p.brand.name}: ${short(p.brand.products.length, 3, "items")}, ${short(p.brand.natural_moments.length, 4, "natural moments")}, named in at most ${Math.round(p.brand.mention_rate * 100)}% of posts`
+        : p.identity.affiliation
+          ? `affiliated with ${p.identity.affiliation} but no brand-pull profile: content can't weave the brand in naturally`
+          : "independent creator (no brand)",
+      fix: "ai",
+    },
     { key: "disclosure", group: "Persona", label: "Openly AI", ok: /\bai\b|artificial/i.test(p.identity.ai_disclosure), detail: p.identity.ai_disclosure.slice(0, 120), fix: "manual", href: "/admin/persona#edit" },
     {
       key: "closet",
@@ -113,7 +135,7 @@ export function personaChecks(p: Persona): Check[] {
     },
     { key: "weekend", group: "Daily life", label: "Weekend life", ok: weekend >= STANDARD.weekend_activities, detail: short(weekend, STANDARD.weekend_activities, "weekend activities"), fix: "ai" },
     { key: "weekend_ideas", group: "Daily life", label: "Weekend post ideas", ok: p.weekend_ideas.length >= STANDARD.weekend_ideas, detail: short(p.weekend_ideas.length, STANDARD.weekend_ideas, "ideas"), fix: "ai" },
-    { key: "locations", group: "Daily life", label: "Places she goes", ok: p.visual.locations.length >= STANDARD.locations, detail: short(p.visual.locations.length, STANDARD.locations, "locations"), fix: "ai" },
+    { key: "locations", group: "Daily life", label: "Places they go", ok: p.visual.locations.length >= STANDARD.locations, detail: short(p.visual.locations.length, STANDARD.locations, "locations"), fix: "ai" },
     {
       key: "trends",
       group: "News",
@@ -216,7 +238,8 @@ Rules:
 - visual.character.closet: tops, bottoms, layers, one_pieces, activewear (lists of strings) and occasions (list of {occasion, outfit, keywords, days}); days are lowercase weekday names.
 - daily_life.activities: items {slot, activity, locations, postable, weight, weekdays_only, weekends_only, days}; slot is EXACTLY one of: ${SLOTS.join(", ")}; locations are ids from visual.locations (existing or ones you add in the same answer).
 - visual.locations: items {id, description, slots}; ids are lowercase-with-dashes.
-- trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".`;
+- trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".
+- brand: {name, category, products, natural_moments, curiosity_hooks, mention_rate}. name and category come from identity.affiliation and the BUSINESS KNOWLEDGE; products are 4-6 generic descriptions of what the brand sells (no invented product names, prices or offers); natural_moments are 5-8 moments from THIS person's own daily_life where the category belongs without being the subject (a breakfast stays about breakfast); curiosity_hooks are 2-4 questions followers would ask; mention_rate 0.2 unless content_rules give another share. Keep any existing values.`;
 
 /** Sections that are plain lists of strings: models sometimes send objects instead. */
 const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas"]);
@@ -229,7 +252,7 @@ const at = (o: unknown, path: string) => path.split(".").reduce<unknown>((v, k) 
 export function structureExamples(paths: string[]): string {
   let ref: unknown;
   try {
-    ref = parse(readFileSync(resolve(process.env.PERSONA_PATH ?? "config/persona.yaml"), "utf8"));
+    ref = parse(template());
   } catch {
     return "";
   }
@@ -250,7 +273,7 @@ export async function upgradePersona(id: number, failing: Check[]): Promise<stri
   const need = failing.filter((c) => SECTION[c.key]).map((c) => `- ${c.label}: ${c.detail}`).join("\n");
   const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region.`;
   const shapes = structureExamples(paths);
-  const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\nWHAT FALLS SHORT:\n${need}\n\n${minimums}\n\n${
+  const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\n${paths.includes("brand") && inf.knowledge_yaml?.trim() ? `BUSINESS KNOWLEDGE (the only source of brand facts):\n${inf.knowledge_yaml}\n\n` : ""}WHAT FALLS SHORT:\n${need}\n\n${minimums}\n\n${
     shapes ? `STRUCTURE TO MATCH (from a different creator: copy the exact shape of each key, lists of plain strings stay plain strings; never copy the content):\n${shapes}\n\n` : ""
   }Return the complete new value for exactly these keys: ${paths.join(", ")}.`;
   let text = await llm().generate({ operation: "persona.upgrade", tier: "smart", maxTokens: 8000, timeoutMs: COMPOSE_TIMEOUT_MS, system: UPGRADE_SYSTEM, prompt });

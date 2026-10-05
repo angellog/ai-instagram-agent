@@ -18,6 +18,8 @@ import { trendsForPrompt } from "../trends/trends.js";
 import { ensureDayPlan } from "./activities.js";
 import { COMPOSITIONS, directionBlock, operatorGate, type Idea } from "./director.js";
 import { recentContent } from "./history.js";
+import { brandMentionBudget, brandPullBlock } from "./brandpull.js";
+import { pronouns } from "../persona/pronouns.js";
 import type { VisualState } from "./history.js";
 import { planOutfits } from "./wardrobe.js";
 
@@ -29,11 +31,11 @@ import { planOutfits } from "./wardrobe.js";
  *
  * House rules enforced in code, whatever the model says:
  *  - never text on a photo of the influencer;
- *  - a shop story's address line comes verbatim from the business knowledge;
+ *  - a brand story's address line comes verbatim from the business knowledge, and only on a turn the brand may be named;
  *  - on-image text may not carry numbers the knowledge or headlines don't.
  */
 
-export const STORY_KINDS = ["moment", "outfit", "shop", "trend", "question"] as const;
+export const STORY_KINDS = ["moment", "look", "brand", "trend", "question"] as const;
 export type StoryKind = (typeof STORY_KINDS)[number];
 
 const MAX_STORY_TEXT = 70;
@@ -47,10 +49,10 @@ export const storySchema = z.object({
       activity_id: z.number().int().nullable().describe("The activity this moment comes from, or null"),
       shot: z.string().describe("What the vertical phone photo shows, concretely"),
       composition: z.enum(COMPOSITIONS),
-      include_character: z.boolean().describe("true when she is in the photo"),
+      include_character: z.boolean().describe("true when the creator is in the photo"),
       location_id: z.string().nullable(),
       time_of_day: z.enum(TIMES_OF_DAY),
-      sneakers: z.string().describe("The pair in the shot or on her feet, described generically; empty if none"),
+      featured_item: z.string().describe("One item from the brand's category naturally in the shot, described generically; empty if none fits"),
       text: z.string().describe(`On-image line, plain words, max ${MAX_STORY_TEXT} characters, no emoji, no hashtags. MUST be empty when include_character is true.`),
       alt_text: z.string().describe("Plain description of the image, max 200 chars"),
     })
@@ -99,7 +101,7 @@ export async function storyGate(c: Controls, p: Persona, now: Date, operator: bo
   return undefined;
 }
 
-/** The shop line a "shop" story must carry, taken verbatim from the knowledge base (never written by the model). */
+/** The shop line a "brand" story carries on a naming turn, taken verbatim from the knowledge base (never written by the model). */
 export function shopLine(): string | undefined {
   const entry = knowledge().find((k) => /store|shop|location/i.test(k.id) && k.must_include?.length);
   return entry ? entry.must_include!.join(", ") : undefined;
@@ -125,7 +127,10 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
   );
   const todaysPosts = worn.filter((r) => r.format !== "story" && localParts(new Date(r.createdAt), p.identity.timezone).day === day);
   const trends = await trendsForPrompt("content");
-  const shop = shopLine();
+  // Naming the brand (a shop footer does) only on a turn the influencer's mention rate allows.
+  const recentWords = [...worn.map((r) => r.caption), ...stories.map((x) => x.text)];
+  const mayName = brandMentionBudget(p, recentWords).mayName;
+  const shop = mayName ? shopLine() : undefined;
   const weekend = weekday === 0 || weekday === 6;
 
   const started = Date.now();
@@ -134,12 +139,12 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
     tier: "smart",
     maxTokens: 900,
     temperature: 0.9,
-    system: storySystem(p, shop),
+    system: storySystem(p, shop, brandPullBlock(p, recentWords, knowledge(), "story")),
     prompt: [
       `NOW: ${day}, ${slot.replace("_", " ")} in ${p.identity.location}${weekend ? " (weekend)" : ""}.`,
       `TODAY SO FAR (id | slot | activity | location):\n${activities.map((a) => `- ${a.id} | ${a.slot} | ${a.activity} | ${a.location ?? "-"}`).join("\n") || "- nothing planned yet"}`,
       `LOCATIONS:\n${p.visual.locations.map((l) => `${l.id}: ${l.description}`).join("\n")}`,
-      `TODAY'S OUTFIT (she is wearing this all day; use it exactly): "${outfits.everyday}". Workout: "${outfits.sport}".`,
+      `TODAY'S OUTFIT (${pronouns(p).subj} ${pronouns(p).is} wearing this all day; use it exactly): "${outfits.everyday}". Workout: "${outfits.sport}".`,
       todaysPosts.length ? `ALREADY ON THE FEED TODAY: ${todaysPosts.map((r) => `"${r.topic}"`).join("; ")}. A story can be a behind-the-scenes angle, never the same shot.` : "",
       `RECENT STORIES (newest first; don't repeat):\n${stories.map((s) => `- ${s.kind}: ${s.shot.slice(0, 90)}${s.text ? ` / text "${s.text}"` : ""}`).join("\n") || "- none yet"}`,
       trends ? `TRENDS AND NEWS (reference only if it fits; never add details beyond the headline):\n${trends}` : "",
@@ -163,7 +168,7 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
     location_id: s.location_id,
     time_of_day: s.time_of_day,
     outfit: wearing,
-    sneakers: s.sneakers || undefined,
+    featured_item: s.featured_item || undefined,
     hairstyle: p.visual.character.hairstyle,
     compositions: [s.composition],
     local_day: day,
@@ -213,18 +218,13 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
 export function normalizeStory(s: StoryPlan, p: Persona, shop: string | undefined, trends = ""): StoryPlan & { footer: string; adjustments: string[] } {
   const out = { ...s, text: s.text.replace(/\s+/g, " ").trim(), footer: "", adjustments: [] as string[] };
   if (out.location_id && !p.visual.locations.some((l) => l.id === out.location_id)) out.location_id = null;
-  if (out.kind === "shop") {
-    if (!shop) {
-      out.kind = "moment";
-      out.adjustments.push("no shop in the business knowledge: made it a moment");
-    } else {
-      out.include_character = false;
-      out.footer = shop;
-    }
+  if (out.kind === "brand" && shop) {
+    out.include_character = false;
+    out.footer = shop;
   }
   if (out.include_character && out.text) {
     out.text = "";
-    out.adjustments.push("removed text: never text on a photo of her");
+    out.adjustments.push("removed text: never text on a photo of the creator");
   }
   if (out.text.length > MAX_STORY_TEXT) {
     out.text = `${out.text.slice(0, MAX_STORY_TEXT - 1).replace(/\s+\S*$/, "")}...`;
@@ -241,22 +241,28 @@ export function normalizeStory(s: StoryPlan, p: Persona, shop: string | undefine
   return out;
 }
 
-function storySystem(p: Persona, shop: string | undefined): string {
+function storySystem(p: Persona, shop: string | undefined, brandPull: string): string {
+  const pr = pronouns(p);
   return `${personaSystemBlock(p)}
 
 ---
 You plan ONE Instagram Story for this creator right now: a light, in-the-moment vertical phone photo, the kind real people post between feed posts.
 Kinds:
-- moment: a slice of what she's doing now (coffee on the table, the view on her run, laces being cleaned). Often no face: hands, feet, POV, the place.
-- outfit: a quick mirror or full-length fit check of today's outfit.
-${shop ? `- shop: a product or shop-floor shot at the store, no person in frame. Write a short line about the pair or the drop; the shop address is added underneath automatically (don't write it).` : ""}
-- trend: a small reaction to one of the headlines, as a photo of her world plus a short line.
-- question: a photo plus a short question followers can answer by replying to the story (e.g. "Which pair for Saturday?").
+- moment: a slice of what ${pr.subj} ${pr.is} doing now (the table, the view, hands at work, the walk). Often no face: hands, POV, the place.
+- look: a quick mirror or full-length shot of today's outfit or look.
+${
+  p.brand
+    ? `- brand: a natural, in-life shot where something from ${p.brand.name}'s world (${p.brand.category}) belongs, never a product ad.${shop ? " The shop line is added underneath automatically (don't write it)." : " Do not name the brand this time."}`
+    : ""
+}
+- trend: a small reaction to one of the headlines, as a photo of ${pr.poss} world plus a short line.
+- question: a photo plus a short question followers can answer by replying to the story.
 Rules:
 - "wait" is fine if nothing is worth a story now or it would repeat a recent one.
-- Text goes ONLY on photos without her in them, and at most ${MAX_STORY_TEXT} characters of plain words: no emoji, no hashtags, no @mentions, no links. When include_character is true, text is "".
+- Text goes ONLY on photos without ${pr.obj} in them, and at most ${MAX_STORY_TEXT} characters of plain words: no emoji, no hashtags, no @mentions, no links. When include_character is true, text is "".
 - Never state prices, stock, dates or numbers unless they are in the headlines; never invent facts.
-- Vary kinds; keep it casual. Return JSON only.`;
+- Vary kinds; keep it casual.${brandPull ? `\n\n${brandPull}` : ""}
+Return JSON only.`;
 }
 
 /** The influencer's recent stories, newest first (console). */

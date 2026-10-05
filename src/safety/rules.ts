@@ -36,7 +36,7 @@ const RULES: Rule[] = [
   { level: "red", category: "illegal", re: /\b(fake (id|passport)|counterfeit money|buy (weed|cocaine|drugs)|stolen (card|account)s?|launder\w*)\b/i },
   { level: "red", category: "credentials", re: /\b(password|passcode|pin code|otp|verification code|cvv)\b\s*[:=]?\s*\S+/i },
   { level: "red", category: "payment_data", re: /\b(?:\d[ -]?){13,19}\b/, outboundOnly: true },
-  { level: "red", category: "impersonation", re: /\b(i am|i'm|this is) (the )?(official|real) (nike|adidas|jordan|meta|instagram)\b/i, outboundOnly: true },
+  { level: "red", category: "impersonation", re: /\b(i am|i'm|this is) (the )?official (account|page|store|team) of\b|\b(i am|i'm|this is) (the )?(official|real) (meta|instagram|tiktok)\b/i, outboundOnly: true },
   { level: "red", category: "human_claim", re: /\b(i'?m|i am) (a )?(real|human|not an? (ai|bot))\b(?! creator)/i, outboundOnly: true },
 
   // ---- YELLOW: review required
@@ -44,7 +44,7 @@ const RULES: Rule[] = [
   { level: "yellow", category: "religion", re: /\b(religion|church|mosque|islam|christian\w*|jesus|allah|god says)\b/i, outboundOnly: true },
   { level: "yellow", category: "health_claim", re: /\b(cures?|diagnos\w*|medication|prescri\w*|weight loss pill|detox)\b/i, outboundOnly: true },
   { level: "yellow", category: "financial", re: /\b(invest(ment)?|crypto|bitcoin|forex|loan|guaranteed (profit|return)s?)\b/i, outboundOnly: true },
-  { level: "yellow", category: "accusation", re: /\b(scam(mer)?s?|fraud|fake (store|seller|pair)|thief|thieves|stole|rip[- ]?off|lawsuit|sue)\b/i },
+  { level: "yellow", category: "accusation", re: /\b(scam(mer)?s?|fraud|fake (store|seller|product|item|pair)|thief|thieves|stole|rip[- ]?off|lawsuit|sue)\b/i },
   { level: "yellow", category: "commercial_promise", re: /\b(in stock|restock(ed|ing)? (on|this|next)|price is|costs? (ugx|shs|\$)|\d[\d,]*\s?(ugx|shs|usd)|discount code|free shipping|giveaway)\b/i, outboundOnly: true },
   { level: "yellow", category: "release_claim", re: /\b(drops?|releas\w*|launch\w*) (on|this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month|\d)/i, outboundOnly: true },
   { level: "yellow", category: "announcement", re: /\b(big announcement|officially announc\w*|we are partnering|collab(oration)? with)\b/i, outboundOnly: true },

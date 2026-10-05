@@ -52,6 +52,7 @@ function readBrief(b: Record<string, string | undefined>): HatchBrief {
     brand: t("brand"),
     language: t("language"),
     faith: t("faith"),
+    pronouns: (["she", "he", "they"] as const).find((x) => x === t("pronouns")),
   };
 }
 
@@ -59,19 +60,20 @@ function briefForm(b: Partial<HatchBrief> = {}, to = "/admin/hatch"): string {
   return `<form method="post" action="${to}">
   <div class="cols">
     ${field("Name", input("name", b.name ?? "", { attrs: 'required maxlength="60"', placeholder: "e.g. Amara" }), { required: true })}
-    ${field("Home city", input("city", b.city ?? "", { attrs: "required", placeholder: "e.g. Nairobi, Kenya" }), { required: true })}
+    ${field("Home city", input("city", b.city ?? "", { attrs: "required", placeholder: "e.g. Kampala, Uganda" }), { required: true })}
     ${field("Timezone", input("timezone", b.timezone ?? "", { attrs: 'list="tz"', placeholder: "auto from the city" }))}
+    ${field("Pronouns", select("pronouns", [["", "— choose —"], ["she", "she / her"], ["he", "he / him"], ["they", "they / them"]], b.pronouns ?? "", "required"), { required: true, help: "Used in every prompt about them. Never guessed from the name." })}
     ${field("Age", input("age", b.age ?? "", { placeholder: "e.g. 26" }))}
   </div>
-  ${field("Niche", input("niche", b.niche ?? "", { attrs: "required", placeholder: "e.g. running, healthy food and weekend hikes around Nairobi" }), { required: true, help: "What they post about. Specific beats broad." })}
+  ${field("Niche", input("niche", b.niche ?? "", { attrs: "required", placeholder: "what their days and posts are about, e.g. home cooking, markets and weekend trips" }), { required: true, help: "What they post about. Specific beats broad." })}
   <div class="cols">
     ${field("Personality / vibe", input("vibe", b.vibe ?? "", { placeholder: "warm, witty, early riser" }))}
     ${field("Audience to build", input("audience", b.audience ?? "", { placeholder: "young professionals into fitness" }))}
   </div>
   ${field("Look", input("appearance", b.appearance ?? "", { placeholder: "e.g. dark skin, short natural hair, athletic, big smile" }), { help: "Used to generate face options. Never name a real person." })}
   <div class="cols">
-    ${field("Affiliated brand", input("brand", b.brand ?? "", { placeholder: "optional, e.g. FeetBit" }))}
-    ${field("Languages", input("language", b.language ?? "", { placeholder: "English, some Swahili" }))}
+    ${field("Affiliated brand", input("brand", b.brand ?? "", { placeholder: "optional: brand name and what it sells" }), { help: "Their content stays everyday life; the brand's world shows up naturally so followers ask about it." })}
+    ${field("Languages", input("language", b.language ?? "", { placeholder: "e.g. English, some Luganda" }))}
   </div>
   ${field("Faith and occasions", input("faith", b.faith ?? "", { placeholder: "e.g. Muslim: Jumu'ah and Eid · Christian: Sunday church · weddings, kwanjula" }), {
     help: "Optional. Adds respectful occasion outfits (church, Jumu'ah, Eid, ceremonies) to their closet for the right days.",

@@ -5,6 +5,8 @@ export interface VisualState {
   location_id?: string | null;
   time_of_day?: string;
   outfit?: string;
+  featured_item?: string;
+  /** Legacy (before per-influencer brands): the pair on foot. Read as a featured item. */
   sneakers?: string;
   hairstyle?: string;
   compositions?: string[];

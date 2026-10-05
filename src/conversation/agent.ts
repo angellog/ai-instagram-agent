@@ -28,7 +28,7 @@ import {
 import {
   decisionSchema,
   decisionSystem,
-  PERCEPTION_SYSTEM,
+  perceptionSystem,
   perceptionSchema,
   type Decision,
   type Perception,
@@ -150,7 +150,7 @@ export async function processInteraction(interactionId: number): Promise<Convers
     tier: "fast",
     maxTokens: 250,
     ref: { type: "interaction", id: String(it.id) },
-    system: PERCEPTION_SYSTEM,
+    system: perceptionSystem(persona()),
     prompt: `Kind: ${it.kind}\nMessage: """${it.text}"""`,
   });
 
@@ -175,7 +175,7 @@ export async function processInteraction(interactionId: number): Promise<Convers
     maxTokens: 700,
     temperature: 0.7,
     ref: { type: "interaction", id: String(it.id) },
-    system: decisionSystem(personaSystemBlock(p), p.communication_style.max_reply_chars),
+    system: decisionSystem(personaSystemBlock(p), p.communication_style.max_reply_chars, p),
     prompt: `${renderContext(it, ctx)}\n\nCLASSIFIER: intent=${perception.intent} sentiment=${perception.sentiment} question=${perception.is_question}`,
   });
 

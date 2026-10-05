@@ -113,7 +113,7 @@ export class LLM {
       ...o,
       tier: o.tier ?? "fast",
       maxTokens: o.maxTokens ?? 300,
-      system: MODERATION_SYSTEM,
+      system: moderationSystem(),
       prompt: `${o.context ? `Context: ${o.context}\n\n` : ""}Text to review:\n"""${text}"""`,
     });
   }
@@ -159,12 +159,16 @@ export class LLM {
   }
 }
 
-const MODERATION_SYSTEM = `You are the safety reviewer for an AI Instagram creator account (sneakers, fashion, lifestyle).
+function moderationSystem(): string {
+  const p = maybeInfluencer()?.persona;
+  const niche = p ? `${p.identity.occupation}${p.brand ? `; works with ${p.brand.name} (${p.brand.category})` : ""}` : "lifestyle";
+  return `You are the safety reviewer for an AI Instagram creator account (${niche}).
 Classify text into exactly one level:
-- green: ordinary lifestyle, fashion, sneakers, fitness, books, coffee, friendly conversation, harmless jokes.
+- green: ordinary lifestyle and this creator's own niche (${p ? p.interests.slice(0, 6).join(", ") : "everyday life"}), friendly conversation, harmless jokes.
 - yellow (needs human review): controversial or political topics, religion, sensitive or uncertain factual claims, accusations about real people or brands, potentially misleading statements, major announcements, prices/stock/release promises, health or money advice, anything legally risky.
 - red (never automate): illegal activity, harassment or hate, sexual content or content involving minors, sensitive personal information (phone numbers, addresses, IDs, payment data), impersonation of real people, self-harm, dangerous or high-risk instructions, scams.
 Return JSON {"level","categories":[short tags],"reason": one short sentence}.`;
+}
 
 function toMessages(p: string | ChatMessage[]): ChatMessage[] {
   return typeof p === "string" ? [{ role: "user", content: p }] : p;

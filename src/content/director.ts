@@ -15,7 +15,10 @@ import { calendarBrief, listEvents } from "../calendar/events.js";
 import { trendsForPrompt } from "../trends/trends.js";
 import { enforceOutfit, planOutfits, type OutfitPlan } from "./wardrobe.js";
 import { accountBlocker } from "../instagram/accounts.js";
-import { influencerId } from "../context.js";
+import { influencerId, type KnowledgeEntry } from "../context.js";
+import { knowledge } from "../conversation/knowledge.js";
+import { namesBrand } from "../persona/pronouns.js";
+import { brandMentionBudget, brandPullBlock } from "./brandpull.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { ensureDayPlan, type ActivityRow } from "./activities.js";
 import { enforceContinuity } from "./continuity.js";
@@ -52,7 +55,7 @@ export function ideaSchema(p: Persona) {
         location_id: z.string().nullable(),
         time_of_day: z.enum(TIMES_OF_DAY),
         outfit: z.string(),
-        sneakers: z.string().describe("The pair on foot, described generically (silhouette, colours). No invented releases."),
+        featured_item: z.string().describe("One item from the brand's category naturally present in the frame, described generically; empty when none would fit naturally"),
         slides: z.array(slide).min(1).max(p.carousel.max_slides),
         caption: z.string().describe("1-2 short lines: one simple thought or feeling. Never describe what the photo shows."),
         hashtags: z.array(z.string()).max(p.hashtags.max),
@@ -89,7 +92,7 @@ export interface PlanOptions {
 export function directionBlock(direction: string | undefined, kind: "post" | "story"): string {
   if (!direction) return "";
   return `OPERATOR DIRECTION (must follow): the operator asked for this ${kind} to be about: "${direction}".
-- Build the idea around every element named there (product, place, occasion, activity, mood, outfit). If a sneaker or product is named, feature exactly that one and put it in the sneakers/outfit fields.
+- Build the idea around every element named there (product, place, occasion, activity, mood, outfit). If a product is named, feature exactly that one and put it in the featured_item (or outfit) field.
 - It outranks today's activity plan, trends and your own preference, and you may not decide to wait.
 - It does not outrank who she is, the safety rules or verified business facts: never state prices, stock, addresses or offers that are not in the knowledge you were given. If part of it is impossible or unsafe, follow the rest and say why in "reason".`;
 }
@@ -133,7 +136,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       temperature: 0.9,
       system: directorSystem(p, c),
       prompt:
-        directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, feedback }) +
+        directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, knowledge: knowledge(), feedback }) +
         (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : "") +
         (opts.direction ? `\n\n${directionBlock(opts.direction, "post")}` : ""),
     });
@@ -150,6 +153,10 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     // Caption quality is judged on what the director wrote; the stored caption is the tidied layout.
     const educational = idea.format === "carousel" && ["educational", "listicle"].includes(idea.structure);
     const capIssues = captionProblems(idea.caption, { educational, recent: recent.map((r) => r.caption) });
+    // The mention rate is the influencer's, not the model's: naming the brand off-turn sends it back.
+    if (p.brand && !brandMentionBudget(p, recent.map((r) => r.caption)).mayName && namesBrand(`${idea.caption} ${idea.hashtags.join(" ")}`, p.brand.name)) {
+      capIssues.push(`it names ${p.brand.name}, which is not allowed in this post (mention rate); keep the brand's world in the photo, not the words`);
+    }
     const rawCaption = idea.caption;
     idea.caption = tidyCaption(idea.caption, educational);
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
@@ -162,7 +169,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
         location_id: idea.location_id,
         time_of_day: idea.time_of_day,
         outfit: worn.outfit,
-        sneakers: idea.sneakers,
+        featured_item: idea.featured_item || undefined,
         compositions: idea.slides.map((s) => s.composition),
         activity: activity?.activity ?? null,
       },
@@ -314,14 +321,14 @@ ${
       : `- Carousels have ${p.carousel.min_slides}-${p.carousel.max_slides} slides of plain photos, exactly like a real person posting from their camera roll: overlay_kind "none" on every slide, no text on images. Put the hook and any tips in the caption instead.`
   }
 - Single images: one strong frame, no text on the image.
-- Shots should feel like the persona's own iPhone photos or ones a friend took: candid, everyday, varied angles (mirror fit check, feet-and-floor shot, coffee on the table, walking away).
-- Never claim experiences as real-world facts; the day is a storyline for an AI creator. Keep sneaker facts accurate or phrase them as opinion.
+- Shots should feel like the persona's own iPhone photos or ones a friend took: candid, everyday, varied angles that suit this creator's life (POV, hands at work, the table, the view, walking away, a friend's candid).
+- Never claim experiences as real-world facts; the day is a storyline for an AI creator. Keep facts about your niche accurate or phrase them as opinion.
 - Captions: the photo already shows the scene, so NEVER describe it (no listing the place, light, weather, food, outfit or what you're doing). Write ONE simple thought, feeling or small joke, the way a real person captions their own photo.
   - 1-2 short sentences, under ${CAPTION_LIMITS.short} characters. Educational carousels: one short hook line plus at most 3 short tip lines, under ${CAPTION_LIMITS.educational}.
   - Everyday words, no filler, at most 1-2 emoji. Ask a question only sometimes (about one post in three), and keep it short.
   - Never start the way a recent caption started; never reuse their phrases.
-  - Good: "golden hour > everything" · "new laces, same me" · "Sunday reset. Coffee first, decisions later ☕️" · "which one tomorrow?"
-  - Bad: a paragraph narrating the rooftop, the coffee, the sky and the rotation.
+  - Good: "golden hour > everything" · "Sunday reset. Coffee first, decisions later ☕️" · "small wins count too" · "which one tomorrow?"
+  - Bad: a paragraph narrating the place, the food, the sky and what you're wearing; anything that reads like an advert.
   - No hashtags inside the caption text; put them in "hashtags" (max ${p.hashtags.max}, from: ${p.hashtags.pool.join(" ")}).
 - Overlay text must be plain Latin text (no emoji).
 Return JSON only.`;
@@ -340,6 +347,7 @@ function directorPrompt(o: {
   outfits?: OutfitPlan;
   weekend?: boolean;
   trends?: string;
+  knowledge?: KnowledgeEntry[];
   feedback: string[];
 }): string {
   const locs = o.p.visual.locations.map((l) => `${l.id}: ${l.description}`).join("\n");
@@ -387,6 +395,7 @@ function directorPrompt(o: {
     o.trends
       ? `TRENDS AND NEWS THIS WEEK (real headlines from this creator's feeds; reference one only when it fits their life naturally; never add details beyond the headline):\n${o.trends}`
       : "",
+    brandPullBlock(o.p, o.recent.map((r) => r.caption), o.knowledge ?? [], "post"),
     o.feedback.length ? `FEEDBACK ON PREVIOUS ATTEMPTS:\n${o.feedback.join("\n")}` : "",
   ]
     .filter(Boolean)

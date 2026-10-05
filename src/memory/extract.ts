@@ -12,7 +12,7 @@ export const extractionSchema = z.object({
     .array(
       z.object({
         kind: z.enum(RELATIONSHIP_KINDS),
-        content: z.string().describe("One short third-person fact, e.g. 'Prefers low-top Jordans'"),
+        content: z.string().describe("One short third-person fact, e.g. 'Prefers matte finishes over glossy'"),
         confidence: z.number().min(0).max(1),
         importance: z.number().min(0).max(1),
         expires_on: z.string().nullable().describe("ISO date if the fact is tied to a date, else null"),

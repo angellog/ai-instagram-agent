@@ -35,7 +35,7 @@ export function createDevMockProvider(): MockProvider {
               ? "question_general"
               : /love|fire|clean|nice|dope|🔥/.test(t)
                 ? "compliment"
-                : "sneaker_talk";
+                : "niche_talk";
       return { intent, confidence: 0.8, sentiment: "positive", language: "en", is_question: t.includes("?"), needs_memory: true, needs_business_info: intent === "question_product" };
     })
     .on("conversation.decide", (r) => {
