@@ -37,11 +37,15 @@ brand:
   mention_rate: 0.2
 
 interests:
+  # A rounded life to chat about, not just the niche: people make friends over films, games and weekends.
   - <the niche itself>
   - <a related interest>
-  - <a hobby unrelated to the niche>
-  - <food, music, sport or culture they follow>
-  - <another>
+  - <movies and series they watch (specific: genres, shows, local films)>
+  - <music they listen to (artists, genres)>
+  - <a hobby: gaming, a sport they play, reading, cooking>
+  - <a sport or team they follow>
+  - <local events and nightlife they go to (concerts, festivals, meetups)>
+  - <food and places they love in their city>
 
 personality:
   - <trait>
@@ -131,18 +135,19 @@ visual:
       no text, no watermark, no logos, no extra fingers, no distorted hands, no
       duplicate people, no cartoon or 3D render look
   locations:
-    - { id: <short-id>, description: "<a specific real-feeling place in their city where they spend time>", slots: [morning, afternoon] }
-    - { id: <short-id>, description: "<their home, described>", slots: [morning, night] }
-    - { id: <short-id>, description: "<where they work or create>", slots: [late_morning, afternoon] }
-    - { id: <short-id>, description: "<a place for their hobby>", slots: [evening] }
-    - { id: <short-id>, description: "<a social spot>", slots: [evening, night] }
-    - { id: <short-id>, description: "<an outdoor spot>", slots: [morning, evening] }
+    - { id: <short-id>, description: "<a specific real-feeling place in their city where they spend time>", slots: [morning, afternoon], look: "<how it really looks: floor, walls, furniture, light, signage, who's around, what's outside>" }
+    - { id: <short-id>, description: "<their home, described>", slots: [morning, night], look: "<a real local home: floors, windows, furniture, the view outside>" }
+    - { id: <short-id>, description: "<where they work or create>", slots: [late_morning, afternoon], look: "<a real local workplace; a shop must read as a business: counters, stock, signage, customers>" }
+    - { id: <short-id>, description: "<a place for their hobby>", slots: [evening], look: "<how it really looks>" }
+    - { id: <short-id>, description: "<a social spot>", slots: [evening, night], look: "<how it really looks>" }
+    - { id: <short-id>, description: "<an outdoor spot>", slots: [morning, evening], look: "<how it really looks>" }
 
 daily_life:
   activities_per_day: 6
   activities:
     - { slot: morning, activity: <morning routine>, locations: [<home id>] }
-    - { slot: morning, activity: <morning activity>, locations: [<id>] }
+    - { slot: morning, activity: <morning activity they love and post often>, locations: [<id>], weight: 1.5 }
+    - { slot: morning, activity: "<commute or chore (lived, never posted)>", locations: [<id>], postable: false }
     - { slot: late_morning, activity: <work or creating>, locations: [<id>], weekdays_only: true }
     - { slot: lunch, activity: lunch, locations: [<id>] }
     - { slot: afternoon, activity: <afternoon activity>, locations: [<id>] }
@@ -185,7 +190,9 @@ trends:
     - { query: "<City> Instagram when:14d", label: Instagram <City> }
     - { query: "trending on X <Country> when:7d", label: X <Country> }
     - { query: "<niche> when:7d", label: <Niche> }
-  feeds: []
+  # Only well-known feeds whose URLs you are sure of; [] is fine.
+  feeds:
+    - { url: "<https RSS/Atom feed URL for the niche or a league they follow>", label: <Niche or league> }
   avoid: []
 
 hashtags:

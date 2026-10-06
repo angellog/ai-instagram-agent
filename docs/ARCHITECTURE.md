@@ -28,6 +28,9 @@ External: Claude (LLM) · kie.ai (images) · Supabase Storage → imgbb (public 
 
 One codebase, one Docker-less Node build, three roles (`web`, `worker`, `all`). Railway runs `web` and `worker` as separate services from the same repo (see DECISIONS.md D-04).
 
+## Zuri is the blueprint
+Every influencer runs the same engine, driven by its own persona, brand and knowledge. Zuri is the reference: any feature or persona field she gets becomes standard for all (shared code + `config/persona.template.yaml` + an Influencer Standard check with a fix). `tests/unit/blueprint.test.ts` enforces that the hatch template carries every field she has. See `CLAUDE.md`.
+
 ## The agents (logical, not processes)
 
 | Agent | Code | Job |

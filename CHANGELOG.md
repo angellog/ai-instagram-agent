@@ -12,6 +12,11 @@ console footer, `/health` and `/api/status`.
 - **Honest when sincerely asked:** they never bring up being an AI or talk like a bot, but if someone sincerely asks whether they're real or a bot, they answer honestly in one light line and keep chatting.
 - Zuri's interests now include movies and series, gaming, and Kampala events.
 
+**Zuri is the blueprint** (rule in `CLAUDE.md` and `docs/ARCHITECTURE.md`): any feature or persona field she gets is standard for every influencer, existing and future.
+- The hatch template now carries everything Zuri has: place `look`s, a rounded social life (films/series, music, a hobby, a team, local events), activity `weight` and `postable`, and news feeds.
+- New Standard check **A life to chat about** (8+ interests covering films/music, a hobby and local events), with an AI fix. **Places look local** applies to everyone. Hatching requires both.
+- `tests/unit/blueprint.test.ts` fails if Zuri has any field the template lacks, or if she fails any Standard check, so a Zuri-only field can't ship again.
+
 ## v1.0.26: Local realism, story styles, content library, reels
 
 **Looks like Kampala, not anywhere**

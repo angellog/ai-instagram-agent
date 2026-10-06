@@ -41,6 +41,7 @@ export const STANDARD = {
   weekend_ideas: 5,
   locations: 4,
   trend_queries: 5,
+  interests: 8,
   trends_max_age_h: 36,
 } as const;
 
@@ -77,10 +78,27 @@ const SECTION: Record<string, string> = {
   trends: "trends",
   brand: "brand",
   local_look: "visual.locations",
+  social_life: "interests",
 };
 
 const isWeekend = (a: Persona["daily_life"]["activities"][number]) => a.weekends_only || a.days.some((d) => d === "saturday" || d === "sunday");
 const short = (have: number, need: number, what: string) => (have >= need ? `${have} ${what}` : `${have} ${what} (standard ${need})`);
+
+/** Enough of a life outside the niche for real small talk: films/music, a hobby, local events. */
+export function socialLife(p: Persona): { ok: boolean; detail: string } {
+  const all = p.interests.join(" | ").toLowerCase();
+  const has = {
+    "films/music": /movie|film|series|netflix|show|music|afrobeat|amapiano|artist|album|podcast|anime/.test(all),
+    hobby: /gam(e|ing)|fifa|ea fc|playstation|console|read|book|cook|bak|paint|draw|photograph|danc|gym|run|swim|play/.test(all),
+    "local events": /event|night|concert|festival|meetup|party|club|hangout|gig|nyege|show/.test(all),
+  };
+  const missing = Object.entries(has).filter(([, v]) => !v).map(([k]) => k);
+  const enough = p.interests.length >= STANDARD.interests;
+  return {
+    ok: enough && !missing.length,
+    detail: `${short(p.interests.length, STANDARD.interests, "interests")}${missing.length ? `; nothing about ${missing.join(", ")}` : ", incl. films/music, a hobby and local events"}`,
+  };
+}
 
 /** Persona checks: pure, testable, no I/O. */
 export function personaChecks(p: Persona): Check[] {
@@ -136,6 +154,14 @@ export function personaChecks(p: Persona): Check[] {
     },
     { key: "weekend", group: "Daily life", label: "Weekend life", ok: weekend >= STANDARD.weekend_activities, detail: short(weekend, STANDARD.weekend_activities, "weekend activities"), fix: "ai" },
     { key: "weekend_ideas", group: "Daily life", label: "Weekend post ideas", ok: p.weekend_ideas.length >= STANDARD.weekend_ideas, detail: short(p.weekend_ideas.length, STANDARD.weekend_ideas, "ideas"), fix: "ai" },
+    {
+      key: "social_life",
+      group: "Persona",
+      label: "A life to chat about",
+      ok: socialLife(p).ok,
+      detail: socialLife(p).detail,
+      fix: "ai",
+    },
     {
       key: "local_look",
       group: "Daily life",
@@ -248,10 +274,11 @@ Rules:
 - daily_life.activities: items {slot, activity, locations, postable, weight, weekdays_only, weekends_only, days}; slot is EXACTLY one of: ${SLOTS.join(", ")}; locations are ids from visual.locations (existing or ones you add in the same answer).
 - visual.locations: items {id, description, slots, look}; ids are lowercase-with-dashes. look is 1-3 sentences on how THIS real place looks in this person's city today, concrete enough for a photographer: floor, walls, windows, furniture, lighting, signage, what is on the shelves, who else is around, what is visible outside. Use real local knowledge (e.g. a Kampala home has tiled floors, burglar-bar windows, a walled compound; a phone shop in Pioneer Mall is a small glass-fronted unit with glass counters full of phones and accessories on pegboards, fluorescent light, a busy corridor outside). A shop or workplace must read as a business, never a home.
 - trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".
+- interests: a list of plain strings. Keep every existing one and add until there are 8+, covering: movies/series and music they actually watch and listen to (specific), a hobby (gaming, a sport they play, reading, cooking), a sport or team they follow, and local events and nightlife in their city (concerts, festivals, meetups), all true to this person's culture, faith and budget.
 - brand: {name, category, products, natural_moments, curiosity_hooks, mention_rate}. name and category come from identity.affiliation and the BUSINESS KNOWLEDGE; products are 4-6 generic descriptions of what the brand sells (no invented product names, prices or offers); natural_moments are 5-8 moments from THIS person's own daily_life where the category belongs without being the subject (a breakfast stays about breakfast); curiosity_hooks are 2-4 questions followers would ask; mention_rate 0.2 unless content_rules give another share. Keep any existing values.`;
 
 /** Sections that are plain lists of strings: models sometimes send objects instead. */
-const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas"]);
+const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas", "interests"]);
 const CLOSET_LISTS = ["tops", "bottoms", "layers", "one_pieces", "activewear"];
 
 /** The value at a dotted path. */
