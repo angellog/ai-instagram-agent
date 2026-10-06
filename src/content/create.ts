@@ -92,7 +92,8 @@ export async function runCreate(runId: string): Promise<string> {
       return plan.status;
     }
     await setRun(runId, { stage: "generating", post_id: plan.postId });
-    const outcome = await producePost(plan.postId);
+    // A business upload is already produced (no shoot): read where it landed.
+    const outcome = "library" in plan && plan.library ? ((await one<{ status: string }>("SELECT status FROM posts WHERE id = $1", [plan.postId]))?.status ?? "failed") : await producePost(plan.postId);
     const ok = ["awaiting_review", "dry_run", "approved"].includes(outcome);
     await setRun(runId, {
       status: ok ? "done" : "failed",

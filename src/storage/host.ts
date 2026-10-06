@@ -54,6 +54,9 @@ export async function verifyImageUrl(url: string, expect = "image/"): Promise<vo
 }
 
 const ensured = new Set<string>();
+const widened = new Set<string>();
+/** What the public media bucket accepts: photos, and MP4 reels. */
+const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
 
 const PROVIDERS: Record<Provider, (bytes: Buffer, key: string, contentType: string) => Promise<string | undefined>> = {
   async supabase(bytes, key, contentType) {
@@ -68,13 +71,23 @@ const PROVIDERS: Record<Provider, (bytes: Buffer, key: string, contentType: stri
         const c = await fetchImpl(`${base}/storage/v1/bucket`, {
           method: "POST",
           headers: h,
-          body: JSON.stringify({ id: bucket, name: bucket, public: true, allowed_mime_types: ["image/jpeg", "image/png", "image/webp"] }),
+          body: JSON.stringify({ id: bucket, name: bucket, public: true, allowed_mime_types: MEDIA_TYPES }),
         });
         if (!c.ok && c.status !== 409) throw new Error(`create bucket HTTP ${c.status}`);
       } else if (!r.ok) {
         throw new Error(`bucket check HTTP ${r.status}`);
       }
       ensured.add(bucket);
+    }
+    // Buckets made before reels only allowed images: widen once, the first time a video goes up.
+    if (!contentType.startsWith("image/") && !widened.has(bucket)) {
+      const u = await fetchImpl(`${base}/storage/v1/bucket/${bucket}`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${token}`, apikey: token, "content-type": "application/json" },
+        body: JSON.stringify({ public: true, allowed_mime_types: MEDIA_TYPES }),
+      });
+      if (!u.ok) throw new Error(`could not allow video in bucket ${bucket}: HTTP ${u.status}`);
+      widened.add(bucket);
     }
     const r = await fetchImpl(`${base}/storage/v1/object/${bucket}/${key}`, {
       method: "POST",

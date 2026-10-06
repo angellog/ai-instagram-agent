@@ -13,7 +13,9 @@ import { SLIDE_H, SLIDE_W, STORY_H, STORY_W } from "../render/compose.js";
  */
 
 export interface StructuralInput {
-  mediaType: "IMAGE" | "CAROUSEL" | "STORY";
+  mediaType: "IMAGE" | "CAROUSEL" | "STORY" | "REEL";
+  /** A business upload (library), not a generated post. */
+  library?: boolean;
   caption: string;
   slides: Array<{ position: number; publicUrl: string | null; width: number | null; height: number | null; bytes?: number; overlayText: string }>;
 }
@@ -21,9 +23,21 @@ export interface StructuralInput {
 export function structuralQc(i: StructuralInput, p: Persona): string[] {
   const problems: string[] = [];
   const n = i.slides.length;
+  if (i.mediaType === "REEL") {
+    // One vertical MP4 (plus an optional cover image), all 1080x1920.
+    if (n < 1 || n > 2) problems.push(`reel has ${n} assets`);
+    for (const s of i.slides) {
+      if (!s.publicUrl) problems.push(`reel asset ${s.position + 1} has no public URL`);
+      if (s.width !== STORY_W || s.height !== STORY_H) problems.push(`reel asset ${s.position + 1} is ${s.width}x${s.height}, expected ${STORY_W}x${STORY_H}`);
+    }
+    if (!i.caption.trim()) problems.push("reel has no caption");
+    return problems;
+  }
+  // Business uploads may be a 2-3 photo carousel; generated ones follow the persona's minimum.
+  const minSlides = i.library ? 2 : p.carousel.min_slides;
   if (i.mediaType === "CAROUSEL") {
-    if (n < Math.max(2, p.carousel.min_slides) || n > Math.min(10, p.carousel.max_slides)) {
-      problems.push(`carousel has ${n} slides; allowed ${p.carousel.min_slides}-${Math.min(10, p.carousel.max_slides)}`);
+    if (n < Math.max(2, minSlides) || n > Math.min(10, i.library ? 10 : p.carousel.max_slides)) {
+      problems.push(`carousel has ${n} slides; allowed ${minSlides}-${Math.min(10, i.library ? 10 : p.carousel.max_slides)}`);
     }
   } else if (n !== 1) problems.push(`${i.mediaType === "STORY" ? "story" : "single image post"} has ${n} assets`);
   const [w, h] = i.mediaType === "STORY" ? [STORY_W, STORY_H] : [SLIDE_W, SLIDE_H];

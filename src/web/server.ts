@@ -1,5 +1,7 @@
 import { createReadStream, existsSync } from "node:fs";
 import formbody from "@fastify/formbody";
+import multipart from "@fastify/multipart";
+import { LIBRARY_LIMITS } from "../library/library.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { getControls } from "../config/controls.js";
 import { env } from "../config/env.js";
@@ -50,6 +52,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   const e = env();
   const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024, trustProxy: true });
   await app.register(formbody);
+  // Content library uploads (photos and one video per item); everything else stays small form posts.
+  await app.register(multipart, { limits: { fileSize: LIBRARY_LIMITS.videoBytes, files: LIBRARY_LIMITS.files, fields: 20, fieldSize: 8 * 1024 } });
 
   // Keep the raw bytes: Meta's signature is over the exact body.
   app.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
@@ -70,7 +74,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // Malformed ids in console URLs are "not found", never a database error.
   app.addHook("preHandler", async (req, reply) => {
     const path = req.url.split("?")[0];
-    const uuidRoute = /^\/admin\/(?:posts|create|generation\/requests)\/([^/]+)/.exec(path) ?? /^\/admin\/api\/create\/([^/]+)/.exec(path);
+    const uuidRoute = /^\/admin\/(?:posts|create|generation\/requests|library)\/([^/]+)/.exec(path) ?? /^\/admin\/api\/create\/([^/]+)/.exec(path);
     if (uuidRoute && !/^[0-9a-f-]{36}$/i.test(uuidRoute[1])) return reply.code(404).send("not found");
     const numRoute = /^\/admin\/(?:reviews|people|interactions|influencers|hatch|api\/calendar|calendar|generation\/models)\/([^/]+)/.exec(path);
     if (numRoute && !/^\d{1,12}$/.test(numRoute[1]) && !["add"].includes(numRoute[1])) return reply.code(404).send("not found");

@@ -40,6 +40,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     [
       ["overview", "/admin", "Overview", "dashboard"],
       ["create", "/admin/create", "Create a post", "zap"],
+      ["library", "/admin/library", "Library", "upload"],
       ["reviews", "/admin/reviews", "Reviews", "inbox"],
       ["calendar", "/admin/calendar", "Calendar", "calendar"],
       ["trends", "/admin/trends", "Trends & news", "activity"],

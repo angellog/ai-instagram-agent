@@ -25,7 +25,7 @@ const fail = (message: string): EditResult => ({ ok: false, message });
 
 interface EditRow {
   status: string;
-  media_type: "IMAGE" | "CAROUSEL" | "STORY";
+  media_type: "IMAGE" | "CAROUSEL" | "STORY" | "REEL";
   ig_media_id: string | null;
 }
 

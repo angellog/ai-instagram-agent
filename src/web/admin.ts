@@ -7,6 +7,7 @@ import { registerOperate } from "./pages/operate.js";
 import { registerPlatform } from "./pages/platform.js";
 import { registerProfile } from "./pages/profile.js";
 import { registerCreate } from "./pages/create.js";
+import { registerLibrary } from "./pages/library.js";
 import { registerTrends } from "./pages/trends.js";
 import { registerStandard } from "./pages/standard.js";
 import { registerTikTok } from "./pages/tiktok.js";
@@ -29,6 +30,7 @@ export function registerAdmin(app: FastifyInstance): void {
   registerPlatform(app);
   registerProfile(app);
   registerCreate(app);
+  registerLibrary(app);
   registerTrends(app);
   registerStandard(app);
   registerTikTok(app);

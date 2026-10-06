@@ -1,3 +1,4 @@
+import { markLibraryPosted } from "../library/library.js";
 import { getControls, isSendingDisabled } from "../config/controls.js";
 import { influencerId } from "../context.js";
 import { db, many, one } from "../db/pool.js";
@@ -16,7 +17,7 @@ import { JOBS, jobId, queue } from "../queue/queues.js";
 interface PublishRow {
   id: string;
   status: string;
-  media_type: "IMAGE" | "CAROUSEL" | "STORY";
+  media_type: "IMAGE" | "CAROUSEL" | "STORY" | "REEL";
   caption: string;
   ig_container_id: string | null;
   ig_child_container_ids: string[];
@@ -25,6 +26,7 @@ interface PublishRow {
   content_idea_id: number | null;
   publish_override: "operator" | null;
   platform: "instagram" | "tiktok";
+  origin: "scheduled" | "operator" | "library";
   updated_at: Date;
 }
 
@@ -79,8 +81,8 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     return "dry_run";
   }
 
-  const assets = await many<{ position: number; public_url: string; overlay: { alt_text?: string } | null }>(
-    "SELECT position, public_url, overlay FROM post_assets WHERE post_id = $1 ORDER BY position",
+  const assets = await many<{ position: number; public_url: string; overlay: { alt_text?: string } | null; media_kind: "image" | "video" }>(
+    "SELECT position, public_url, overlay, media_kind FROM post_assets WHERE post_id = $1 ORDER BY position",
     [postId],
   );
   if (!assets.length || assets.some((a) => !a.public_url)) throw new PermanentError(`post ${postId} has missing assets`);
@@ -134,6 +136,11 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     let containerId: string;
     if (post.media_type === "STORY") {
       containerId = await createStoryContainer(ig, postId, assets[0].public_url);
+    } else if (post.media_type === "REEL") {
+      const video = assets.find((a) => a.media_kind === "video") ?? assets[0];
+      const cover = assets.find((a) => a.media_kind === "image");
+      const r = await ig.createReelContainer({ videoUrl: video.public_url, caption: post.caption, coverUrl: cover?.public_url, thumbOffsetMs: 1000, isAiGenerated: post.origin !== "library" });
+      containerId = r.id;
     } else if (post.media_type === "IMAGE") {
       const r = await ig.createImageContainer({ imageUrl: assets[0].public_url, caption: post.caption, altText: assets[0].overlay?.alt_text, isAiGenerated: true });
       containerId = r.id;
@@ -151,7 +158,7 @@ async function publishLocked(postId: string): Promise<PublishOutcome> {
     }
     // Persist BEFORE publishing: this is what makes the next attempt safe.
     await one("UPDATE posts SET ig_container_id = $2 WHERE id = $1", [postId, containerId]);
-    await ig.waitForContainer(containerId);
+    await ig.waitForContainer(containerId, { video: post.media_type === "REEL" });
     const published = await ig.publishContainer(containerId);
     return markPublished(post, published.id, undefined, startedAt);
   } catch (e) {
@@ -187,6 +194,7 @@ async function markPublished(post: PublishRow, mediaId: string, permalink?: stri
     `UPDATE posts SET status = 'published', ig_media_id = $2, permalink = $3, published_at = now(), last_error = NULL, updated_at = now() WHERE id = $1`,
     [post.id, mediaId, link ?? null],
   );
+  await markLibraryPosted(post.id);
   const idea = post.content_idea_id
     ? await one<{ topic: string; activity_id: number | null; format: string; structure: string }>(
         "SELECT topic, activity_id, format, structure FROM content_ideas WHERE id = $1",

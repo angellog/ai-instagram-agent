@@ -19,6 +19,7 @@ import { influencerId, type KnowledgeEntry } from "../context.js";
 import { knowledge } from "../conversation/knowledge.js";
 import { namesBrand } from "../persona/pronouns.js";
 import { brandMentionBudget, brandPullBlock } from "./brandpull.js";
+import { libraryForDirector, planLibraryPost, type LibraryItem } from "../library/library.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
 import { ensureDayPlan, type ActivityRow } from "./activities.js";
 import { enforceContinuity } from "./continuity.js";
@@ -55,6 +56,7 @@ export function ideaSchema(p: Persona) {
         location_id: z.string().nullable(),
         time_of_day: z.enum(TIMES_OF_DAY),
         outfit: z.string(),
+        library_item_id: z.string().nullable().describe("Id of a BUSINESS LIBRARY item to post instead of a new photo shoot, or null"),
         featured_item: z.string().describe("One item from the brand's category naturally present in the frame, described generically; empty when none would fit naturally"),
         slides: z.array(slide).min(1).max(p.carousel.max_slides),
         caption: z.string().describe("1-2 short lines: one simple thought or feeling. Never describe what the photo shows."),
@@ -69,7 +71,7 @@ export type PlanOutcome =
   | { status: "skipped"; reason: string }
   | { status: "waited"; reason: string }
   | { status: "rejected_all"; attempts: number; reason: string }
-  | { status: "accepted"; ideaId: number; postId: string; attempts: number };
+  | { status: "accepted"; ideaId: number; postId: string; attempts: number; library?: boolean };
 
 /**
  * `content.plan` job (brief §6, §7, §19): the activity planner proposes, the
@@ -125,6 +127,8 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
   const weekend = [0, 6].includes(localParts(now, p.identity.timezone).weekday);
   const trends = await trendsForPrompt("content");
   const schema = ideaSchema(p);
+  // Business uploads waiting for the right moment (operator direction wins over them).
+  const library = opts.direction ? [] : await libraryForDirector();
 
   const feedback: string[] = [];
   for (let attempt = 1; attempt <= c.max_concept_attempts; attempt++) {
@@ -138,8 +142,18 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       prompt:
         directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, knowledge: knowledge(), feedback }) +
         (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : "") +
-        (opts.direction ? `\n\n${directionBlock(opts.direction, "post")}` : ""),
+        (opts.direction ? `\n\n${directionBlock(opts.direction, "post")}` : "") +
+        (library.length ? `\n\n${libraryBlock(library)}` : ""),
     });
+
+    // The director chose a business upload: post that (caption in its voice) instead of a new shoot.
+    const chosen = out.decision === "post" && out.idea?.library_item_id ? library.find((l) => l.id === out.idea!.library_item_id) : undefined;
+    if (chosen && out.idea) {
+      const { postId } = await planLibraryPost(chosen.id, { caption: tidyCaption(out.idea.caption, false), hashtags: out.idea.hashtags });
+      await recordDecision({ agent: "content_director", subjectType: "post", subjectId: postId, action: "post_library_item", reason: out.reason, latencyMs: Date.now() - started });
+      const idea = await one<{ content_idea_id: number }>("SELECT content_idea_id FROM posts WHERE id = $1", [postId]);
+      return { status: "accepted", ideaId: idea!.content_idea_id, postId, attempts: attempt, library: true };
+    }
 
     if (out.decision === "wait" || !out.idea) {
       await recordDecision({ agent: "content_director", subjectType: "system", subjectId: `plan-${day}-${slot}`, action: "wait", reason: out.reason, latencyMs: Date.now() - started });
@@ -400,6 +414,13 @@ function directorPrompt(o: {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** The business's waiting uploads, offered to the director to post when they fit the day. */
+function libraryBlock(items: LibraryItem[]): string {
+  return `BUSINESS LIBRARY (media the business uploaded and wants posted when it fits; you choose the moment):
+${items.map((i) => `- id ${i.id} | ${i.kind === "video" ? "video (reel)" : i.files.length > 1 ? `${i.files.length} photos (carousel)` : "1 photo"} | ${i.title}${i.notes ? ` | notes: ${i.notes.replace(/\s+/g, " ").slice(0, 200)}` : ""}`).join("\n")}
+If one of these fits today better than a new shoot, set "library_item_id" to its id, write the caption in your own voice from its notes (never invent facts), and fill the other fields as usual (they are ignored for library posts). Otherwise leave it null.`;
 }
 
 /** Activities still planned for today (dashboard + CLI). */

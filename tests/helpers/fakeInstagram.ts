@@ -31,7 +31,7 @@ interface Rule {
 export class FakeInstagram {
   calls: Call[] = [];
   containers = new Map<string, { status: "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ERROR"; polls: number; params: Record<string, any>; children?: string[] }>();
-  media = new Map<string, { id: string; caption: string; permalink: string; timestamp: string; children?: string[] }>();
+  media = new Map<string, { id: string; caption: string; permalink: string; timestamp: string; children?: string[]; params?: Record<string, any> }>();
   stories = new Map<string, { id: string; permalink: string; timestamp: string; params: Record<string, any> }>();
   replies: Array<{ commentId: string; message: string; id: string }> = [];
   dms: Array<{ recipient: Record<string, string>; text: string; id: string }> = [];
@@ -99,6 +99,8 @@ export class FakeInstagram {
         if (body.is_carousel_item && body.is_ai_generated) {
           return err(400, 100, "AI Label for Carousels should be set at the container and not on individual carousel items");
         }
+        // Real API rule: a reel is a video_url container; an image_url there is rejected.
+        if (body.media_type === "REELS" && (!body.video_url || body.image_url)) return err(400, 100, "REELS containers need video_url");
         const cid = `c_${id()}`;
         const children = body.children ? String(body.children).split(",") : undefined;
         if (children) {
@@ -120,7 +122,7 @@ export class FakeInstagram {
           return ok({ id: sid });
         }
         const mid = `m_${id()}`;
-        this.media.set(mid, { id: mid, caption: c.params.caption ?? "", permalink: `https://www.instagram.com/p/${mid}/`, timestamp: new Date().toISOString(), children: c.children });
+        this.media.set(mid, { id: mid, caption: c.params.caption ?? "", permalink: `https://www.instagram.com/${c.params.media_type === "REELS" ? "reel" : "p"}/${mid}/`, timestamp: new Date().toISOString(), children: c.children, params: c.params });
         this.quotaUsage++;
         return ok({ id: mid });
       }

@@ -104,6 +104,7 @@ export function createDevMockProvider(): MockProvider {
     .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
     .on("persona.compose", (r) => devPersona(lastUser(r)))
     // Offline TikTok caption: a hook line and a few hashtags.
+    .on("library.caption", () => ({ caption: "New in, and honestly it's my favourite this week.", hashtags: [], alt_text: "Business photo" }))
     .on("tiktok.caption", () => ({ title: "New laces, same me", caption: "Sunday reset, sneakers first 👟", hashtags: ["sneakers", "kampala", "fitcheck"] }))
     // Offline standard upgrade: fill each requested section from the reference persona.
     .on("persona.upgrade", (r) => devUpgrade(lastUser(r)))
@@ -182,6 +183,8 @@ export function createDevMockProvider(): MockProvider {
           time_of_day: "morning",
           outfit: "cream ribbed knit crop top with light-wash wide-leg denim",
           featured_item: "",
+          // Like a director that likes business uploads: take the first one offered.
+          library_item_id: /BUSINESS LIBRARY/.test(u) ? (/- id ([0-9a-f-]{36}) \|/.exec(u)?.[1] ?? null) : null,
           slides: Array.from({ length: carousel ? 4 : 1 }, (_, i) => slide(i)),
           caption: `${line} ${["Which pair would you pick?", "Tell me your go-to this week.", "Rate the fit 1–10."][attempt % 3]}`,
           hashtags: ["#sneakers", "#kampala"],

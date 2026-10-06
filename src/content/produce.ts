@@ -26,10 +26,12 @@ type Slide = Idea["slides"][number];
 interface PostRow {
   id: string;
   content_idea_id: number;
-  media_type: "IMAGE" | "CAROUSEL" | "STORY";
+  media_type: "IMAGE" | "CAROUSEL" | "STORY" | "REEL";
   caption: string;
   status: string;
   visual_state: VisualState;
+  origin?: "scheduled" | "operator" | "library";
+  scheduled_for?: Date | null;
 }
 
 interface AssetRow {
@@ -256,6 +258,7 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
   const problems = structuralQc(
     {
       mediaType: post.media_type,
+      library: post.origin === "library",
       caption: post.caption,
       slides: assets.map((a) => ({ position: a.position, publicUrl: a.public_url, width: a.width, height: a.height, bytes: a.qc?.bytes, overlayText: overlayText(a) })),
     },
@@ -315,7 +318,9 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
 
 /** Queue publishing now, or at the start of the next posting window. */
 export async function schedulePublish(postId: string, c: Controls, p: Persona, now = new Date()): Promise<Date> {
-  const at = nextPublishTime(now, c, p.identity.timezone);
+  // A business-chosen time (content library) stands; otherwise the next posting window.
+  const fixed = await one<{ scheduled_for: Date | null; origin: string }>("SELECT scheduled_for, origin FROM posts WHERE id = $1", [postId]);
+  const at = fixed?.origin === "library" && fixed.scheduled_for && new Date(fixed.scheduled_for).getTime() > now.getTime() ? new Date(fixed.scheduled_for) : nextPublishTime(now, c, p.identity.timezone);
   await one("UPDATE posts SET scheduled_for = $2, updated_at = now() WHERE id = $1", [postId, at]);
   await queue("publish").add(JOBS.postPublish, { influencerId: influencerId(), postId }, { jobId: jobId("publish", postId), delay: Math.max(0, at.getTime() - now.getTime()) });
   return at;

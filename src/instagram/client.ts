@@ -192,6 +192,21 @@ export class InstagramClient {
     });
   }
 
+  /**
+   * Reel container (media_type REELS): one vertical MP4 Instagram downloads from
+   * our public URL. Video takes minutes to process; wait with { video: true }.
+   */
+  createReelContainer(o: { videoUrl: string; caption: string; coverUrl?: string; thumbOffsetMs?: number; shareToFeed?: boolean; isAiGenerated?: boolean }): Promise<{ id: string }> {
+    return this.request("POST", `${this.igUserId}/media`, {
+      media_type: "REELS",
+      video_url: o.videoUrl,
+      caption: o.caption,
+      share_to_feed: o.shareToFeed ?? true,
+      ...(o.coverUrl ? { cover_url: o.coverUrl } : o.thumbOffsetMs !== undefined ? { thumb_offset: o.thumbOffsetMs } : {}),
+      ...(o.isAiGenerated ? { is_ai_generated: true } : {}),
+    });
+  }
+
   /** The account's live stories (the last 24 hours). */
   async listStories(): Promise<IgMedia[]> {
     const r = await this.request<{ data: IgMedia[] }>("GET", `${this.igUserId}/stories`, { fields: "id,media_type,media_product_type,permalink,timestamp" });
@@ -206,15 +221,17 @@ export class InstagramClient {
    * Wait until a container is FINISHED (or already PUBLISHED). ERROR and
    * EXPIRED are permanent for this container; the caller rebuilds it.
    */
-  async waitForContainer(containerId: string): Promise<ContainerStatus> {
+  async waitForContainer(containerId: string, o: { video?: boolean } = {}): Promise<ContainerStatus> {
+    // Video processing takes minutes: keep polling at the slowest interval for ~5 more minutes.
+    const delays = o.video ? [...this.pollDelays, ...Array(20).fill(this.pollDelays.at(-1) ?? 15_000)] : this.pollDelays;
     for (let i = 0; ; i++) {
       const s = await this.getContainerStatus(containerId);
       if (s.status_code === "FINISHED" || s.status_code === "PUBLISHED") return s.status_code;
       if (s.status_code === "ERROR" || s.status_code === "EXPIRED") {
         throw new PermanentError(`Container ${containerId} ${s.status_code}${s.status ? `: ${s.status}` : ""}`);
       }
-      if (i >= this.pollDelays.length) throw new TransientError(`Container ${containerId} still ${s.status_code} after polling`);
-      await sleep(this.pollDelays[i]);
+      if (i >= delays.length) throw new TransientError(`Container ${containerId} still ${s.status_code} after polling`);
+      await sleep(delays[i]);
     }
   }
 
