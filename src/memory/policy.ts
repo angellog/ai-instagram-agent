@@ -25,6 +25,11 @@ export const TTL_DAYS: Record<string, number | null> = {
   recent_topic: 14,
   published: null,
   calendar_recap: 120,
+  // identity layer: the creator's own canon, built up in conversation
+  self_fact: null,
+  self_plan: 21,
+  // relationship layer: what the creator told this person (keeps the story straight with them)
+  shared: 120,
 };
 
 export const MIN_CONFIDENCE = 0.6;

@@ -3,6 +3,15 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.27: Social conversations (a friend, not a sales rep)
+
+- **How every influencer talks:** like a person on Instagram. Replies mirror the other person's length (a "hey" gets a few words), one short message, an occasional question back, small real-sounding details from their own life, and friendly follow-ups on what people told them before. No paragraphs, lists, help-desk phrases ("how can I help", "let me know if") or sales talk.
+- **Not a salesperson:** the brand, shop, prices and stock come up only when someone asks how to buy, what something costs or where it's from, and then the answer comes exactly from the business knowledge.
+- **Social check on every draft** (code, not just the prompt): too long for the message it answers, line breaks or lists, help-desk or ad phrases, more than one question, or the brand named in small talk. The draft gets one rewrite in the influencer's voice before the fact check and safety check.
+- **Their own canon:** details an influencer invents about their life in a chat (a film they're watching, a game, weekend plans) are saved as their own memory, shared across every conversation so they never contradict themselves, and each person's memory notes what they were told. Replies also see what the influencer is actually doing today (the day plan).
+- **Honest when sincerely asked:** they never bring up being an AI or talk like a bot, but if someone sincerely asks whether they're real or a bot, they answer honestly in one light line and keep chatting.
+- Zuri's interests now include movies and series, gaming, and Kampala events.
+
 ## v1.0.26: Local realism, story styles, content library, reels
 
 **Looks like Kampala, not anywhere**

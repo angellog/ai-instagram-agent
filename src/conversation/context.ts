@@ -3,7 +3,9 @@ import { many, one } from "../db/pool.js";
 import { instagramClient } from "../instagram/accounts.js";
 import { calendarBrief } from "../calendar/events.js";
 import { trendsForPrompt } from "../trends/trends.js";
-import { relationshipMemories, worldMemories, type MemoryRow } from "../memory/store.js";
+import { relationshipMemories, selfMemories, worldMemories, type MemoryRow } from "../memory/store.js";
+import { localParts, slotForHour } from "../lib/time.js";
+import { persona } from "../persona/loader.js";
 import { retrieveKnowledge, type KnowledgeEntry } from "./knowledge.js";
 
 export interface InteractionRow {
@@ -44,6 +46,10 @@ export interface ConversationContext {
   recentOwnPosts: Array<{ topic: string; published_at: Date | null }>;
   /** Current affairs from the operator calendar (may be empty). */
   calendar: string;
+  /** The creator's own canon (what they've said about themselves before). */
+  selfLife: MemoryRow[];
+  /** What the creator is doing today, from the day plan. */
+  today: string;
   contextUsed: string[];
 }
 
@@ -138,7 +144,10 @@ export async function buildContext(it: InteractionRow, user: UserRow, conversati
   const calendar = [await calendarBrief("conversation"), await trendsForPrompt("conversation")].filter(Boolean).join("\n");
   if (calendar) contextUsed.push("calendar");
 
-  return { user, conversationId, history, memories, post, knowledge, recentOwnPosts, calendar, contextUsed };
+  const selfLife = await selfMemories(it.text);
+  if (selfLife.length) contextUsed.push("self_canon");
+  const today = await todayForChat();
+  return { user, conversationId, history, memories, post, knowledge, recentOwnPosts, calendar, selfLife, today, contextUsed };
 }
 
 export function renderContext(it: InteractionRow, ctx: ConversationContext, now = new Date()): string {
@@ -162,7 +171,28 @@ export function renderContext(it: InteractionRow, ctx: ConversationContext, now 
     ctx.knowledge.length ? `KNOWLEDGE:\n${ctx.knowledge.map((k) => `- [${k.id}] ${k.content.trim()}`).join("\n")}` : "KNOWLEDGE: none relevant",
     ctx.calendar ? `WHAT'S GOING ON AROUND YOU (mention only if it is relevant to what they said):\n${ctx.calendar}` : "",
     ctx.recentOwnPosts.length ? `YOUR RECENT POSTS: ${ctx.recentOwnPosts.map((p) => p.topic).join(" | ")}` : "",
+    ctx.today ? `YOUR DAY (true for today; use it when they ask what you're up to): ${ctx.today}` : "",
+    `YOUR OWN LIFE (things you've already said about yourself in chats; never contradict them, build on them):\n${
+      ctx.selfLife.map((m) => `- ${m.content}`).join("\n") || "- nothing yet: whatever you share now becomes part of your story"
+    }`,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** Today's planned activities, in order, for answering "what are you up to?". */
+async function todayForChat(now = new Date()): Promise<string> {
+  try {
+    const { todayPlan } = await import("../content/director.js");
+    const p = persona();
+    const { hour } = localParts(now, p.identity.timezone);
+    const plan = await todayPlan(now);
+    const order = ["morning", "late_morning", "lunch", "afternoon", "evening", "night"];
+    const nowSlot = order.indexOf(slotForHour(hour));
+    return plan
+      .map((a) => `${order.indexOf(a.slot) < nowSlot ? "earlier" : order.indexOf(a.slot) === nowSlot ? "now" : "later"}: ${a.activity}${a.location ? ` (${a.location})` : ""}`)
+      .join("; ");
+  } catch {
+    return "";
+  }
 }

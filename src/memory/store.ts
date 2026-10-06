@@ -101,3 +101,26 @@ export async function forgetUser(igUserId: number): Promise<number> {
   );
   return r.length;
 }
+
+/**
+ * The creator's own canon: things they've said about their life in chats
+ * (tastes, what they're watching or playing, plans). Shared across every
+ * conversation so they never contradict themselves. Most relevant to the
+ * message first, then most recent.
+ */
+export async function selfMemories(message: string, limit = 12): Promise<MemoryRow[]> {
+  const rows = await many<MemoryRow>(
+    `SELECT * FROM memories
+     WHERE influencer_id = $1 AND layer = 'identity' AND kind IN ('self_fact', 'self_plan') AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+     ORDER BY updated_at DESC LIMIT 200`,
+    [influencerId()],
+  );
+  const words = new Set((message.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter((w) => !STOP.has(w)));
+  const score = (m: MemoryRow) => (m.content.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter((w) => words.has(w)).length;
+  return rows
+    .map((m, i) => ({ m, s: score(m) * 10 - i * 0.05 }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, limit)
+    .map((x) => x.m);
+}
+const STOP = new Set(["that", "this", "with", "have", "what", "your", "you're", "about", "just", "like", "from", "they", "them", "there", "were", "been", "when", "will", "would", "could"]);

@@ -80,8 +80,15 @@ export function createDevMockProvider(): MockProvider {
     .on("memory.extract", (r) => {
       const msg = between(lastUser(r), 'message: """', '"""');
       const m = msg.match(/i (?:love|like|prefer|wear) ([\w\s'-]{3,40})/i);
-      return { memories: m ? [{ kind: "interest", content: `Likes ${m[1].trim()}`, confidence: 0.85, importance: 0.6, expires_on: null }] : [] };
+      // The creator's own story: "I'm watching/playing/heading to X" becomes canon.
+      const reply = between(lastUser(r), 'reply (use it only for "self"): """', '"""');
+      const own = reply.match(/i'?m (watching|playing|reading|heading to|going to) ([\w\s'-]{3,40})/i);
+      return {
+        memories: m ? [{ kind: "interest", content: `Likes ${m[1].trim()}`, confidence: 0.85, importance: 0.6, expires_on: null }] : [],
+        self: own ? [{ kind: /heading|going/i.test(own[1]) ? "self_plan" : "self_fact", content: `The creator is ${own[1].toLowerCase()} ${own[2].trim()}`, expires_on: null }] : [],
+      };
     })
+    .on("conversation.social_rewrite", () => "haha same, honestly")
     .on("memory.summarize", () => "Friendly follower who talks sneakers.")
     .on("config.test", () => "OK")
     .on("trends.brief", (r) => {

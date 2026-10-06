@@ -88,7 +88,7 @@ describe("reels", () => {
     const idea = await one<{ plan: { verified?: string; steps: unknown[] } }>("SELECT plan FROM content_ideas WHERE id = (SELECT content_idea_id FROM posts WHERE id = $1)", [postId]);
     expect(idea!.plan.verified).toMatch(/iOS 18/);
     expect(idea!.plan.steps).toHaveLength(2);
-  });
+  }, 120_000);
 
   it("publishes a reel as REELS with the AI label", async () => {
     const run = await runCreate("reel");

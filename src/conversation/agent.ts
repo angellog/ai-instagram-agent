@@ -34,6 +34,7 @@ import {
   type Perception,
 } from "./prompts.js";
 import { deliver, outboundCountLastHour, rearmIfRetryable, reserveOutbound, windowOpen, type ReplyChannel } from "./send.js";
+import { socialFixInstruction, socialProblems, socialStyleBlock } from "./social.js";
 import { checkFacts, fixInstruction, hasProblems } from "./facts.js";
 import type { KnowledgeEntry } from "./knowledge.js";
 
@@ -258,6 +259,30 @@ export async function processInteraction(interactionId: number): Promise<Convers
     return finish("ignored", hidden ? "hidden" : "ignored");
   }
 
+  // ---------------------------------------------------------- social check
+  // A chat reply, not a help desk or an ad: short, one message, no selling unless asked.
+  let socialNote: string | undefined;
+  const social = socialProblems(text, it.text, p, perception.intent);
+  if (social.problems.length) {
+    const rewrite = await llm()
+      .generate({
+        operation: "conversation.social_rewrite",
+        tier: "smart",
+        maxTokens: 200,
+        ref: { type: "interaction", id: String(it.id) },
+        system: `${personaSystemBlock(p)}\n\n---\n${socialStyleBlock(p)}\nYou are fixing one Instagram reply before it is sent.`,
+        prompt: `${renderContext(it, ctx)}\n\nDRAFT REPLY: """${text}"""\n\n${socialFixInstruction(social)}`,
+      })
+      .catch(() => "");
+    const candidate = truncate(rewrite.trim().replace(/^["“]|["”]$/g, "").replace(/\s*\n+\s*/g, " ").trim(), p.communication_style.max_reply_chars);
+    if (candidate && socialProblems(candidate, it.text, p, perception.intent).problems.length < social.problems.length) {
+      socialNote = `social check rewrote the reply (${social.problems.join("; ")})`;
+      text = candidate;
+    } else {
+      socialNote = `social check: ${social.problems.join("; ")}`;
+    }
+  }
+
   // ---------------------------------------------------------- fact check
   // Business facts go out complete and true, or a human looks first.
   const byId = new Map(ctx.knowledge.map((k) => [k.id, k]));
@@ -323,7 +348,7 @@ export async function processInteraction(interactionId: number): Promise<Convers
     ...decisionBase,
     action: `${action}:${outcome}`,
     safetyLevel: assessment.level,
-    reason: factNote ? `${decision.reason} (${factNote})` : decision.reason,
+    reason: [decision.reason, socialNote, factNote].filter(Boolean).join(" · "),
     output: { ...decisionBase.output, safety: { categories: assessment.categories, reason: assessment.reason }, fact_check: { ...facts, note: factNote ?? null } },
     latencyMs: Date.now() - started,
   });

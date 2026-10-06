@@ -5,7 +5,7 @@ import { llm } from "../llm/llm.js";
 import { allowedContacts } from "../conversation/knowledge.js";
 import { recordEvent } from "../lib/events.js";
 import { applyMemoryPolicy, RELATIONSHIP_KINDS } from "./policy.js";
-import { relationshipMemories, upsertMemory } from "./store.js";
+import { relationshipMemories, selfMemories, upsertMemory } from "./store.js";
 
 export const extractionSchema = z.object({
   memories: z
@@ -19,6 +19,16 @@ export const extractionSchema = z.object({
       }),
     )
     .max(5),
+  self: z
+    .array(
+      z.object({
+        kind: z.enum(["self_fact", "self_plan"]).describe("self_plan for something the creator is about to do (with a date if known), self_fact otherwise"),
+        content: z.string().describe("One short third-person fact about the CREATOR, using their name, e.g. 'Zuri is replaying Spider-Man 2 this week'"),
+        expires_on: z.string().nullable().describe("ISO date after which a plan is over, else null"),
+      }),
+    )
+    .max(3)
+    .describe("New details the CREATOR shared about their own life in their reply; [] if none"),
 });
 
 const SYSTEM = `You extract durable relationship memory for an Instagram creator about ONE follower.
@@ -27,7 +37,9 @@ Rules:
 - Never extract: health, religion, politics, sexuality, finances, exact addresses, phone numbers, emails, IDs, passwords, age if under 18, or anything about third parties.
 - Never extract anything the creator said, or guesses. No speculation.
 - Skip small talk. If nothing is worth remembering, return {"memories": []}.
-- Do not repeat memories already known (listed below) unless the new message changes them.`;
+- Do not repeat memories already known (listed below) unless the new message changes them.
+
+Separately, under "self": the creator is a character with a consistent life. From the CREATOR's reply only, extract new concrete details they stated about themselves (a favourite film, what they're playing or watching, a place they go, a plan for the weekend, an opinion they hold). Skip generic pleasantries and anything already in THEIR CANON. Never include business facts (prices, stock, addresses).`;
 
 /**
  * `memory.extract` job. Runs after the reply went out (or was skipped), so a
@@ -46,6 +58,7 @@ export async function extractMemories(interactionId: number): Promise<{ stored: 
   if (!user) return { stored: 0, rejected: 0 };
 
   const known = await relationshipMemories(user.id, 20);
+  const canon = await selfMemories(it.text, 30);
   const reply = await one<{ text: string }>(
     "SELECT text FROM messages WHERE interaction_id = $1 AND direction = 'out' ORDER BY id DESC LIMIT 1",
     [interactionId],
@@ -61,7 +74,8 @@ export async function extractMemories(interactionId: number): Promise<{ stored: 
       `Today: ${new Date().toISOString().slice(0, 10)}`,
       `Already known about @${user.username ?? "follower"}:\n${known.map((m) => `- (${m.kind}) ${m.content}`).join("\n") || "(nothing)"}`,
       `Follower's ${it.kind} message: """${it.text}"""`,
-      reply ? `Creator's reply (context only, do not extract from it): """${reply.text}"""` : "",
+      reply ? `Creator's reply (use it only for "self"): """${reply.text}"""` : "",
+      `THEIR CANON (already known about the creator):\n${canon.map((m) => `- ${m.content}`).join("\n") || "(nothing yet)"}`,
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -78,6 +92,16 @@ export async function extractMemories(interactionId: number): Promise<{ stored: 
       continue;
     }
     await upsertMemory("relationship", user.id, v, { type: "message", id: String(interactionId) });
+    stored++;
+  }
+
+  // The creator's own story: shared canon, and a note of what this person was told.
+  for (const f of reply ? out.self : []) {
+    const v = applyMemoryPolicy({ kind: f.kind, content: f.content, confidence: 0.9, importance: 0.6, expires_on: f.expires_on }, new Date(), contacts);
+    if (!v.store) continue;
+    await upsertMemory("identity", null, v, { type: "message", id: String(interactionId) });
+    const told = applyMemoryPolicy({ kind: "shared", content: `Told them: ${f.content}`, confidence: 0.9, importance: 0.4 }, new Date(), contacts);
+    if (told.store) await upsertMemory("relationship", user.id, told, { type: "message", id: String(interactionId) });
     stored++;
   }
 
