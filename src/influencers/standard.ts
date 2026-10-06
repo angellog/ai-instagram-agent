@@ -76,6 +76,7 @@ const SECTION: Record<string, string> = {
   locations: "visual.locations",
   trends: "trends",
   brand: "brand",
+  local_look: "visual.locations",
 };
 
 const isWeekend = (a: Persona["daily_life"]["activities"][number]) => a.weekends_only || a.days.some((d) => d === "saturday" || d === "sunday");
@@ -135,6 +136,14 @@ export function personaChecks(p: Persona): Check[] {
     },
     { key: "weekend", group: "Daily life", label: "Weekend life", ok: weekend >= STANDARD.weekend_activities, detail: short(weekend, STANDARD.weekend_activities, "weekend activities"), fix: "ai" },
     { key: "weekend_ideas", group: "Daily life", label: "Weekend post ideas", ok: p.weekend_ideas.length >= STANDARD.weekend_ideas, detail: short(p.weekend_ideas.length, STANDARD.weekend_ideas, "ideas"), fix: "ai" },
+    {
+      key: "local_look",
+      group: "Daily life",
+      label: "Places look local",
+      ok: p.visual.locations.every((l) => (l.look ?? "").trim().length >= 60),
+      detail: `${p.visual.locations.filter((l) => (l.look ?? "").trim().length >= 60).length}/${p.visual.locations.length} places describe how they really look (floors, walls, furniture, signage, what's outside)`,
+      fix: "ai",
+    },
     { key: "locations", group: "Daily life", label: "Places they go", ok: p.visual.locations.length >= STANDARD.locations, detail: short(p.visual.locations.length, STANDARD.locations, "locations"), fix: "ai" },
     {
       key: "trends",
@@ -237,7 +246,7 @@ Rules:
 - Stay true to this person: their city, culture, faith, style, budget and voice as the persona describes them. Specific colours, fabrics and cuts; no brand logos.
 - visual.character.closet: tops, bottoms, layers, one_pieces, activewear (lists of strings) and occasions (list of {occasion, outfit, keywords, days}); days are lowercase weekday names.
 - daily_life.activities: items {slot, activity, locations, postable, weight, weekdays_only, weekends_only, days}; slot is EXACTLY one of: ${SLOTS.join(", ")}; locations are ids from visual.locations (existing or ones you add in the same answer).
-- visual.locations: items {id, description, slots}; ids are lowercase-with-dashes.
+- visual.locations: items {id, description, slots, look}; ids are lowercase-with-dashes. look is 1-3 sentences on how THIS real place looks in this person's city today, concrete enough for a photographer: floor, walls, windows, furniture, lighting, signage, what is on the shelves, who else is around, what is visible outside. Use real local knowledge (e.g. a Kampala home has tiled floors, burglar-bar windows, a walled compound; a phone shop in Pioneer Mall is a small glass-fronted unit with glass counters full of phones and accessories on pegboards, fluorescent light, a busy corridor outside). A shop or workplace must read as a business, never a home.
 - trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".
 - brand: {name, category, products, natural_moments, curiosity_hooks, mention_rate}. name and category come from identity.affiliation and the BUSINESS KNOWLEDGE; products are 4-6 generic descriptions of what the brand sells (no invented product names, prices or offers); natural_moments are 5-8 moments from THIS person's own daily_life where the category belongs without being the subject (a breakfast stays about breakfast); curiosity_hooks are 2-4 questions followers would ask; mention_rate 0.2 unless content_rules give another share. Keep any existing values.`;
 

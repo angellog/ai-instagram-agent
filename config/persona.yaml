@@ -201,15 +201,15 @@ visual:
       no text, no watermark, no logos other than on the sneakers, no extra fingers,
       no distorted hands, no duplicate people, no cartoon or 3D render look
   locations:
-    - { id: kololo-cafe, description: "a sunlit specialty coffee shop in Kololo, Kampala, wooden tables, plants", slots: [morning, afternoon] }
-    - { id: ntinda-street, description: "a busy Ntinda street with boda bodas and colourful shop fronts", slots: [morning, late_morning, afternoon] }
-    - { id: pioneer-mall, description: "inside Pioneer Mall, Kampala, near sneaker shelves", slots: [late_morning, afternoon] }
-    - { id: kololo-track, description: "the Kololo airstrip running path at sunrise", slots: [morning, evening] }
-    - { id: apartment, description: "a bright minimalist apartment with a sneaker wall shelf", slots: [morning, night] }
-    - { id: rooftop, description: "a Kampala rooftop terrace at dusk overlooking the hills", slots: [evening, night] }
-    - { id: bookshop, description: "a small independent bookshop with stacked shelves", slots: [afternoon] }
-    - { id: gym, description: "a clean modern gym with concrete floors", slots: [evening] }
-    - { id: skyz-lounge, description: "the outdoor lounge terrace of Skyz Hotel on Naguru hill, Kampala, lounge seating, greenery and a view over the Kampala hills and skyline", slots: [afternoon, evening] }
+    - { id: kololo-cafe, description: "a sunlit specialty coffee shop in Kololo, Kampala, wooden tables, plants", slots: [morning, afternoon], look: "open-fronted Kololo café with a garden terrace, dark wooden tables, rattan chairs, potted palms and frangipani, tiled floor inside, a barista counter with a big espresso machine, Ugandan customers on laptops, lush greenery and a walled compound outside" }
+    - { id: ntinda-street, description: "a busy Ntinda street with boda bodas and colourful shop fronts", slots: [morning, late_morning, afternoon], look: "Ntinda trading centre roadside: rows of boda bodas waiting at the stage, small shops with MTN-yellow and Airtel-red painted fronts, a white matatu with a blue checked stripe, roadside fruit vendors, red murram edges and power lines, low buildings climbing green hills" }
+    - { id: pioneer-mall, description: "inside Pioneer Mall, Kampala, near sneaker shelves", slots: [late_morning, afternoon], look: "downtown Pioneer Mall: a busy narrow corridor of small glass-fronted shop units on tiled floors under fluorescent light; FeetBit's unit has glass shelves and a wall of sneakers on lit shelving, a small glass counter, the shop name above the doorway, shoppers walking past glass railings" }
+    - { id: kololo-track, description: "the Kololo airstrip running path at sunrise", slots: [morning, evening], look: "the long flat tarmac of the Kololo Airstrip at sunrise with the Independence Monument area and green Kololo hill in the distance, joggers and walkers in groups, tall grass edges and flame trees" }
+    - { id: apartment, description: "a bright minimalist apartment with a sneaker wall shelf", slots: [morning, night], look: "a bright two-bedroom Kampala flat: glossy cream ceramic floor tiles, mint-painted walls, aluminium sliding windows with white burglar bars and sheer curtains, a grey fabric sofa with kitenge cushions, a wooden TV stand, a simple wall shelf of sneakers, potted plants; outside a walled compound, a gate and iron-sheet roofs on green hills" }
+    - { id: rooftop, description: "a Kampala rooftop terrace at dusk overlooking the hills", slots: [evening, night], look: "a Kampala rooftop terrace with plastic and rattan chairs, potted plants and warm string lights, looking across hills of red-roofed houses, mid-rise buildings and church spires under a dusky sky" }
+    - { id: bookshop, description: "a small independent bookshop with stacked shelves", slots: [afternoon], look: "a small Kampala bookshop with tightly packed wooden shelves, African and international titles face-out, a tiled floor, a ceiling fan, a counter with a cash box and a reading stool" }
+    - { id: gym, description: "a clean modern gym with concrete floors", slots: [evening], look: "a clean Kampala gym with grey rubber floor tiles, mirrors, simple racks and benches, fans on the walls, local trainers working out, louvre windows with bars" }
+    - { id: skyz-lounge, description: "the outdoor lounge terrace of Skyz Hotel on Naguru hill, Kampala, lounge seating, greenery and a view over the Kampala hills and skyline", slots: [afternoon, evening], look: "the Skyz Hotel terrace on Naguru hill: cushioned lounge chairs and low tables, potted greenery, glass balustrades, a wide view over Kampala's green hills and skyline" }
 
 daily_life:
   activities_per_day: 6

@@ -1,3 +1,4 @@
+import { localeLines } from "./locale.js";
 import type { Persona } from "../persona/schema.js";
 import type { Idea } from "./director.js";
 import type { VisualState } from "./history.js";
@@ -49,7 +50,7 @@ export function slidePrompt(p: Persona, idea: { format: Idea["format"] | "story"
     if (ch.face_policy === "faceless") lines.push("The face is not visible: framed from the chin down or turned away.");
   } else {
     lines.push(
-      `No people in frame except possibly hands${item(state) ? `; ${item(state)} sits naturally in the scene` : ""}.`,
+      `The creator is not in frame except possibly their hands${item(state) ? `; ${item(state)} sits naturally in the scene` : ""}.`,
       "Same shoot and styling as the rest of the series.",
     );
   }
@@ -58,6 +59,7 @@ export function slidePrompt(p: Persona, idea: { format: Idea["format"] | "story"
   lines.push(`Shot: ${slide.shot.trim()}`);
   lines.push(`Framing: ${COMPOSITION_TEXT[slide.composition] ?? slide.composition}.`);
   if (loc) lines.push(`Location: ${loc.description}.`);
+  lines.push(...localeLines(p, loc, slide.include_character));
   lines.push(`Light: ${LIGHT_TEXT[state.time_of_day ?? "morning"] ?? state.time_of_day}. ${ph.lighting}.`);
   lines.push(
     story

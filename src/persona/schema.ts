@@ -95,7 +95,15 @@ export const personaSchema = z.object({
       negative: z.string().default(""),
     }),
     locations: z
-      .array(z.object({ id: z.string(), description: z.string(), slots: z.array(slot).default([]) }))
+      .array(
+        z.object({
+          id: z.string(),
+          description: z.string(),
+          slots: z.array(slot).default([]),
+          // How this real place looks (floors, walls, furniture, signage, what's outside), so images match the city.
+          look: z.string().optional(),
+        }),
+      )
       .min(1),
   }),
   daily_life: z.object({
