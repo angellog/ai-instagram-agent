@@ -13,7 +13,7 @@ import { notify } from "../notify/telegram.js";
 import { persona } from "../persona/loader.js";
 import type { Persona } from "../persona/schema.js";
 import { JOBS, jobId, queue } from "../queue/queues.js";
-import { composeSlide, FEED, inspectImage, STORY, type Overlay } from "../render/compose.js";
+import { composeSlide, FEED, inspectImage, STORY, STORY_STYLES, type Overlay, type StoryStyle } from "../render/compose.js";
 import { assessText, gate, openReview } from "../safety/safety.js";
 import { download, hostImage, mediaPrefix } from "../storage/host.js";
 import type { Idea } from "./director.js";
@@ -197,8 +197,26 @@ export function overlayFor(p: Persona, post: Pick<PostRow, "media_type">, slide:
   return p.carousel.text_overlays ? { kind: slide.overlay_kind, heading, body } : { kind: "none" };
 }
 
+/**
+ * A story's text style: random, but never one of the influencer's last two, so
+ * stories look hand-made rather than templated. Same post → same style on re-render.
+ */
+export async function pickStoryStyle(postId: string): Promise<{ style: StoryStyle; seed: number }> {
+  const recent = await many<{ style: string | null }>(
+    `SELECT pa.overlay->>'style' AS style FROM post_assets pa JOIN posts po ON po.id = pa.post_id
+     WHERE po.influencer_id = $1 AND po.media_type = 'STORY' AND po.id <> $2 AND pa.overlay ? 'heading'
+     ORDER BY pa.created_at DESC LIMIT 2`,
+    [influencerId(), postId],
+  );
+  const seed = parseInt(sha256(Buffer.from(postId)).slice(0, 8), 16);
+  const used = new Set(recent.map((r) => r.style ?? "panel"));
+  const options = STORY_STYLES.filter((s) => !used.has(s));
+  return { style: options[seed % options.length], seed };
+}
+
 export async function composeAndHost(p: Persona, post: PostRow, slide: Slide, index: number, total: number, img: Pick<SlideImage, "bytes" | "url" | "assetId" | "providerRequestId" | "provider" | "model">): Promise<void> {
-  const overlay = overlayFor(p, post, slide);
+  let overlay = overlayFor(p, post, slide);
+  if (overlay.kind === "story") overlay = { ...overlay, ...(await pickStoryStyle(post.id)) };
   const { jpeg, width, height } = await composeSlide(img.bytes, overlay, p.carousel.brand_colors, post.media_type === "STORY" ? STORY : FEED);
   const digest = sha256(jpeg);
   const hosted = await hostImage(jpeg, `${mediaPrefix(currentInfluencer().id)}/${post.media_type === "STORY" ? "stories" : "posts"}/${post.id}/${index + 1}-${digest.slice(0, 10)}.jpg`);

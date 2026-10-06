@@ -29,6 +29,10 @@ export const STORY: Size = { w: STORY_W, h: STORY_H };
 
 export type OverlayKind = "none" | "cover" | "body" | "cta" | "story";
 
+/** How a story's words are drawn. Picked at random per story so the feed doesn't look templated. */
+export const STORY_STYLES = ["panel", "plain", "caption", "script", "marker", "highlight"] as const;
+export type StoryStyle = (typeof STORY_STYLES)[number];
+
 export interface Overlay {
   kind: OverlayKind;
   heading?: string;
@@ -36,6 +40,10 @@ export interface Overlay {
   /** "2/5" style counter; omitted on single images. */
   counter?: string;
   handle?: string;
+  /** Story text style (stories only); "panel" when absent. */
+  style?: StoryStyle;
+  /** Deterministic variation (tilt, position, sticker) for this story. */
+  seed?: number;
 }
 
 export interface Brand {
@@ -50,7 +58,7 @@ function fontsDir(): string {
   return process.env.FONTS_DIR ?? resolve(HERE, "..", "..", "assets", "fonts");
 }
 
-const FONT_FILES = ["ArchivoBlack-Regular.ttf", "Inter-Bold.ttf", "Inter-Medium.ttf"];
+const FONT_FILES = ["ArchivoBlack-Regular.ttf", "Inter-Bold.ttf", "Inter-Medium.ttf", "Pacifico-Regular.ttf", "PermanentMarker-Regular.ttf"];
 let fontPaths: string[] | undefined;
 function fonts(): string[] {
   if (!fontPaths) {
@@ -74,7 +82,7 @@ export function sanitizeOverlayText(s: string): string {
 
 // Average advance width as a fraction of font size, per font. Conservative
 // (slightly wide) so text never overflows; checked in tests by rendering.
-const WIDTH_FACTOR = { archivo: 0.8, interBold: 0.58, interMedium: 0.53 } as const;
+const WIDTH_FACTOR = { archivo: 0.8, interBold: 0.58, interMedium: 0.53, pacifico: 0.62, marker: 0.6 } as const;
 
 export function wrap(text: string, fontSize: number, factor: number, maxWidth: number): string[] {
   const maxChars = Math.max(4, Math.floor(maxWidth / (fontSize * factor)));
@@ -163,7 +171,7 @@ export function overlaySvg(o: Overlay, brand: Brand, size: Size = FEED): string 
   const body = o.body ? sanitizeOverlayText(o.body) : "";
 
   if (o.kind === "story" && (heading || body)) {
-    parts.push(storySvg(o, brand, size));
+    parts.push(o.style && o.style !== "panel" ? styledStorySvg({ ...o, heading, body }, brand, size) : storySvg(o, brand, size));
   } else if (o.kind !== "none" && (heading || body)) {
     const gradTop = o.kind === "cover" ? 0.42 : 0.38;
     parts.push(
@@ -282,4 +290,111 @@ export async function inspectImage(buf: Buffer): Promise<ImageCheck> {
   if (ch.mean < 18) problems.push("almost black");
   if (ch.mean > 240) problems.push("almost white / blown out");
   return { ok: problems.length === 0, problems, width, height, meanLuma: ch.mean, stdev: ch.stdev };
+}
+
+/** A small deterministic random source per story (tilt, position, sticker). */
+function rng(seed: number): () => number {
+  let x = (seed >>> 0) || 1;
+  return () => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return ((x >>> 0) % 10_000) / 10_000;
+  };
+}
+
+/** Vector stickers (always render: no emoji font needed). Each is drawn around (0,0), ~120px. */
+const STICKERS: Record<string, (c: string) => string> = {
+  sparkle: (c) => `<path d="M0 -60 C8 -14 14 -8 60 0 C14 8 8 14 0 60 C-8 14 -14 8 -60 0 C-14 -8 -8 -14 0 -60Z" fill="${c}"/><path d="M52 -52 C55 -40 58 -37 70 -34 C58 -31 55 -28 52 -16 C49 -28 46 -31 34 -34 C46 -37 49 -40 52 -52Z" fill="${c}" opacity="0.85"/>`,
+  heart: (c) => `<path d="M0 50 C-60 10 -62 -40 -28 -48 C-12 -52 -2 -40 0 -30 C2 -40 12 -52 28 -48 C62 -40 60 10 0 50Z" fill="${c}"/>`,
+  star: (c) => `<path d="M0 -58 L16 -18 L58 -16 L25 10 L36 52 L0 28 L-36 52 L-25 10 L-58 -16 L-16 -18Z" fill="${c}"/>`,
+  sun: (c) => `<circle r="30" fill="${c}"/>${Array.from({ length: 8 }, (_, i) => `<rect x="-5" y="-62" width="10" height="20" rx="5" fill="${c}" transform="rotate(${i * 45})"/>`).join("")}`,
+  arrow: (c) => `<path d="M-50 30 C-30 -20 10 -30 40 -20" fill="none" stroke="${c}" stroke-width="10" stroke-linecap="round"/><path d="M22 -42 L48 -18 L18 -2" fill="none" stroke="${c}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`,
+  burst: (c) => `<path d="${Array.from({ length: 24 }, (_, i) => { const r = i % 2 ? 40 : 60; const a = (i * Math.PI) / 12; return `${i ? "L" : "M"}${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`; }).join(" ")}Z" fill="${c}"/>`,
+};
+
+/**
+ * The non-panel story styles. All keep text inside the safe band (between the
+ * top ~14% and bottom ~20% Instagram covers) and on the side of the frame the
+ * prompt left calm.
+ */
+function styledStorySvg(o: Overlay, brand: Brand, size: Size): string {
+  const r = rng(o.seed ?? 1);
+  const heading = o.heading ?? "";
+  const body = o.body ?? "";
+  const W = size.w;
+  const safeTop = Math.round(size.h * 0.16);
+  const safeBottom = Math.round(size.h * 0.78);
+  const accent = brand.primary;
+  const shadow = `<defs><filter id="ts" x="-10%" y="-30%" width="120%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.55"/></filter></defs>`;
+  const stickerNames = Object.keys(STICKERS);
+  const sticker = (x: number, y: number, scale = 1) =>
+    `<g transform="translate(${x} ${y}) rotate(${Math.round(r() * 40 - 20)}) scale(${scale})">${STICKERS[stickerNames[Math.floor(r() * stickerNames.length)]](r() < 0.5 ? accent : "#FFFFFF")}</g>`;
+  const centerY = Math.round(safeTop + (safeBottom - safeTop) * (0.45 + r() * 0.35));
+
+  switch (o.style) {
+    case "plain": {
+      const h = fit(heading || body, [96, 84, 74, 64, 56], WIDTH_FACTOR.interBold, W - 180, 4);
+      const lh = Math.round(h.size * 1.12);
+      const top = centerY - Math.round((h.lines.length * lh) / 2);
+      const words = h.lines.map((l, i) => `<text x="${W / 2}" y="${top + i * lh + h.size}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${h.size}" fill="#FFFFFF" filter="url(#ts)">${esc(l)}</text>`);
+      const small = heading && body ? fit(body, [36, 32], WIDTH_FACTOR.interMedium, W - 220, 2) : undefined;
+      const smallLines = small ? small.lines.map((l, i) => `<text x="${W / 2}" y="${top + h.lines.length * lh + 30 + (i + 1) * Math.round(small.size * 1.3)}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="${small.size}" fill="#FFFFFF" filter="url(#ts)">${esc(l)}</text>`) : [];
+      return shadow + words.join("") + smallLines.join("");
+    }
+    case "caption": {
+      const h = fit([heading, body].filter(Boolean).join(" · "), [40, 36, 34, 32], WIDTH_FACTOR.interMedium, W - 260, 3);
+      const lh = Math.round(h.size * 1.32);
+      const boxW = Math.min(W - 160, Math.max(...h.lines.map((l) => l.length)) * h.size * WIDTH_FACTOR.interMedium + 72);
+      const boxH = h.lines.length * lh + 44;
+      const x = Math.round((W - boxW) / 2);
+      const y = centerY - Math.round(boxH / 2);
+      return `<rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="${Math.min(40, boxH / 2)}" fill="#FFFFFF" fill-opacity="0.94"/>${h.lines
+        .map((l, i) => `<text x="${W / 2}" y="${y + 22 + (i + 1) * lh - Math.round(h.size * 0.3)}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="${h.size}" fill="#111111">${esc(l)}</text>`)
+        .join("")}`;
+    }
+    case "script": {
+      const h = fit(heading || body, [104, 92, 80, 70, 62], WIDTH_FACTOR.pacifico, W - 220, 3);
+      const lh = Math.round(h.size * 1.3);
+      const tilt = Math.round(r() * 10 - 6);
+      const top = centerY - Math.round((h.lines.length * lh) / 2);
+      const txt = h.lines.map((l, i) => `<text x="${W / 2}" y="${top + i * lh + h.size}" text-anchor="middle" font-family="Pacifico" font-size="${h.size}" fill="#FFFFFF" filter="url(#ts)">${esc(l)}</text>`).join("");
+      const under = `<path d="M${W / 2 - 180} ${top + h.lines.length * lh + 18} C${W / 2 - 60} ${top + h.lines.length * lh + 34} ${W / 2 + 60} ${top + h.lines.length * lh + 2} ${W / 2 + 190} ${top + h.lines.length * lh + 20}" fill="none" stroke="${accent}" stroke-width="9" stroke-linecap="round"/>`;
+      const small = heading && body ? `<text x="${W / 2}" y="${top + h.lines.length * lh + 90}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="34" fill="#FFFFFF" filter="url(#ts)">${esc(fit(body, [34], WIDTH_FACTOR.interMedium, W - 220, 1).lines[0] ?? "")}</text>` : "";
+      return `${shadow}<g transform="rotate(${tilt} ${W / 2} ${centerY})">${txt}${under}</g>${small}`;
+    }
+    case "marker": {
+      const h = fit(heading || body, [84, 74, 66, 58], WIDTH_FACTOR.marker, W - 300, 3);
+      const lh = Math.round(h.size * 1.15);
+      const boxW = Math.min(W - 200, Math.max(...h.lines.map((l) => l.length)) * h.size * WIDTH_FACTOR.marker + 90);
+      const boxH = h.lines.length * lh + 70;
+      const tilt = Math.round(r() * 8 - 4);
+      const x = Math.round((W - boxW) / 2);
+      const y = centerY - Math.round(boxH / 2);
+      const label = `<g transform="rotate(${tilt} ${W / 2} ${centerY})"><rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="14" fill="${accent}"/>${h.lines
+        .map((l, i) => `<text x="${W / 2}" y="${y + 35 + (i + 1) * lh - Math.round(h.size * 0.18)}" text-anchor="middle" font-family="Permanent Marker" font-size="${h.size}" fill="${brand.text}">${esc(l)}</text>`)
+        .join("")}</g>`;
+      const side = r() < 0.5 ? x + 10 : x + boxW - 10;
+      return label + sticker(side, y - 30, 0.9) + (heading && body ? `${shadow}<text x="${W / 2}" y="${y + boxH + 70}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="34" fill="#FFFFFF" filter="url(#ts)">${esc(fit(body, [34], WIDTH_FACTOR.interMedium, W - 220, 1).lines[0] ?? "")}</text>` : "");
+    }
+    case "highlight":
+    default: {
+      const h = fit(heading || body, [66, 58, 52, 46], WIDTH_FACTOR.interBold, W - 240, 4);
+      const lh = Math.round(h.size * 1.32);
+      const top = centerY - Math.round((h.lines.length * lh) / 2);
+      const bg = r() < 0.5 ? "#FFFFFF" : accent;
+      const fg = bg === "#FFFFFF" ? "#111111" : brand.text;
+      return (
+        h.lines
+          .map((l, i) => {
+            const w = l.length * h.size * WIDTH_FACTOR.interBold + 44;
+            const y = top + i * lh;
+            return `<rect x="${(W - w) / 2}" y="${y}" width="${w}" height="${lh - 6}" rx="10" fill="${bg}"/><text x="${W / 2}" y="${y + Math.round(lh * 0.72)}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${h.size}" fill="${fg}">${esc(l)}</text>`;
+          })
+          .join("") +
+        (heading && body ? `${shadow}<text x="${W / 2}" y="${top + h.lines.length * lh + 50}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="34" fill="#FFFFFF" filter="url(#ts)">${esc(fit(body, [34], WIDTH_FACTOR.interMedium, W - 220, 1).lines[0] ?? "")}</text>` : "") +
+        (r() < 0.6 ? sticker(W - 170, top - 40, 0.8) : "")
+      );
+    }
+  }
 }

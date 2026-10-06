@@ -140,7 +140,8 @@ export async function editStoryText(postId: string, headingRaw: string, by: stri
     if (facts.unverified.length) return fail(`Not saved: ${facts.unverified.join(", ")} isn't in the business knowledge. Only use numbers you can stand behind`);
   }
   const body = row.overlay?.body;
-  const overlay: Overlay = heading || body ? { kind: "story", heading: heading || undefined, body } : { kind: "none" };
+  // A word change keeps the story's own style and layout.
+  const overlay: Overlay = heading || body ? { kind: "story", heading: heading || undefined, body, style: row.overlay?.style, seed: row.overlay?.seed } : { kind: "none" };
   const p = persona();
   const { jpeg, width, height } = await composeSlide(await download(row.generated_url), overlay, p.carousel.brand_colors, STORY);
   const digest = sha256(jpeg);
