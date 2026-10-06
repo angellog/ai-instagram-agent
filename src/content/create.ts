@@ -22,7 +22,7 @@ export const STAGES = [
 ] as const;
 export type Stage = (typeof STAGES)[number]["key"] | "queued";
 
-export type CreateKind = "post" | "story";
+export type CreateKind = "post" | "story" | "reel";
 
 export interface CreateRun {
   id: string;
@@ -79,14 +79,15 @@ export async function runCreate(runId: string): Promise<string> {
     await setRun(runId, { status: "running", stage: "planning" });
     const story = run.kind === "story";
     const opts = { operator: true, direction: run.direction ?? undefined };
-    const plan = story ? await planStory(new Date(), opts) : await planContent(new Date(), opts);
+    const plan =
+      run.kind === "reel" ? await (await import("../reels/plan.js")).planReel(new Date(), opts) : story ? await planStory(new Date(), opts) : await planContent(new Date(), opts);
     if (plan.status !== "accepted") {
       const why = "reason" in plan && plan.reason ? plan.reason : plan.status;
       const friendly =
         plan.status === "rejected_all"
           ? "Every idea was too close to recent posts. Add something to the calendar or wait for new activity, then try again."
           : plan.status === "waited"
-            ? `The director found nothing worth ${story ? "a story" : "posting"} right now.`
+            ? `The director found nothing worth ${run.kind === "reel" ? "a reel" : story ? "a story" : "posting"} right now.`
             : `Couldn't start: ${why}`;
       await setRun(runId, { status: "failed", outcome: plan.status, message: `${friendly}\n\nDetails: ${why}`.slice(0, 1200) });
       return plan.status;

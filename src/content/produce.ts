@@ -23,7 +23,7 @@ import { slidePrompt } from "./visual.js";
 
 type Slide = Idea["slides"][number];
 
-interface PostRow {
+export interface PostRow {
   id: string;
   content_idea_id: number;
   media_type: "IMAGE" | "CAROUSEL" | "STORY" | "REEL";
@@ -54,6 +54,7 @@ export type ProduceOutcome = "approved" | "awaiting_review" | "dry_run" | "rejec
 export async function producePost(postId: string): Promise<ProduceOutcome> {
   const post = await one<PostRow>("SELECT * FROM posts WHERE id = $1 AND influencer_id = $2", [postId, influencerId()]);
   if (!post || !["draft", "generating", "composing"].includes(post.status)) return "skipped";
+  if (post.media_type === "REEL") return (await import("../reels/produce.js")).produceReel(postId);
   const idea = await one<{ plan: { slides: Slide[] }; format: string; topic: string }>("SELECT plan, format, topic FROM content_ideas WHERE id = $1", [
     post.content_idea_id,
   ]);
@@ -97,7 +98,7 @@ export async function producePost(postId: string): Promise<ProduceOutcome> {
   return finalizePost(postId, c, p);
 }
 
-interface SlideImage {
+export interface SlideImage {
   bytes: Buffer;
   url: string; // durable, influencer-owned asset URL
   assetId: string;
@@ -113,7 +114,7 @@ interface SlideImage {
  * new idempotency key; a crashed job replays the same key and gets the stored
  * result instead of paying again.
  */
-async function generateValidatedSlide(
+export async function generateValidatedSlide(
   p: Persona,
   c: Controls,
   post: PostRow,
@@ -123,7 +124,7 @@ async function generateValidatedSlide(
   coverUrl: string | undefined,
 ): Promise<SlideImage | undefined> {
   const soul = await activeSoul();
-  const story = post.media_type === "STORY";
+  const story = post.media_type === "STORY" || post.media_type === "REEL";
   const prompt = slidePrompt(p, { format: formatOf(post) }, slide, post.visual_state, index, total);
   const identity = slide.include_character ? (soul?.identityRefs ?? []) : [];
   const refs = [...identity, ...(index > 0 && coverUrl ? [coverUrl] : [])];
@@ -184,7 +185,7 @@ async function generateValidatedSlide(
 }
 
 const formatOf = (post: Pick<PostRow, "media_type">): "story" | "carousel" | "single" =>
-  post.media_type === "STORY" ? "story" : post.media_type === "CAROUSEL" ? "carousel" : "single";
+  post.media_type === "STORY" || post.media_type === "REEL" ? "story" : post.media_type === "CAROUSEL" ? "carousel" : "single";
 
 /**
  * The text layer for one slide. No handle or slide counter ever (Instagram
@@ -276,6 +277,11 @@ export async function finalizePost(postId: string, c: Controls, p: Persona): Pro
   let outcome = gate(assessment.level, c);
   // "Create a post now" always stops for the operator: they asked to see it before it goes out.
   if (origin === "operator" && outcome !== "block") outcome = "review";
+  // Step-by-step phone tips are checked by a person before thousands follow them.
+  if (post.media_type === "REEL" && outcome === "send") {
+    const kind = (await one<{ structure: string }>("SELECT structure FROM content_ideas WHERE id = $1", [post.content_idea_id]))?.structure;
+    if (kind === "explainer") outcome = "review";
+  }
   await one("UPDATE posts SET safety_level = $2, qc = $3, updated_at = now() WHERE id = $1", [
     postId,
     assessment.level,

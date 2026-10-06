@@ -48,7 +48,9 @@ export class MockAdapter implements ProviderAdapter {
       <defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
       <rect width="${w}" height="${hgt}" fill="url(#a)"/><circle cx="${w / 2}" cy="${hgt * 0.38}" r="${w * 0.19}" fill="#fff" fill-opacity="0.35"/>
       <rect x="${w * 0.3}" y="${hgt * 0.56}" width="${w * 0.4}" height="${hgt * 0.28}" rx="60" fill="#000" fill-opacity="0.25"/></svg>`;
-    MockAdapter.images.set(id, await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer());
+    const still = await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toBuffer();
+    // Video models return a real short MP4 (the still, held), so reel assembly runs offline too.
+    MockAdapter.images.set(id, job.request.modality.includes("video") ? await stillToMp4(still, job.request.durationSeconds ?? 5) : still);
     return { providerRequestId: id };
   }
 
@@ -73,4 +75,15 @@ function sizeFor(ratio: string): [number, number] {
   const [a, b] = ratio.split(":").map(Number);
   if (!a || !b) return [1080, 1350];
   return a >= b ? [1350, Math.round((1350 * b) / a)] : [1080, Math.round((1080 * b) / a)];
+}
+
+async function stillToMp4(jpeg: Buffer, seconds: number): Promise<Buffer> {
+  const { ffmpeg, withTemp } = await import("../../media/video.js");
+  const { readFile, writeFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  return withTemp(async (dir) => {
+    await writeFile(join(dir, "f.jpg"), jpeg);
+    await ffmpeg(["-y", "-loop", "1", "-i", join(dir, "f.jpg"), "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100", "-t", String(Math.max(1, seconds)), "-vf", "scale=720:1280,fps=24,format=yuv420p", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", "-shortest", join(dir, "o.mp4")]);
+    return readFile(join(dir, "o.mp4"));
+  });
 }

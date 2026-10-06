@@ -44,3 +44,9 @@ ALTER TABLE posts ADD COLUMN library_item_id uuid REFERENCES library_items(id) O
 
 ALTER TABLE posts DROP CONSTRAINT posts_origin_check;
 ALTER TABLE posts ADD CONSTRAINT posts_origin_check CHECK (origin IN ('scheduled', 'operator', 'library'));
+
+-- Reels animate a photo into a short clip. Policies predate video, so nobody chose to
+-- exclude it: allow image→video by default (Controls → Reels and the routing policy can turn it off).
+ALTER TABLE generation_policies ALTER COLUMN allowed_modalities SET DEFAULT '{text_to_image,image_edit,reference_image,upscale,image_to_video}';
+UPDATE generation_policies SET allowed_modalities = array_append(allowed_modalities, 'image_to_video')
+ WHERE NOT ('image_to_video' = ANY (allowed_modalities));

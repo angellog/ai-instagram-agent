@@ -90,6 +90,7 @@ export const HANDLERS: Record<string, Handler> = {
   // Runs in the influencer's (loose) context itself: it works for hatching influencers too.
   [JOBS.standardize]: (j) => standardize(ownerOf(j)),
   [JOBS.contentProduce]: scoped((j) => producePost(j.data.postId)),
+  [JOBS.reelPlan]: scoped(async () => (await import("../reels/plan.js")).planReel(new Date())),
   [JOBS.postPublish]: scoped((j) => publishPost(j.data.postId)),
   [JOBS.engagementCollect]: scoped((j) => collectEngagement(j.data.postId, j.data.checkpoint)),
   // Periodic per-influencer work.
@@ -132,6 +133,7 @@ const TIMEOUT_MS: Record<string, number> = {
   [JOBS.contentPlan]: 6 * 60_000,
   [JOBS.storyPlan]: 3 * 60_000,
   [JOBS.contentProduce]: 45 * 60_000,
+  [JOBS.reelPlan]: 10 * 60_000,
   [JOBS.benchmarkRun]: 60 * 60_000,
   [JOBS.hatchFaces]: 20 * 60_000,
   [JOBS.hatchPersona]: 20 * 60_000, // compose + repair, then a standard upgrade if short
@@ -281,6 +283,7 @@ export async function upsertSchedulers(): Promise<void> {
 
 export const planSchedulerId = (influencerId: number) => `content-plan-${influencerId}`;
 export const storySchedulerId = (influencerId: number) => `story-plan-${influencerId}`;
+export const reelSchedulerId = (influencerId: number) => `reel-plan-${influencerId}`;
 
 /**
  * Upsert a content-plan scheduler for every active influencer (in their
@@ -291,6 +294,8 @@ export async function syncInfluencerSchedulers(): Promise<{ active: number; remo
   const planCron = process.env.CONTENT_PLAN_CRON ?? "20 8,12,16,19 * * *";
   // Offset from feed planning; the story gate decides whether each check posts.
   const storyCron = process.env.STORY_PLAN_CRON ?? "50 9,13,17,20 * * *";
+  // Reels: a check late morning and early evening; the reel gate keeps it to reels_per_week.
+  const reelCron = process.env.REEL_PLAN_CRON ?? "35 11,18 * * *";
   let active = 0;
   let removed = 0;
   for (const inf of await listInfluencers(["active", "paused", "hatching", "archived"])) {
@@ -298,6 +303,7 @@ export async function syncInfluencerSchedulers(): Promise<{ active: number; remo
     if (inf.status !== "active") {
       if (await queue("content").removeJobScheduler(planSchedulerId(id)).catch(() => false)) removed++;
       await queue("content").removeJobScheduler(storySchedulerId(id)).catch(() => false);
+      await queue("content").removeJobScheduler(reelSchedulerId(id)).catch(() => false);
       continue;
     }
     let tz = "UTC";
@@ -317,6 +323,11 @@ export async function syncInfluencerSchedulers(): Promise<{ active: number; remo
         name: JOBS.storyPlan,
         data: { influencerId: id },
         opts: { attempts: 2, backoff: { type: "smart", delay: 30_000 } },
+      });
+      await queue("content").upsertJobScheduler(reelSchedulerId(id), { pattern: reelCron, tz }, {
+        name: JOBS.reelPlan,
+        data: { influencerId: id },
+        opts: { attempts: 2, backoff: { type: "smart", delay: 60_000 } },
       });
       active++;
     } catch (e) {

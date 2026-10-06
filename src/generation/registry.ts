@@ -109,7 +109,7 @@ export async function policyFor(influencerId: number): Promise<Policy> {
     (await one<PolicyRow>("SELECT * FROM generation_policies WHERE influencer_id = $1", [influencerId])) ??
     (await one<PolicyRow>("SELECT * FROM generation_policies WHERE influencer_id = 0"));
   if (!row) {
-    return { mode: "auto", preferredModelId: null, fallbackModelIds: [], allowedModalities: ["text_to_image", "reference_image", "image_edit", "upscale"], qualityTier: "high", maxCostPerJobUsd: 0.5 };
+    return { mode: "auto", preferredModelId: null, fallbackModelIds: [], allowedModalities: ["text_to_image", "reference_image", "image_edit", "upscale", "image_to_video"], qualityTier: "high", maxCostPerJobUsd: 0.5 };
   }
   return {
     mode: row.mode,

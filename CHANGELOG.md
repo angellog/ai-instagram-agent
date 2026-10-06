@@ -3,6 +3,29 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.26: Local realism, story styles, content library, reels
+
+**Looks like Kampala, not anywhere**
+- Every image prompt states the real setting (present-day Kampala), what that kind of place really looks like (tiled floors and burglar-bar windows at home; glass-fronted units with packed glass counters in Pioneer Mall; boda bodas and MTN-yellow shopfronts on the street), that anyone else in frame is a Ugandan local, and what to avoid (Western suburban rooms, carpets, snow).
+- Hands-only and POV shots now carry the creator's own skin tone and accessories. They used to have none, so the model drew white hands.
+- A shop or workplace must read as a business, stocked with the influencer's own brand (phones for AG Gadgets, shea butter for See-Me).
+- Locations can carry a hand-tuned `look`; new Standard check "Places look local" (AI fix writes them from local knowledge). Zuri's nine places have one.
+
+**Story text styles**
+- Six styles picked at random per story, never repeating the last two: panel, plain, caption pill, script calligraphy (Pacifico), marker label (Permanent Marker) and highlight blocks, plus vector stickers (sparkle, heart, star, sun, arrow, burst). Editing a story's words keeps its style.
+
+**Content library** (new page: Library)
+- Businesses upload photos (one, or up to 10 for a carousel) or one video, with a title and notes. "Let them decide": the content director posts it when it fits the day. "At a set time": the caption is written now and waits in Reviews, then publishes at that time. "Reel material": screen recordings and b-roll cut into AI reels, never posted alone.
+- Captions are written in the influencer's voice from the notes only (no invented prices or dates); numbers not in the notes are flagged. Business videos are not marked AI-generated.
+
+**Reels**
+- Instagram Reels publishing (video container, longer processing wait, cover image).
+- AI reels, 2 a week by default (Controls → Reels): moments (1-3 short AI clips of the creator's life) or, for tips creators, explainers. The creator introduces the tip in an AI clip, then the steps play on a recreated phone screen (finger, tap ripple, highlighted row, switches flipping, screens sliding). Steps get a second, sceptical research pass, and explainers always wait for review.
+- Each clip is a validated photo of the creator in their real setting, animated by image→video (Seedance on kie, about $0.06/s). The hook line uses a story text style. Uploaded reel material can be cut in. Length 5-55 s.
+- Create page: "Create a reel".
+- Video is allowed in routing policies (it predated reels); bundled ffmpeg (`ffmpeg-static`); the media bucket accepts MP4.
+- Migration `013_library_and_reels.sql`.
+
 ## v1.0.25: Every influencer is its own creator (independent brains, UGC brand pull, isolation)
 
 All influencers ran on Zuri's architecture with her world baked in: a required `sneakers` field on every idea, "sneakers clearly visible" in the image framing, FeetBit in the reply prompts, "she" everywhere, and Zuri's whole persona as the hatch template.

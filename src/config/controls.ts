@@ -39,6 +39,12 @@ export const controlsSchema = z.object({
   stories_enabled: z.boolean().default(true),
   stories_per_day: z.number().int().min(0).max(10).default(3),
   min_hours_between_stories: z.number().min(0).default(2.5),
+  // Reels: short vertical videos (moments, or step-by-step explainers with phone screens).
+  reels_enabled: z.boolean().default(true),
+  reels_per_week: z.number().int().min(0).max(14).default(2),
+  min_days_between_reels: z.number().min(0).default(2),
+  // Hard ceiling on reel length (Instagram allows more; short reels perform better).
+  max_reel_seconds: z.number().int().min(5).max(90).default(55),
   max_comment_replies_per_hour: z.number().int().min(0).default(30),
   max_dms_per_hour: z.number().int().min(0).default(40),
   // Probability of replying to a comment the agent judged worth answering but

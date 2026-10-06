@@ -23,6 +23,7 @@ export const JOBS = {
   memoryExtract: "memory.extract",
   contentPlan: "content.plan",
   storyPlan: "content.story",
+  reelPlan: "content.reel",
   contentProduce: "content.produce",
   imageGenerate: "image.generate",
   carouselCompose: "carousel.compose",

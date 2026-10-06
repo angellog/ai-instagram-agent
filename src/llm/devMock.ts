@@ -104,6 +104,41 @@ export function createDevMockProvider(): MockProvider {
     .on("benchmark.judge", () => ({ identity: 7, photorealism: 7, adherence: 8, notes: "mock judge" }))
     .on("persona.compose", (r) => devPersona(lastUser(r)))
     // Offline TikTok caption: a hook line and a few hashtags.
+    // Offline reel director: an explainer for tips creators, a moment for everyone else.
+    .on("reel.plan", (r) => {
+      const u = lastUser(r);
+      const loc = (u.split("LOCATIONS:")[1] ?? "").match(/^([\w-]+):/m)?.[1] ?? null;
+      const material = /- id ([0-9a-f-]{36}) \|/.exec(u.split("REEL MATERIAL")[1] ?? "")?.[1] ?? null;
+      const clip = (shot: string, seconds: number) => ({ shot, motion: "she looks up and smiles, gentle handheld drift", composition: "medium", include_character: true, location_id: loc, time_of_day: "afternoon", seconds });
+      const explainer = /prefer an explainer/.test(u);
+      const row = (label: string, extra: Record<string, unknown> = {}) => ({ label, section: null, icon_color: "#34C759", value: null, toggle: null, chevron: true, ...extra });
+      return {
+        decision: "post",
+        reason: "A useful short reel.",
+        reel: {
+          kind: explainer ? "explainer" : "moment",
+          topic: explainer ? "Save battery with Low Power Mode" : "Slow afternoon at the shop",
+          hook: explainer ? "Your battery, twice as long" : "afternoons like this",
+          caption: explainer ? "One switch, a lot more battery." : "Small moments, big mood.",
+          hashtags: [],
+          os: explainer ? "ios" : null,
+          intro: clip("She holds up her phone in the shop", 4),
+          clips: explainer ? [] : [clip("Coffee on the counter", 3)],
+          steps: explainer
+            ? [
+                { say: "Open Settings, tap Battery", tap: "Battery", screen: { title: "Settings", back: null, footer: null, rows: [row("Wi-Fi", { value: "Home" }), row("Battery"), row("Privacy & Security")] } },
+                { say: "Turn on Low Power Mode", tap: "Low Power Mode", screen: { title: "Battery", back: "Settings", footer: null, rows: [row("Low Power Mode", { icon_color: null, toggle: false, chevron: false })] } },
+              ]
+            : [],
+          material_id: material,
+          featured_item: "",
+        },
+      };
+    })
+    .on("reel.verify", (r) => {
+      const steps = JSON.parse(lastUser(r).split("STEPS:\n")[1] ?? "[]");
+      return { accurate: true, os_version: "iOS 18", problems: [], steps };
+    })
     .on("library.caption", () => ({ caption: "New in, and honestly it's my favourite this week.", hashtags: [], alt_text: "Business photo" }))
     .on("tiktok.caption", () => ({ title: "New laces, same me", caption: "Sunday reset, sneakers first 👟", hashtags: ["sneakers", "kampala", "fitcheck"] }))
     // Offline standard upgrade: fill each requested section from the reference persona.

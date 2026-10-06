@@ -60,7 +60,7 @@ function fontsDir(): string {
 
 const FONT_FILES = ["ArchivoBlack-Regular.ttf", "Inter-Bold.ttf", "Inter-Medium.ttf", "Pacifico-Regular.ttf", "PermanentMarker-Regular.ttf"];
 let fontPaths: string[] | undefined;
-function fonts(): string[] {
+export function fonts(): string[] {
   if (!fontPaths) {
     fontPaths = FONT_FILES.map((f) => resolve(fontsDir(), f));
     // Fail at first use with a clear message rather than silently falling back.

@@ -33,7 +33,7 @@ function examples(): string[] {
 }
 
 /** The direction box: a few words, then Create a post or Create a story. */
-function directForm(kind: "post" | "story", value = ""): string {
+function directForm(kind: "post" | "story" | "reel", value = ""): string {
   return `<section class="card" id="direct" aria-labelledby="direct-h"><div class="card-b">
 <form method="post" action="/admin/create" class="direct-form">
   <div class="field"><label id="direct-h" for="direction">Direction <span class="meta">(optional)</span></label>
@@ -44,6 +44,7 @@ function directForm(kind: "post" | "story", value = ""): string {
   <div class="row" style="margin-top:14px">
     <button class="btn${kind === "post" ? " primary" : ""}" type="submit" name="kind" value="post">${icon("zap", 16)}<span>Create a post</span></button>
     <button class="btn${kind === "story" ? " primary" : ""}" type="submit" name="kind" value="story">${icon("sparkles", 16)}<span>Create a story</span></button>
+    <button class="btn${kind === "reel" ? " primary" : ""}" type="submit" name="kind" value="reel">${icon("play", 16)}<span>Create a reel</span></button>
   </div>
 </form></div></section>
 <script>(function(){var t=document.getElementById("direction"),c=document.querySelector("[data-count-for=direction]");if(!t)return;
@@ -94,9 +95,9 @@ export function registerCreate(app: FastifyInstance): void {
   const r = consoleRouter(app);
 
   r.post("/admin/create", async (req: Req, reply) => {
-    const kind = req.body?.kind === "story" ? "story" : "post";
+    const kind = req.body?.kind === "story" ? "story" : req.body?.kind === "reel" ? "reel" : "post";
     const c = await getControls();
-    const block = operatorGate(c) ?? (kind === "story" && !c.stories_enabled ? "stories are turned off in Controls" : undefined);
+    const block = operatorGate(c) ?? (kind === "story" && !c.stories_enabled ? "stories are turned off in Controls" : kind === "reel" && !c.reels_enabled ? "reels are turned off in Controls" : undefined);
     if (block) return done(req, reply, kind === "story" ? "/admin/stories" : "/admin", `Can't create a ${kind}: ${block}`, false);
     const run = await startCreate(reviewer(req), kind, cleanDirection(req.body?.direction));
     if (String(req.headers.accept ?? "").includes("application/json")) return reply.send({ ok: true, id: run.id, existing: run.existing, kind });
@@ -112,7 +113,7 @@ export function registerCreate(app: FastifyInstance): void {
   r.get("/admin/create", async (req: Req, reply) => {
     const runs = await recentRuns(10);
     const q = req.query as Record<string, string | undefined>;
-    const kind = q.kind === "story" ? "story" : "post";
+    const kind = q.kind === "story" ? "story" : q.kind === "reel" ? "reel" : "post";
     const body = `${header("Create a post now", { sub: "One tap runs the whole pipeline for this influencer (idea → photos → quality and safety checks) and stops so you can look before it goes out. Add a direction to steer what it's about." })}
 ${directForm(kind, cleanDirection(q.direction) ?? "")}
 ${card(
@@ -132,8 +133,8 @@ ${card(
     if (!p) return reply.code(404).send("not found");
     const inf = currentInfluencer();
     const acct = await primaryAccount();
-    const story = p.kind === "story";
-    const noun = story ? "story" : "post";
+    const story = p.kind === "story" || p.kind === "reel";
+    const noun = p.kind === "reel" ? "reel" : story ? "story" : "post";
     const again = story ? storyButton("Make another") : createButton("Make another", false).replace("btn primary", "btn");
     const retry = story ? storyButton("Try again", true, p.direction) : createButton("Try again", false, p.direction);
     const edit = link("Change direction", `/admin/create?${new URLSearchParams({ ...(story ? { kind: "story" } : {}), direction: p.direction ?? "" }).toString()}#direct`, { variant: "ghost", icon: "pencil" });
@@ -179,7 +180,7 @@ ${card(
       li.querySelector(".cr-dot").innerHTML=s&&s.state==="failed"?'${icon("x", 16).replace(/'/g, "\\'")}':'${icon("check", 16).replace(/'/g, "\\'")}'});
     var total=Math.max(p.slides.total,p.slides.urls.length);
     while(shots.children.length<total){var d=document.createElement("div");d.className="cr-shot wait";shots.append(d)}
-    p.slides.urls.forEach(function(u,i){var el=shots.children[i];if(el&&!el.querySelector("img")){el.classList.remove("wait");var im=new Image();im.src=u;im.alt="Photo "+(i+1);el.append(im)}});
+    p.slides.urls.forEach(function(u,i){var el=shots.children[i];if(el&&!el.querySelector("img,video")){el.classList.remove("wait");var vid=/\.mp4(\?|$)/.test(u),im=vid?document.createElement("video"):new Image();im.src=u;if(vid){im.muted=true;im.controls=true;im.playsInline=true;im.style.cssText="width:100%;height:100%;object-fit:cover"}else im.alt="Photo "+(i+1);el.append(im)}});
     if(p.status==="done"||p.status==="failed"){
       stopped=true;time.textContent=fmt(p.elapsedMs);root.setAttribute("aria-busy","false");root.classList.add(p.status==="done"?"cr-done":"cr-failed");
       if(p.status==="done"){document.getElementById("cr-ok").hidden=false;document.getElementById("cr-caption").textContent=p.caption||"";

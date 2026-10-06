@@ -384,7 +384,7 @@ export const CATALOG: CatalogModel[] = [
     provider: "mock",
     model: "mock-video",
     displayName: "Mock video (offline)",
-    capabilities: ["image_to_video", "text_to_video"],
+    capabilities: ["image_to_video", "text_to_video", "audio"],
     ratios: [],
     maxDuration: 10,
     referenceLimit: 1,
