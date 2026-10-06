@@ -3,6 +3,20 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.28: Tenant set-up and the Interview
+
+**Each influencer stands alone** (tenant set-up, no billing)
+- Accounts: email and password sign-in (scrypt-hashed), one-time invite links (7 days), 14-day sessions stored only as hashes. The admin token still signs you in as admin.
+- **Team & access** (admin): invite a tenant user for one influencer's business, or another admin; new link or password reset; disable (signs them out everywhere).
+- A tenant sees only their own influencer: no switcher, no other influencer's name, no platform pages. Enforced in the server before any route runs (`src/auth/access.ts`): Influencers, Hatch, Standard, Config & keys, Team & access, switching, routing policy, benchmarks, providers, soul training, Instagram connection, the raw persona editor, platform budgets and the status API are refused even when typed. Their requests always run as their own influencer, whatever cookie or id they send.
+- Costs and Events show a tenant only their own. Budgets, the language-model brain and reel volume are read-only for tenants. The platform queue card is admin-only.
+
+**Interview** (new page under Identity)
+- Asks a few specific questions at a time: missing business facts first (address, how to order), then whatever the Standard finds short, then life, voice, audience and places. Not repeated within two weeks.
+- Answers become a structured change set (interests, phrases, boundaries, place looks, business facts with exact `must_include`, remembered experiences). It's shown for review and saved only on confirm, as a versioned persona update.
+- **Add an experience**: a sentence or two goes straight into the influencer's remembered story, used in chats.
+- Migration `014_tenants.sql`.
+
 ## v1.0.27: Social conversations (a friend, not a sales rep)
 
 - **How every influencer talks:** like a person on Instagram. Replies mirror the other person's length (a "hey" gets a few words), one short message, an occasional question back, small real-sounding details from their own life, and friendly follow-ups on what people told them before. No paragraphs, lists, help-desk phrases ("how can I help", "let me know if") or sales talk.

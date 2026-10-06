@@ -14,7 +14,8 @@ import { localParts } from "../../lib/time.js";
 import { bindHiggsfieldSoul, newSoulVersion, refreshHiggsfieldSoul, trainHiggsfieldSoul } from "../../souls/manage.js";
 import { activeSoul, listSouls } from "../../souls/souls.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
-import { attempt, consoleRouter, done, render, reviewer, type Req } from "../console.js";
+import { attempt, consoleRouter, done, isTenant, render, reviewer, type Req } from "../console.js";
+import { ADMIN_CONTROLS } from "../../auth/access.js";
 import { action, ago, avatar, button, card, empty, esc, field, header, icon, input, link, pill, select, table, textarea } from "../ui/kit.js";
 
 const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
@@ -241,8 +242,11 @@ ${card(
   // ------------------------------------------------------------ controls
   r.get("/admin/controls", async (req: Req, reply) => {
     const c = (await getControls(true)) as Record<string, unknown>;
+    const locked = isTenant(req) ? new Set<string>(ADMIN_CONTROLS) : new Set<string>();
     const control = (k: string) => {
       const v = c[k];
+      // Spend, the AI brain and reel volume are the platform operator's: tenants see them, read-only.
+      if (locked.has(k)) return `<input value="${esc(String(v))}" disabled aria-describedby="locked-${esc(k)}"><span class="meta" id="locked-${esc(k)}">Set by your platform admin</span>`;
       if (k === "mode") return select("mode", ["development", "dry_run", "human_approval", "autonomous"], v);
       if (typeof v === "boolean") return select(k, [["true", "On"], ["false", "Off"]], String(v));
       if (k === "llm_brain") return select(k, [["claude", "Claude (Anthropic)"], ["openai", "OpenAI (GPT)"]], String(v));
@@ -264,8 +268,9 @@ ${CONTROL_GROUPS.map(([title, sub, keys]) =>
       const patch: Record<string, unknown> = {};
       const shape = controlsSchema.shape as Record<string, unknown>;
       const current = (await getControls(true)) as Record<string, unknown>;
+      const locked = isTenant(req) ? new Set<string>(ADMIN_CONTROLS) : new Set<string>();
       for (const [k, raw] of Object.entries(req.body ?? {})) {
-        if (!(k in shape) || k.startsWith("platform_")) continue;
+        if (!(k in shape) || k.startsWith("platform_") || locked.has(k)) continue;
         const cur = current[k];
         const text = String(raw).trim();
         if (text === "") continue; // an emptied field means "leave as is", never 0

@@ -56,6 +56,7 @@ code,.mono,pre,kbd{font-family:var(--mono);font-size:.86em}
 .switch{margin:0 0 12px;position:relative}
 .switch summary{list-style:none;display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--surface-2)}
 .switch summary::-webkit-details-marker{display:none}
+.tenant-card{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}.tenant-card .who{min-width:0;flex:1}.tenant-card b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tenant-card small{color:var(--muted)}
 .switch summary .who{min-width:0;flex:1}.switch summary b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.switch summary small{color:var(--muted)}
 .switch[open] summary{border-color:var(--line-2)}
 .switch .menu{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--shadow-lg);padding:6px;z-index:30;max-height:60vh;overflow:auto}

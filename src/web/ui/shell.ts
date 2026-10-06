@@ -1,4 +1,5 @@
 import { MODES } from "../../config/modes.js";
+import { tenantMayAccess } from "../../auth/access.js";
 import { VERSION } from "../../version.js";
 import { avatar, esc, icon, pill } from "./kit.js";
 import { CSS } from "./styles.js";
@@ -29,6 +30,8 @@ export interface ShellContext {
   outOfCredit?: Array<{ brain: "claude" | "openai"; since: string; message: string }>;
   pendingReviews?: number;
   openAccess?: boolean;
+  /** Signed in as one influencer's business: their own dashboard only. */
+  tenant?: boolean;
   head?: string;
   scripts?: string;
 }
@@ -56,6 +59,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     "Identity",
     [
       ["persona", "/admin/persona", "Persona & soul", "user"],
+      ["interview", "/admin/interview", "Interview", "message"],
       ["profile", "/admin/profile", "Profile kit", "instagram"],
       ["controls", "/admin/controls", "Controls", "sliders"],
     ],
@@ -75,6 +79,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     [
       ["influencers", "/admin/influencers", "Influencers", "egg"],
       ["standard", "/admin/standard", "Standard", "shield"],
+      ["users", "/admin/users", "Team & access", "users"],
       ["config", "/admin/config", "Config & keys", "key"],
       ["costs", "/admin/costs", "Costs", "wallet"],
       ["events", "/admin/events", "Events & jobs", "activity"],
@@ -129,7 +134,9 @@ const APP_JS = String.raw`
 })();`;
 
 export function shell(o: ShellContext): string {
-  const nav = NAV.map(
+  // A tenant sees only what operates their own influencer (the server enforces the same list).
+  const navFor = o.tenant ? NAV.map(([sec, items]) => [sec === "Platform" ? "Account" : sec, items.filter(([, href]) => tenantMayAccess("GET", href))] as [string, NavItem[]]).filter(([, items]) => items.length) : NAV;
+  const nav = navFor.map(
     ([section, items]) =>
       `<h3>${esc(section)}</h3>${items
         .map(([key, href, label, ic]) => {
@@ -151,7 +158,11 @@ export function shell(o: ShellContext): string {
         )
         .join("")}<div class="sep"></div><a href="/admin/controls" role="menuitem">${icon("sliders", 16)}<span>All controls</span></a></div></details>`
     : "";
-  const switcher = `<div class="switch-wrap"><details class="switch"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
+  // Tenants have one influencer: show it, no switcher, no hatching, no other names.
+  const tenantCard = cur
+    ? `<div class="switch-wrap"><div class="switch"><div class="tenant-card">${avatar(cur.avatar_url, cur.name, 34)}<span class="who"><b>${esc(cur.name)}</b><small>${esc(cur.username ? `@${cur.username}` : cur.status)}</small></span></div></div></div>`
+    : "";
+  const switcher = o.tenant ? tenantCard : `<div class="switch-wrap"><details class="switch"><summary aria-label="Switch influencer">${cur ? avatar(cur.avatar_url, cur.name, 34) : avatar(null, "?", 34)}<span class="who"><b>${esc(cur?.name ?? "No influencer")}</b><small>${
     cur ? esc(cur.username ? `@${cur.username}` : cur.status) : "hatch one to begin"
   }</small></span>${icon("chevron", 16)}</summary><div class="menu" role="menu">${o.influencers
     .map(

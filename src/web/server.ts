@@ -21,6 +21,9 @@ import { legalPage } from "./legal.js";
 import { registerAdmin, selectedInfluencer } from "./admin.js";
 import { setting } from "../config/settings.js";
 import { listInfluencers, withInfluencer } from "../context.js";
+import { acceptInvite, createSession, INVITE_DAYS, login, MIN_PASSWORD, principalForSession, SESSION_DAYS, userForInvite, type Principal } from "../auth/users.js";
+import { tenantMayAccess } from "../auth/access.js";
+import { setPrincipal } from "../auth/request.js";
 import { VERSION } from "../version.js";
 
 const SESSION_COOKIE = "aia_session";
@@ -38,15 +41,30 @@ function readCookie(req: FastifyRequest, name: string): string | undefined {
   return undefined;
 }
 
-/** ADMIN_TOKEN via Bearer header (API) or a signed session cookie (dashboard). Open only in development without a token. */
-export function isAuthorized(req: FastifyRequest): boolean {
+export const USER_COOKIE = "aia_user";
+
+/**
+ * Who is calling: the admin (ADMIN_TOKEN as a Bearer header or the signed admin
+ * cookie, or an admin user's session), a tenant (a user's session, tied to one
+ * influencer), or nobody. Open as admin only in development without a token.
+ */
+export async function resolvePrincipal(req: FastifyRequest): Promise<Principal | undefined> {
   const token = env().ADMIN_TOKEN;
-  if (!token) return env().NODE_ENV !== "production";
+  // A signed-in user is who they are, even on an open development box.
+  const user = readCookie(req, USER_COOKIE);
+  if (user) {
+    const p = await principalForSession(user);
+    if (p) return p;
+  }
+  if (!token && env().NODE_ENV !== "production") return { kind: "admin", userId: null, label: "development" };
   const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ") && safeEqual(auth.slice(7), token)) return true;
-  const cookie = readCookie(req, SESSION_COOKIE);
-  return Boolean(cookie && safeEqual(cookie, sessionValue(token)));
+  if (token && auth?.startsWith("Bearer ") && safeEqual(auth.slice(7), token)) return { kind: "admin", userId: null, label: "admin token" };
+  const legacy = readCookie(req, SESSION_COOKIE);
+  if (token && legacy && safeEqual(legacy, sessionValue(token))) return { kind: "admin", userId: null, label: "admin token" };
+  return undefined;
 }
+
+const NOT_YOURS = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not available</title><body style="font:16px/1.5 system-ui;display:grid;place-items:center;min-height:100dvh;margin:0"><p>That page isn't part of your account. <a href="/admin">Back to your dashboard</a></p></body>`;
 
 export async function buildServer(): Promise<FastifyInstance> {
   const e = env();
@@ -61,10 +79,18 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.addHook("onRequest", async (req, reply) => {
     const url = req.url.split("?")[0];
     const isAdmin = url === "/admin" || url.startsWith("/admin/") || url.startsWith("/api/");
-    if (!isAdmin || url === "/admin/login") return;
-    if (isAuthorized(req)) return;
-    if (url.startsWith("/api/")) return reply.code(401).send({ error: "unauthorized" });
-    return reply.redirect(`/admin/login?next=${encodeURIComponent(req.url)}`, 303);
+    if (!isAdmin || url === "/admin/login" || url.startsWith("/admin/invite/")) return;
+    const principal = await resolvePrincipal(req);
+    if (!principal) {
+      if (url.startsWith("/api/")) return reply.code(401).send({ error: "unauthorized" });
+      return reply.redirect(`/admin/login?next=${encodeURIComponent(req.url)}`, 303);
+    }
+    setPrincipal(req, principal);
+    // Tenants operate their own influencer only: onboarding, platform and cross-influencer pages are refused outright.
+    if (principal.kind === "tenant" && !tenantMayAccess(req.method, url)) {
+      if (url.startsWith("/api/") || String(req.headers.accept ?? "").includes("application/json")) return reply.code(403).send({ error: "forbidden" });
+      return reply.code(403).type("text/html").send(NOT_YOURS);
+    }
   });
 
   app.addHook("onResponse", async (req, reply) => {
@@ -76,7 +102,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     const path = req.url.split("?")[0];
     const uuidRoute = /^\/admin\/(?:posts|create|generation\/requests|library)\/([^/]+)/.exec(path) ?? /^\/admin\/api\/create\/([^/]+)/.exec(path);
     if (uuidRoute && !/^[0-9a-f-]{36}$/i.test(uuidRoute[1])) return reply.code(404).send("not found");
-    const numRoute = /^\/admin\/(?:reviews|people|interactions|influencers|hatch|api\/calendar|calendar|generation\/models)\/([^/]+)/.exec(path);
+    const numRoute = /^\/admin\/(?:reviews|people|interactions|influencers|hatch|api\/calendar|calendar|generation\/models|users)\/([^/]+)/.exec(path);
     if (numRoute && !/^\d{1,12}$/.test(numRoute[1]) && !["add"].includes(numRoute[1])) return reply.code(404).send("not found");
   });
 
@@ -185,21 +211,54 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // ------------------------------------------------------------ login
   app.get("/admin/login", async (req: FastifyRequest<{ Querystring: Record<string, string> }>, reply) => {
-    const next = safeNext(req.query.next);
-    return reply.type("text/html").send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Influencer OS</title>
-<style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;min-height:100dvh;margin:0;background:light-dark(#f6f6f8,#0d0e12);color:light-dark(#12141a,#eceef2)}
-form{background:light-dark(#fff,#15171c);padding:28px;border-radius:16px;border:1px solid light-dark(#e3e4ea,#262a33);display:grid;gap:12px;width:min(380px,calc(100vw - 32px));box-shadow:0 12px 32px rgb(0 0 0/.08)}
-h1{font-size:20px;margin:0}label{font-weight:600;font-size:14px}input,button{font:inherit;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid light-dark(#d3d5dd,#343945);background:transparent;color:inherit}
-button{background:#c8410e;border:0;color:#fff;font-weight:600;cursor:pointer}input:focus-visible,button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}</style>
-<form method="post" action="/admin/login"><h1>Influencer OS</h1><label for="t">Admin token</label><input id="t" type="password" name="token" autocomplete="current-password" autofocus required><input type="hidden" name="next" value="${next.replace(/"/g, "")}"><button>Sign in</button></form></html>`);
+    const next = safeNext(req.query.next).replace(/"/g, "");
+    const err = req.query.e === "1" ? `<p class="err" role="alert">That email and password don't match.</p>` : req.query.e === "t" ? `<p class="err" role="alert">Wrong admin token.</p>` : "";
+    return reply.type("text/html").send(authPage(
+      "Sign in",
+      `<form method="post" action="/admin/login"><h1>Influencer OS</h1>${err}
+<label for="e">Email</label><input id="e" type="email" name="email" autocomplete="username" autofocus required>
+<label for="p">Password</label><input id="p" type="password" name="password" autocomplete="current-password" required>
+<input type="hidden" name="next" value="${next}"><button>Sign in</button>
+<details><summary>Admin token</summary><div class="tok"><label for="t">Token</label><input id="t" type="password" name="token" autocomplete="off"><button name="mode" value="token" formnovalidate>Sign in with token</button></div></details></form>`,
+    ));
   });
   app.post("/admin/login", async (req: FastifyRequest<{ Body: Record<string, string> }>, reply) => {
-    const token = env().ADMIN_TOKEN;
-    const given = String(req.body?.token ?? "").trim(); // pasted tokens often carry a stray space or newline
-    if (!token || !safeEqual(given, token)) return reply.code(401).type("text/html").send(`Wrong token. <a href="/admin/login">Try again</a>`);
     const secure = env().PUBLIC_BASE_URL.startsWith("https://") ? "; Secure" : "";
-    reply.header("set-cookie", `${SESSION_COOKIE}=${sessionValue(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}${secure}`);
-    return reply.redirect(safeNext(req.body?.next), 303);
+    const next = safeNext(req.body?.next);
+    if (req.body?.mode === "token" || (req.body?.token && !req.body?.email)) {
+      const token = env().ADMIN_TOKEN;
+      const given = String(req.body?.token ?? "").trim(); // pasted tokens often carry a stray space or newline
+      if (!token || !safeEqual(given, token)) return reply.redirect("/admin/login?e=t", 303);
+      reply.header("set-cookie", `${SESSION_COOKIE}=${sessionValue(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}${secure}`);
+      return reply.redirect(next, 303);
+    }
+    const user = await login(String(req.body?.email ?? ""), String(req.body?.password ?? ""));
+    if (!user) return reply.redirect("/admin/login?e=1", 303);
+    const t = await createSession(user.id, String(req.headers["user-agent"] ?? ""));
+    reply.header("set-cookie", `${USER_COOKIE}=${t}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}${secure}`);
+    return reply.redirect(user.role === "tenant" ? "/admin" : next, 303);
+  });
+  // Invite links: set a password, then you're signed in.
+  app.get("/admin/invite/:token", async (req: FastifyRequest<{ Params: { token: string }; Querystring: Record<string, string> }>, reply) => {
+    const u = await userForInvite(req.params.token);
+    if (!u) return reply.code(410).type("text/html").send(authPage("Invite expired", `<div class="card"><h1>This link has expired</h1><p>Invite links work once, for ${INVITE_DAYS} days. Ask for a new one.</p></div>`));
+    const err = req.query.e ? `<p class="err" role="alert">${String(req.query.e).replace(/[<>&"]/g, "")}</p>` : "";
+    return reply.type("text/html").send(authPage(
+      "Set your password",
+      `<form method="post" action="/admin/invite/${encodeURIComponent(req.params.token)}"><h1>Welcome${u.name ? `, ${u.name.replace(/[<>&"]/g, "")}` : ""}</h1><p class="sub">${u.email.replace(/[<>&"]/g, "")}</p>${err}
+<label for="p">Choose a password</label><input id="p" type="password" name="password" minlength="${MIN_PASSWORD}" autocomplete="new-password" autofocus required>
+<p class="sub">At least ${MIN_PASSWORD} characters.</p><button>Set password and sign in</button></form>`,
+    ));
+  });
+  app.post("/admin/invite/:token", async (req: FastifyRequest<{ Params: { token: string }; Body: Record<string, string> }>, reply) => {
+    try {
+      const u = await acceptInvite(req.params.token, String(req.body?.password ?? ""));
+      const secure = env().PUBLIC_BASE_URL.startsWith("https://") ? "; Secure" : "";
+      reply.header("set-cookie", `${USER_COOKIE}=${await createSession(u.id, String(req.headers["user-agent"] ?? ""))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}${secure}`);
+      return reply.redirect("/admin", 303);
+    } catch (e) {
+      return reply.redirect(`/admin/invite/${encodeURIComponent(req.params.token)}?e=${encodeURIComponent((e as Error).message)}`, 303);
+    }
   });
 
   // ------------------------------------------------------------ JSON API
@@ -308,4 +367,14 @@ function stateKey(): string {
 
 function safeNext(n: string | undefined): string {
   return n && n.startsWith("/admin") && !n.startsWith("//") ? n : "/admin";
+}
+
+function authPage(title: string, body: string): string {
+  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Influencer OS</title>
+<style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;min-height:100dvh;margin:0;background:light-dark(#f6f6f8,#0d0e12);color:light-dark(#12141a,#eceef2)}
+form,.card{background:light-dark(#fff,#15171c);padding:28px;border-radius:16px;border:1px solid light-dark(#e3e4ea,#262a33);display:grid;gap:10px;width:min(380px,calc(100vw - 32px));box-shadow:0 12px 32px rgb(0 0 0/.08)}
+h1{font-size:20px;margin:0}.sub{margin:0;color:light-dark(#636878,#9a9fad);font-size:14px}.err{margin:0;color:light-dark(#b3141a,#ff8a8a);font-size:14px}label{font-weight:600;font-size:14px}
+input,button{font:inherit;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid light-dark(#d3d5dd,#343945);background:transparent;color:inherit}
+button{background:#c8410e;border:0;color:#fff;font-weight:600;cursor:pointer}input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+details{margin-top:6px;font-size:14px}summary{cursor:pointer;color:light-dark(#636878,#9a9fad)}.tok{display:grid;gap:8px;margin-top:8px}</style>${body}</html>`;
 }

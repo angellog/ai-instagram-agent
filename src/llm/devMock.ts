@@ -146,6 +146,20 @@ export function createDevMockProvider(): MockProvider {
       const steps = JSON.parse(lastUser(r).split("STEPS:\n")[1] ?? "[]");
       return { accurate: true, os_version: "iOS 18", problems: [], steps };
     })
+    // Offline interview: business answers become knowledge, everything else a memory.
+    .on("interview.apply", (r) => {
+      const u = lastUser(r);
+      const answers = [...u.matchAll(/Q \(([\w:-]+)\): [^\n]*\nA: ([^\n]+)/g)].map((m) => ({ topic: m[1], answer: m[2] }));
+      const loc = answers.find((a) => a.topic === "business_location");
+      const life = answers.filter((a) => a.topic.startsWith("life"));
+      return {
+        interests_add: [], signature_phrases_add: [], avoid_phrases_add: [], boundaries_add: [], weekend_ideas_add: [], location_looks: [],
+        knowledge: loc ? [{ id: "shop-location", keywords: ["shop", "where", "location", "address"], content: `The shop is at ${loc.answer}.`, must_include: [loc.answer] }] : [],
+        memories: life.map((a) => ({ kind: "self_fact", content: `The creator ${a.answer}`, expires_on: null })),
+        summary: [...(loc ? [`Business fact: the shop is at ${loc.answer}`] : []), ...life.map((a) => `Remembered: ${a.answer}`)],
+      };
+    })
+    .on("interview.experience", (r) => ({ memories: [{ kind: "self_fact", content: `The creator ${between(lastUser(r), "NOTE: ", "\n") || lastUser(r).replace("NOTE: ", "")}`, expires_on: null }], weekend_idea: null }))
     .on("library.caption", () => ({ caption: "New in, and honestly it's my favourite this week.", hashtags: [], alt_text: "Business photo" }))
     .on("tiktok.caption", () => ({ title: "New laces, same me", caption: "Sunday reset, sneakers first 👟", hashtags: ["sneakers", "kampala", "fitcheck"] }))
     // Offline standard upgrade: fill each requested section from the reference persona.

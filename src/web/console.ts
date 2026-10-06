@@ -1,3 +1,4 @@
+import { principalOf } from "../auth/request.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { billingBlocks } from "../llm/billing.js";
 import { getControls } from "../config/controls.js";
@@ -31,8 +32,19 @@ async function loadable(id: number): Promise<InfluencerContext | undefined> {
   }
 }
 
-/** The influencer the console is looking at: the cookie's, else the first active one with a persona. */
+/** True when the signed-in user is a tenant (one influencer's business), not the admin. */
+export function isTenant(req: FastifyRequest): boolean {
+  return principalOf(req)?.kind === "tenant";
+}
+
+/**
+ * The influencer the console is looking at. A tenant always gets their own,
+ * whatever cookie or id they send; the admin gets the cookie's, else the first
+ * active one with a persona.
+ */
 export async function resolveInfluencer(req: FastifyRequest): Promise<InfluencerContext | undefined> {
+  const who = principalOf(req);
+  if (who?.kind === "tenant") return loadable(who.influencerId);
   const wanted = selectedInfluencer(req);
   if (wanted) {
     const c = await loadable(wanted);
@@ -60,6 +72,8 @@ export function consoleRouter(app: FastifyInstance) {
       // Routes about a specific influencer (hatch, status, sync) run as THAT influencer, whatever the sidebar says.
       if (param) {
         const id = Number(req.params?.[param]);
+        const who = principalOf(req);
+        if (who?.kind === "tenant" && who.influencerId !== id) return reply.code(404).send("not found");
         if (!Number.isInteger(id) || id < 1 || !(await one("SELECT 1 FROM influencers WHERE id = $1", [id]))) return reply.code(404).send("not found");
         return withInfluencerLoose(id, async () => h(req, reply));
       }
@@ -94,7 +108,7 @@ export async function shellInfluencers(): Promise<ShellInfluencer[]> {
 
 export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
   const ctx = maybeInfluencer();
-  const influencers = await shellInfluencers();
+  const influencers = isTenant(req) ? (await shellInfluencers()).filter((i) => i.id === ctx?.id) : await shellInfluencers();
   let mode: string | undefined;
   let paused: boolean | undefined;
   let pending = 0;
@@ -129,6 +143,7 @@ export async function render(req: Req, reply: FastifyReply, p: PageSpec) {
       disconnected,
       tiktokDisconnected,
       outOfCredit,
+      tenant: isTenant(req),
       pendingReviews: pending,
       openAccess: !env().ADMIN_TOKEN,
     }),

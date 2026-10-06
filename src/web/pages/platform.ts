@@ -16,7 +16,7 @@ import type { CompletionRequest } from "../../llm/types.js";
 import { detectChatId, notify, sendTelegram } from "../../notify/telegram.js";
 import { syncInfluencerSchedulers } from "../../queue/worker.js";
 import { hostImage } from "../../storage/host.js";
-import { attempt, consoleRouter, done, render, reviewer, selectCookie, type Req } from "../console.js";
+import { attempt, consoleRouter, done, isTenant, render, reviewer, selectCookie, type Req } from "../console.js";
 import { action, ago, avatar, bar, button, card, empty, esc, field, header, icon, input, kpi, link, pill, status, table, tabs, usd } from "../ui/kit.js";
 
 const GROUPS: Array<[SettingGroup, string, string]> = [
@@ -301,6 +301,24 @@ addEventListener("scroll",function(){if(!tick)tick=requestAnimationFrame(spy)},{
     "/admin/costs",
     async (req: Req, reply) => {
       const inf = maybeInfluencer();
+      // A tenant sees their own influencer's spend only: no platform totals, caps or other names.
+      if (isTenant(req) && inf) {
+        const [report, byOp, daily] = await Promise.all([
+          costReport(),
+          costByOperation(30),
+          many<{ day: string; llm: number; image: number }>(
+            `SELECT occurred_at::date::text AS day, coalesce(sum(cost_usd) FILTER (WHERE category='llm'),0)::float AS llm,
+               coalesce(sum(cost_usd) FILTER (WHERE category='image'),0)::float AS image
+             FROM cost_ledger WHERE influencer_id = $1 AND occurred_at > now() - interval '14 days' GROUP BY 1 ORDER BY 1 DESC`,
+            [inf.id],
+          ),
+        ]);
+        const body = `${header("Costs", { sub: `What ${esc(inf.name)} has spent on AI and images.` })}
+<div class="kpis">${Object.entries(report).slice(0, 4).map(([k, v]) => kpi(k.replace(/_/g, " "), usd(v), { icon: "wallet" })).join("")}</div>
+<div class="grid">${card(table(["Category", "Operation", "Calls", "USD"], byOp.map((o) => [esc(o.category), `<code>${esc(o.operation)}</code>`, String(o.n), usd(o.usd)])), { title: "By operation (30d)" })}
+${card(table(["Day", "LLM", "Images"], daily.map((d) => [esc(d.day), usd(d.llm), usd(d.image)])), { title: "Daily" })}</div>`;
+        return render(req, reply, { title: "Costs", active: "costs", body });
+      }
       const [report, byOp, platform, all, perInf, daily, c] = await Promise.all([
         inf ? costReport() : Promise.resolve({} as Record<string, number>),
         inf ? costByOperation(30) : Promise.resolve([]),
@@ -389,7 +407,7 @@ ${card(table(["Day", "LLM", "Images"], daily.map((d) => [esc(d.day), usd(d.llm),
     async (req: Req, reply) => {
       // An influencer's page shows only its own rows; platform rows (no influencer) have their own tab.
       const q = String(req.query.scope ?? "");
-      const scope = !maybeInfluencer() || q === "all" ? "all" : q === "platform" ? "platform" : "mine";
+      const scope = isTenant(req) ? "mine" : !maybeInfluencer() || q === "all" ? "all" : q === "platform" ? "platform" : "mine";
       const id = maybeInfluencer()?.id ?? null;
       const where = "($1 = 'all' OR ($1 = 'mine' AND influencer_id = $2) OR ($1 = 'platform' AND influencer_id IS NULL))";
       const [events, runs, failures] = await Promise.all([
@@ -407,7 +425,7 @@ ${card(table(["Day", "LLM", "Images"], daily.map((d) => [esc(d.day), usd(d.llm),
         ),
       ]);
       const body = `${header("Events & jobs")}
-${tabs([
+${isTenant(req) ? "" : tabs([
   ...(id ? [{ href: "/admin/events", label: `${maybeInfluencer()!.name} only`, active: scope === "mine" }] : []),
   { href: "/admin/events?scope=platform", label: "Platform", active: scope === "platform" },
   { href: "/admin/events?scope=all", label: "Everything", active: scope === "all" },

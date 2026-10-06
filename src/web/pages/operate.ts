@@ -16,7 +16,7 @@ import { createButton, directLink, storyButton } from "./create.js";
 import { persona } from "../../persona/loader.js";
 import { JOBS, jobId, queue, queueCounts } from "../../queue/queues.js";
 import { listEvents } from "../../calendar/events.js";
-import { attempt, consoleRouter, done, isUuid, render, reviewer, type Req } from "../console.js";
+import { attempt, consoleRouter, done, isTenant, isUuid, render, reviewer, type Req } from "../console.js";
 import { approveReview, listReviews, rejectReview } from "../reviews.js";
 import { action, ago, bar, button, card, empty, esc, field, header, icon, input, kpi, link, pill, select, table, tabs, textarea, usd } from "../ui/kit.js";
 
@@ -192,7 +192,7 @@ ${setup.length ? `<div class="callout warn">${icon("info")}<div>${setup.map((s) 
       : `<p class="muted">${icon("check", 16)} No warnings.</p>`,
     { title: "Warnings & errors", actions: link("Events", "/admin/events", { small: true, variant: "ghost" }) },
   )}
-  ${card(table(["Queue", "Waiting", "Active", "Delayed", "Failed"], q, "Redis unreachable"), { title: "Queues (platform)", actions: `${action("/admin/actions/sweep", "Recover stalled", { small: true, icon: "refresh" })}` })}
+  ${isTenant(req) ? "" : card(table(["Queue", "Waiting", "Active", "Delayed", "Failed"], q, "Redis unreachable"), { title: "Queues (platform)", actions: `${action("/admin/actions/sweep", "Recover stalled", { small: true, icon: "refresh" })}` })}
   </div>
 </div>`;
     return render(req, reply, { title: "Overview", active: "overview", body });
