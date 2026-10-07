@@ -67,6 +67,25 @@ describe("interview", () => {
     expect(life.circle).toEqual([{ name: "Amina", who: "younger sister, borrows her sneakers" }]);
   });
 
+  it("adds short-form questions, a club and scout hashtags", async () => {
+    await one("UPDATE influencers SET persona_yaml = regexp_replace(persona_yaml, '\nengagement:.*?(?=\ntrends:)', '', 's') WHERE id = 1");
+    invalidateInfluencer();
+    expect((await app.inject({ url: "/admin/interview" })).body).toMatch(/What gets Zuri&#39;s followers talking|What gets Zuri's followers talking/);
+    const draft = await form("/admin/interview/draft", {
+      topic_0: "short_form", question_0: "What gets them talking?", answer_0: "boda or matatu, which has the better playlist?; KCCA, rivals Vipers and Express",
+      topic_1: "scout", question_1: "Hashtags?", answer_1: "#kampala #ugandanfashion",
+    });
+    const set = /name="set" value="([^"]+)"/.exec(draft.body)![1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+    const qa = /name="qa" value="([^"]+)"/.exec(draft.body)![1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+    await form("/admin/interview/apply", { set, qa });
+    const { parsePersona } = await import("../../src/persona/parse.js");
+    const e = parsePersona((await one<{ persona_yaml: string }>("SELECT persona_yaml FROM influencers WHERE id = 1"))!.persona_yaml).engagement;
+    expect(e.questions).toEqual(["boda or matatu, which has the better playlist?"]);
+    expect(e.football).toEqual({ team: "KCCA", league: "", rivals: ["Vipers", "Express"] });
+    expect(e.formats).toEqual(expect.arrayContaining(["football_banter", "funny_question"]));
+    expect(e.scout_hashtags).toEqual(["kampala", "ugandanfashion"]);
+  });
+
   it("rejects a tampered change set", async () => {
     const r = await form("/admin/interview/apply", { set: JSON.stringify({ interests_add: "not a list" }), qa: "[]" });
     expect(decodeURIComponent(String(r.headers.location))).toMatch(/Not saved/);

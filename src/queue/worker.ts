@@ -101,6 +101,8 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.contentCreate]: scoped((j) => runCreate(String(j.data.runId))),
   [JOBS.trendsRefresh]: (j) => (j.data?.influencerId ? scoped(() => refreshTrends())(j) : forEachActiveInfluencer("trends", () => refreshTrends())),
   [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
+  // Drafts comments for a person to post; a no-op until a scout token is set.
+  [JOBS.engagementScout]: () => forEachActiveInfluencer("engagement scout", async () => (await import("../engagement/scout.js")).runScout()),
   // X (read-only in phase 1): each is a no-op for influencers without an X account.
   [JOBS.xPoll]: () => forEachActiveInfluencer("x mentions", pollMentions),
   [JOBS.xMetrics]: () => forEachActiveInfluencer("x metrics", collectXMetrics),
@@ -263,6 +265,7 @@ export async function upsertSchedulers(): Promise<void> {
     ["maintenance", "calendar-recap", { pattern: "15 * * * *" }, JOBS.calendarRecap],
     ["analytics", "profile-sync", { pattern: "35 * * * *" }, JOBS.profileSync],
     ["analytics", "trends-refresh", { pattern: "5 5,11,17,23 * * *" }, JOBS.trendsRefresh],
+    ["analytics", "engagement-scout", { pattern: "15 9,15 * * *" }, JOBS.engagementScout],
     ["maintenance", "reviews-expire", { pattern: "5 * * * *" }, JOBS.reviewsExpire],
     ["maintenance", "sweep", { every: 10 * 60_000 }, JOBS.sweep],
     ["maintenance", "x-poll", { every: 15 * 60_000 }, JOBS.xPoll],

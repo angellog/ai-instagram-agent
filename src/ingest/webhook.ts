@@ -7,7 +7,7 @@ import { hmacSha256Hex, sha256, signatureMatches } from "../lib/crypto.js";
  * shape the conversation pipeline consumes. Shapes: docs/RESEARCH.md §2.
  */
 
-export type InteractionKind = "comment" | "comment_reply" | "dm" | "story_reply" | "story_mention";
+export type InteractionKind = "comment" | "comment_reply" | "dm" | "story_reply" | "story_mention" | "mention";
 
 export interface NormalizedInteraction {
   kind: InteractionKind;
@@ -70,10 +70,11 @@ export function normalizeWebhook(payload: unknown): NormalizedInteraction[] {
           occurredAt: entry.time ? new Date(entry.time * 1000) : new Date(),
         });
       } else if (change.field === "mentions") {
+        // An @mention in someone else's comment or caption (answered through the /mentions edge).
         const id = v.comment_id ?? v.media_id;
         if (!id) continue;
         out.push({
-          kind: "story_mention",
+          kind: "mention",
           igObjectId: String(id),
           igAccountId: accountId,
           senderIgId: String(v.from?.id ?? "unknown"),

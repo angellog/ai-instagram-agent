@@ -228,11 +228,12 @@ a.kpi:hover{border-color:var(--glass-edge);box-shadow:var(--glass-hi),0 12px 28p
 .tabs a:hover{background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--ink)}
 .tabs a.on,.tabs a[aria-current]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(16 18 26/.08),var(--glass-hi)}
 .tabs .count{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+@media (max-width:640px){.tabs a{padding:7px 9px;gap:4px}.tabs .count{margin-left:0}}
 /* Wide tables scroll inside their card; a soft fade says there's more to the side. */
 .tw{position:relative}
-.tw.more-right{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
-.tw.more-left.more-right{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent)}
-.tw.more-left:not(.more-right){-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px)}
+.tw.more-right,.tabs.more-right{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
+.tw.more-left.more-right,.tabs.more-left.more-right{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent)}
+.tw.more-left:not(.more-right),.tabs.more-left:not(.more-right){-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px)}
 /* Long words, URLs and ids never push a layout wider than its column */
 main :where(dd,p,li,.meta,.help,.kv dd){overflow-wrap:anywhere}
 /* ids, dates and code tokens stay whole; their table scrolls inside its panel */
@@ -286,7 +287,7 @@ input,textarea{caret-color:var(--brand)}
   .glass,.card,.kpi,.tabs,.card th,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.toast{-webkit-backdrop-filter:none;backdrop-filter:none}
   .glass,.card,.kpi,.tabs,.card th,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.ring::before{background:var(--surface)}.top{background:var(--bg)}
   .toast{background:var(--ink)}.toast.bad{background:var(--bad)}
-  .glass,.card,.kpi,.tabs,.cfg-nav{border-color:var(--line-2)}.tw{-webkit-mask-image:none!important;mask-image:none!important}.cfg-group .field,.checks li{background:var(--surface-2);border-color:var(--line)}}
+  .glass,.card,.kpi,.tabs,.cfg-nav{border-color:var(--line-2)}.tw,.tabs{-webkit-mask-image:none!important;mask-image:none!important}.cfg-group .field,.checks li{background:var(--surface-2);border-color:var(--line)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.side,.top,.toasts{display:none}.app{display:block}}
 `;

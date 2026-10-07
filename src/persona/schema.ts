@@ -4,6 +4,10 @@ const slot = z.enum(["morning", "late_morning", "lunch", "afternoon", "evening",
 export type Slot = z.infer<typeof slot>;
 export const SLOTS: Slot[] = ["morning", "late_morning", "lunch", "afternoon", "evening", "night"];
 
+/** Short-form formats built to get replies (v1.0.29). Playful only: never romantic or sexual. */
+export const SHORT_FORMATS = ["silly_talk", "funny_question", "football_banter", "this_or_that", "hot_take"] as const;
+export type ShortFormat = (typeof SHORT_FORMATS)[number];
+
 export const personaSchema = z.object({
   identity: z.object({
     name: z.string().min(1),
@@ -164,6 +168,24 @@ export const personaSchema = z.object({
       circle: z.array(z.object({ name: z.string().min(1), who: z.string().min(1) })).default([]),
     })
     .default({ arcs: [], moments: [], circle: [] }),
+  // Short-form content that gets people talking, and how this influencer shows up
+  // in other people's comments (drafted for a human to post; apps can't comment
+  // on or like other accounts' posts).
+  engagement: z
+    .object({
+      formats: z.array(z.enum(SHORT_FORMATS)).default([]),
+      // Football banter needs a club: friendly rivalry about clubs, never about people.
+      football: z.object({ team: z.string().min(1), league: z.string().default(""), rivals: z.array(z.string()).default([]) }).nullable().default(null),
+      // Short, funny questions followers answer in the comments.
+      questions: z.array(z.string().min(1)).default([]),
+      // Short silly takes and bits in their voice.
+      silly_talk: z.array(z.string().min(1)).default([]),
+      // Community hashtags (no #) whose posts the engagement scout reads.
+      scout_hashtags: z.array(z.string().min(1)).default([]),
+      // How they comment on other people's posts.
+      comment_style: z.string().default(""),
+    })
+    .default({ formats: [], football: null, questions: [], silly_talk: [], scout_hashtags: [], comment_style: "" }),
   // What this influencer keeps up with: news searches (Google News) and RSS/Atom feeds.
   // Each source may carry a label (the platform or topic it represents), e.g.
   // { query: "TikTok Uganda", label: "TikTok Uganda" } or { url: "...", label: "Premier League" }.

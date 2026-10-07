@@ -112,7 +112,7 @@ describe("reels", () => {
       expect(makesExplainers(p)).toBe(false);
       const step = { say: "x", tap: "A", screen: { title: "S", back: null, footer: null, rows: [{ label: "A", section: null, icon_color: null, value: null, toggle: null, chevron: true }] } };
       const clip = { shot: "x", motion: "y", composition: "medium" as const, include_character: true, location_id: "nowhere", time_of_day: "morning" as const, seconds: 6 };
-      const plan: ReelPlan = { kind: "explainer", topic: "t", hook: "h".repeat(60), caption: "c", hashtags: [], os: "ios", intro: clip, clips: [], steps: Array(6).fill(step), material_id: "missing", featured_item: "" };
+      const plan: ReelPlan = { kind: "explainer", format: null, topic: "t", hook: "h".repeat(60), caption: "c", hashtags: [], os: "ios", intro: clip, clips: [], steps: Array(6).fill(step), material_id: "missing", featured_item: "" };
       const out = normalizeReel(plan, p, false, [], { max_reel_seconds: 55 });
       expect(out).toMatchObject({ kind: "moment", steps: [], material_id: null });
       expect(out.intro.location_id).toBeNull();

@@ -3,7 +3,7 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
-## v1.0.29: Liquid glass everywhere, real-life timelines, short-form and engagement (in progress, not deployed)
+## v1.0.29: Liquid glass everywhere, real-life timelines, short-form and engagement (not deployed yet)
 
 **1. Liquid glass across the whole console** (the Config & keys look, everywhere)
 - Every section panel is glass now: cards, KPI tiles and tab bars (tabs are a glass pill bar with a solid chip for the current one). Table headers sit on stronger glass; inputs, previews, code and stat cells stay solid insets so dense data reads cleanly. DESIGN.md's rule is now "The Glass Panel Rule".
@@ -22,7 +22,18 @@ console footer, `/health` and `/api/status`.
 - **Anti-generic check:** an idea built on a stock line ("living my best life", "good vibes", "golden hour", "small wins", "Sunday reset"…) or standing on nothing concrete is sent back once to be anchored in a beat, a moment, a person, a place or a number. The director's caption examples are now specific ones.
 - **Chats know the storyline:** replies see the latest beats and the circle, so "how's training going?" gets the same story the feed tells.
 - **Timeline page** (Identity → Timeline, tenants too): storylines with progress and links to the posts that moved them, the people, which moments are used or fresh, and the latest posts with what each stood on.
-- **Standard:** three new checks (2+ storylines with 4+ beats, 12+ moments, 2+ people) with an AI fix; the hatch prompt and template carry them, and the Interview asks for them and saves them. After deploy, run **Bring all up to standard** so the other four get their timelines. Migration `015_life.sql`.
+- **Standard:** three new checks (2+ storylines with 4+ beats, 12+ moments, 2+ people) with an AI fix; the hatch prompt and template carry them, and the Interview asks for them and saves them. After deploy, run **Bring all up to standard** so the other four get their timelines and short-form material. Migration `015_life.sql`.
+
+**3. Short-form that gets replies, and the engagement scout** (every influencer, standardised; details in `docs/ENGAGEMENT.md`)
+- **Talk reels:** one 5-8 s front-camera clip, the influencer reacting or talking, the line on screen: silly talk, a funny question, football banter, this-or-that or a hot take. The caption asks people to answer. Roughly every other reel for creators who do short-form.
+- **Banter stories:** a photo without the influencer (the watch-party TV, two options side by side) plus a playful line; question stories draw on the same question bank.
+- **Each influencer's material:** formats, 10+ funny questions, 6+ silly takes, a football club with rivals (Zuri: Arsenal vs Tottenham, Chelsea, Manchester United), scout hashtags and a comment style. Football news in the brief nudges banter on matchdays.
+- **Playful only, everywhere:** never romantic or sexual, never flirting with real people, nothing about anyone's looks, no betting or politics; rivalry is about clubs, never people.
+- **Engagement page** (Operate → Engagement, tenants too): today's short-form ideas, each one tap from Create; the comment queue; pasted links; recent @mentions and the replies.
+- **Engagement scout:** reads two of the influencer's hashtags twice a day through Instagram's official hashtag search, skips ads, grief, politics and posts already queued, and drafts one specific comment per post in the influencer's voice (safety-checked; no links, tags, brand or selling). **Instagram doesn't let apps like or comment on other people's posts**, so the queue is one tap: *Copy & open post*, paste and like from the influencer's account, *Posted it*. Within Meta's 30-hashtags-a-week limit; up to 8 drafts a day (Controls). Hashtag search needs a Facebook Login token with Instagram Public Content Access (you add it in Config & keys); until then the queue works from pasted links.
+- **@mention replies:** when someone tags the influencer in a comment on another account's post, the influencer answers there through Instagram's mentions API, with the same safety checks, review rules and hourly limit as comments (Controls → Engagement → Reply to @mentions). Previously skipped.
+- **Standard:** two new checks (Short-form that gets replies; Engagement scout set up) with an AI fix; template, hatch prompt and Interview carry them. Migration `016_engagement.sql`.
+- Tab bars that don't fit a phone fade at the edge and centre the current tab.
 
 **Fix: fact check reads units.** A number now has to match its unit: "2 hours" in the delivery facts no longer lets "only 2 pairs left" through. A follower's own numbers and bare numbers work as before.
 

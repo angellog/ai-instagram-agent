@@ -57,6 +57,8 @@ export const SETTINGS: SettingDef[] = [
   { key: "INSTAGRAM_APP_SECRET", label: "Instagram app secret", group: "instagram", secret: true, help: "Same page. Verifies webhooks and powers Connect Instagram.", provider: "meta" },
   { key: "FACEBOOK_APP_SECRET", label: "Facebook app secret", group: "instagram", secret: true, help: "Only if your app signs webhooks with the Facebook secret." },
   { key: "WEBHOOK_VERIFY_TOKEN", label: "Webhook verify token", group: "instagram", secret: true, help: "Only if Meta points straight at this service (not via OpenReply)." },
+  { key: "META_SCOUT_TOKEN", label: "Engagement scout token (Facebook Login)", group: "instagram", secret: true, help: "Optional. A long-lived Facebook Login token with instagram_basic and the Instagram Public Content Access feature (needs Meta app review). Powers hashtag search for the engagement scout; without it the scout works from links you paste. See docs/ENGAGEMENT.md." },
+  { key: "META_SCOUT_IG_USER_ID", label: "Engagement scout Instagram account ID", group: "instagram", secret: false, help: "The Instagram professional account (linked to a Facebook Page) the scout token searches as. Meta allows 30 different hashtags per 7 days per account.", placeholder: "17841…" },
   // TikTok
   { key: "TIKTOK_CLIENT_KEY", label: "TikTok client key", group: "tiktok", secret: false, help: "developers.tiktok.com → your app → Client key. See docs/TIKTOK_SETUP.md." },
   { key: "TIKTOK_CLIENT_SECRET", label: "TikTok client secret", group: "tiktok", secret: true, help: "Same page. Powers Log in with TikTok and token renewal." },

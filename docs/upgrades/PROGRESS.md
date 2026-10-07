@@ -17,13 +17,14 @@ Standardised for all 5 influencers per the blueprint rule in CLAUDE.md.
 - [x] Director uses arcs + callbacks; anti-generic checks on ideas and captions
 - [x] Tests; docs
 
-## 3. Short-form engagement + engagement scout
-- [ ] Short-form formats: silly talk, funny questions, football banter (persona-aware, playful only)
-- [ ] Engagement scout: official hashtag search, persona-voice comment drafts, one-tap manual queue
-- [ ] Auto-reply to @mentions where the API allows; never unofficial automation
-- [ ] Standard check + template; tests; docs
+## 3. Short-form engagement + engagement scout — DONE
+- [x] Short-form formats: silly talk, funny questions, football banter (persona-aware, playful only)
+- [x] Engagement scout: official hashtag search, persona-voice comment drafts, one-tap manual queue
+- [x] Auto-reply to @mentions where the API allows; never unofficial automation
+- [x] Standard check + template; tests; docs
 
 ## Log
 - 2026-10-08: plan written; loop scheduled.
 - 2026-10-08: Upgrade 1 done. 30 routes at 375/1280 both themes, no page overflow; detector 0 warnings (3 fixed); fact-check unit fix; 394 tests green; committed.
 - 2026-10-08: Upgrade 2 done. life schema + Standard (3 checks, AI fix) + template + hatch + Interview; director/stories/chats use it; Timeline page; 408 tests green. After deploy: Bring all up to standard (others get life via AI fix).
+- 2026-10-08: Upgrade 3 done. engagement schema + 2 Standard checks + template/hatch/Interview; talk reels, banter stories, Engagement page, compliant scout (hashtag search needs a Facebook Login token the operator adds; pasted links work now), @mention replies via /mentions; 422 tests green; detector 0 warnings. All 3 upgrades complete; loop stopped. Not pushed: waiting for "deploy".

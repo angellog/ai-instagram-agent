@@ -28,6 +28,7 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Stories", "Instagram Story updates: 1-3 a day from their life, separate from feed posts. Same posting window and review rules.", ["stories_enabled", "stories_per_day", "min_hours_between_stories"]],
   ["Reels", "Short vertical videos: everyday moments, or step-by-step explainers with recreated phone screens for tips creators. Explainers always wait for your review. About $1-1.50 of AI video each.", ["reels_enabled", "reels_per_week", "min_days_between_reels", "max_reel_seconds"]],
   ["Conversation limits", "", ["max_comment_replies_per_hour", "max_dms_per_hour", "optional_reply_rate"]],
+  ["Engagement", "Replies to @mentions on other people's posts go out through Instagram's mentions API, with the same safety checks, review rules and hourly limit as comments. The scout drafts comments on other people's posts for you to post yourself (apps can't like or comment on them).", ["mention_replies_enabled", "scout_enabled", "scout_daily_drafts"]],
   ["Budgets (this influencer)", "Hard caps checked before every paid call.", ["daily_budget_usd", "monthly_budget_usd", "daily_llm_budget_usd", "daily_image_budget_usd", "max_retries_per_image"]],
   ["Creativity guards", "", ["repetition_threshold", "max_concept_attempts"]],
 ];
@@ -35,6 +36,9 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
 /** Human labels for control keys ("max_dms_per_hour" → "Max DMs per hour"). */
 const LABEL_OVERRIDES: Partial<Record<string, string>> = {
   llm_brain: "AI brain",
+  mention_replies_enabled: "Reply to @mentions",
+  scout_enabled: "Engagement scout",
+  scout_daily_drafts: "Scout drafts per day",
   require_review_for_yellow: "Review yellow (sensitive) items",
   daily_llm_budget_usd: "Daily AI budget (USD)",
   daily_image_budget_usd: "Daily image budget (USD)",

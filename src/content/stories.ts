@@ -23,6 +23,7 @@ import { pronouns } from "../persona/pronouns.js";
 import type { VisualState } from "./history.js";
 import { planOutfits } from "./wardrobe.js";
 import { lifeBlock, lifeContext, resolveLife } from "./life.js";
+import { PLAYFUL_ONLY, shortFormBlock } from "../engagement/shortform.js";
 
 /**
  * Story updates: 1-3 light, in-the-moment frames a day from the influencer's
@@ -36,7 +37,7 @@ import { lifeBlock, lifeContext, resolveLife } from "./life.js";
  *  - on-image text may not carry numbers the knowledge or headlines don't.
  */
 
-export const STORY_KINDS = ["moment", "look", "brand", "trend", "question"] as const;
+export const STORY_KINDS = ["moment", "look", "brand", "trend", "question", "banter"] as const;
 export type StoryKind = (typeof STORY_KINDS)[number];
 
 const MAX_STORY_TEXT = 70;
@@ -153,6 +154,7 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
       `RECENT STORIES (newest first; don't repeat):\n${stories.map((s) => `- ${s.kind}: ${s.shot.slice(0, 90)}${s.text ? ` / text "${s.text}"` : ""}`).join("\n") || "- none yet"}`,
       trends ? `TRENDS AND NEWS (reference only if it fits; never add details beyond the headline):\n${trends}` : "",
       lifeBlock(p, life, "story"),
+      shortFormBlock(p, { day, recent: stories.map((x) => x.text), trends, kind: "story" }),
       opts.operator ? "OPERATOR REQUEST: the operator wants a story right now. Do not wait: pick the best moment." : "",
       directionBlock(opts.direction, "story"),
     ]
@@ -262,7 +264,12 @@ ${
     : ""
 }
 - trend: a small reaction to one of the headlines, as a photo of ${pr.poss} world plus a short line.
-- question: a photo plus a short question followers can answer by replying to the story.
+- question: a photo plus a short question followers can answer by replying to the story.${
+    p.engagement.formats.length
+      ? `
+- banter: a photo WITHOUT ${pr.obj} (the TV at the watch party, a jersey on the bed, two options side by side) plus a short playful line: football banter, this-or-that, a silly take or a hot take. ${PLAYFUL_ONLY}`
+      : ""
+  }
 Rules:
 - "wait" is fine if nothing is worth a story now or it would repeat a recent one.
 - Text goes ONLY on photos without ${pr.obj} in them, and at most ${MAX_STORY_TEXT} characters of plain words: no emoji, no hashtags, no @mentions, no links. When include_character is true, text is "".

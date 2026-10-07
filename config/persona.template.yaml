@@ -209,6 +209,22 @@ life:
     - { name: <local first name>, who: "<who they are, with one telling detail>" }
     - { name: <local first name>, who: "<a sibling, cousin or coworker; no partners>" }
 
+# Short-form content that gets replies, and how they comment on other people's
+# posts. Playful banter only: never romantic or sexual, never about anyone's
+# looks, no betting. football is null if they don't follow a club.
+engagement:
+  formats: [silly_talk, funny_question, this_or_that, hot_take]
+  football: { team: "<the club they support, or replace this line with: football: null>", league: "<league>", rivals: ["<rival club>", "<another>"] }
+  questions:
+    - "<a short, funny question their followers would answer in the comments>"
+    - "<a would-you-rather from their world>"
+    - "<10+ in total, local and specific>"
+  silly_talk:
+    - "<a short silly take or bit in their voice>"
+    - "<6+ in total>"
+  scout_hashtags: ["<community hashtag without #>", "<5+ in total: their city, niche and scene>"]
+  comment_style: "<how they comment on other people's posts: short, specific, warm; never generic, never selling>"
+
 trends:
   region: <ISO country code>
   language: en

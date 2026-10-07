@@ -101,6 +101,8 @@ ${card(
     [`${STANDARD.arcs}+`, `storylines, ${STANDARD.arc_beats}+ beats each`],
     [`${STANDARD.moments}+`, "specific moments"],
     [`${STANDARD.circle}+`, "people in their life"],
+    [`${STANDARD.questions}+`, `funny questions, ${STANDARD.silly_talk}+ silly takes`],
+    [`${STANDARD.scout_hashtags}+`, "hashtags for the scout"],
   ]
     .map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`)
     .join("")}</div>

@@ -34,6 +34,7 @@ export class FakeInstagram {
   media = new Map<string, { id: string; caption: string; permalink: string; timestamp: string; children?: string[]; params?: Record<string, any> }>();
   stories = new Map<string, { id: string; permalink: string; timestamp: string; params: Record<string, any> }>();
   replies: Array<{ commentId: string; message: string; id: string }> = [];
+  mentionReplies: Array<{ mediaId: string; commentId?: string; message: string; id: string }> = [];
   dms: Array<{ recipient: Record<string, string>; text: string; id: string }> = [];
   hidden: string[] = [];
   quotaUsage = 0;
@@ -89,6 +90,13 @@ export class FakeInstagram {
 
     if (seg[0] === TEST_IG_ID) {
       const sub = seg[1];
+      if (method === "POST" && sub === "mentions") {
+        // Real API: replies where the account was @mentioned on someone else's media.
+        if (!body.media_id || !body.message) return err(400, 100, "media_id and message are required");
+        const rid = `mr_${id()}`;
+        this.mentionReplies.push({ mediaId: body.media_id, commentId: body.comment_id, message: body.message, id: rid });
+        return ok({ id: rid });
+      }
       if (method === "POST" && sub === "messages") {
         const mid = `mid_${id()}`;
         this.dms.push({ recipient: body.recipient, text: body.message?.text, id: mid });

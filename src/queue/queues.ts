@@ -45,6 +45,7 @@ export const JOBS = {
   contentCreate: "content.create",
   profileSync: "instagram.profile_sync",
   trendsRefresh: "trends.refresh",
+  engagementScout: "engagement.scout",
   sweep: "maintenance.sweep",
 } as const;
 

@@ -403,7 +403,8 @@ export function perceive(
 ): { skip: false } | { skip: true; reason: string; outcome?: ConversationOutcome; rememberAnyway: boolean } {
   if (!c.conversation_enabled || c.paused) return { skip: true, reason: "conversation disabled or paused", rememberAnyway: false };
   if (trust === "blocked" || trust === "muted") return { skip: true, reason: `user is ${trust}`, rememberAnyway: false };
-  if (it.kind === "story_mention") return { skip: true, reason: "story mention (no reply API for mentions)", rememberAnyway: false };
+  if (it.kind === "story_mention") return { skip: true, reason: "story mention (no reply API for story mentions)", rememberAnyway: false };
+  if (it.kind === "mention" && !c.mention_replies_enabled) return { skip: true, reason: "replies to @mentions are off in Controls", rememberAnyway: false };
   if (defer.some((k) => containsKeyword(it.text, k))) {
     return { skip: true, reason: "keyword handled by an OpenReply campaign", rememberAnyway: false };
   }
@@ -416,6 +417,7 @@ export function perceive(
 
 function resolveChannel(it: InteractionRow, d: Decision): ReplyChannel {
   if (it.kind === "dm" || it.kind === "story_reply") return "dm";
+  if (it.kind === "mention") return "mention_reply"; // the only way an app may answer on another account's post
   return d.channel === "private" ? "private_reply" : "public_reply";
 }
 

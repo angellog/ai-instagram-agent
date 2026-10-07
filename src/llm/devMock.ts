@@ -120,15 +120,19 @@ export function createDevMockProvider(): MockProvider {
       const material = /- id ([0-9a-f-]{36}) \|/.exec(u.split("REEL MATERIAL")[1] ?? "")?.[1] ?? null;
       const clip = (shot: string, seconds: number) => ({ shot, motion: "she looks up and smiles, gentle handheld drift", composition: "medium", include_character: true, location_id: loc, time_of_day: "afternoon", seconds });
       const explainer = /prefer an explainer/.test(u);
+      // A talk reel when the operator asks for one (banter, a question, silly talk) and the creator does short-form.
+      const talk = /kind "talk"/.test(u) && /OPERATOR DIRECTION[^\n]*(banter|question|silly|talk)/i.test(u);
+      const question = /Questions you could ask today:\n- (.+)/.exec(u)?.[1]?.trim();
       const row = (label: string, extra: Record<string, unknown> = {}) => ({ label, section: null, icon_color: "#34C759", value: null, toggle: null, chevron: true, ...extra });
       return {
         decision: "post",
         reason: "A useful short reel.",
         reel: {
-          kind: explainer ? "explainer" : "moment",
+          kind: talk ? "talk" : explainer ? "explainer" : "moment",
+          format: talk ? "funny_question" : null,
           topic: explainer ? "Save battery with Low Power Mode" : "Slow afternoon at the shop",
-          hook: explainer ? "Your battery, twice as long" : "afternoons like this",
-          caption: explainer ? "One switch, a lot more battery." : "Small moments, big mood.",
+          hook: talk ? (question ?? "be honest with me").slice(0, 40) : explainer ? "Your battery, twice as long" : "afternoons like this",
+          caption: talk ? `${question ?? "be honest with me"}\nanswers in the comments, I'm reading all of them` : explainer ? "One switch, a lot more battery." : "The shop's quiet hour, my favourite one.",
           hashtags: [],
           os: explainer ? "ios" : null,
           intro: clip("She holds up her phone in the shop", 4),
@@ -162,17 +166,37 @@ export function createDevMockProvider(): MockProvider {
           return { title: title.trim(), story: title.trim(), beats: rest.split(/;\s*/).filter(Boolean) };
         }),
         moments_add: answers.filter((a) => a.topic === "moments").flatMap((a) => a.answer.split(/;\s*/).filter(Boolean)),
+        questions_add: answers.filter((a) => a.topic === "short_form").flatMap((a) => a.answer.split(/;\s*/).filter((x) => x.includes("?"))),
+        silly_talk_add: [],
+        football: (() => {
+          const m = answers.find((a) => a.topic === "short_form")?.answer.match(/;\s*([A-Z][\w ]+), rivals ([^;]+)/);
+          return m ? { team: m[1].trim(), league: "", rivals: m[2].split(/ and |,\s*/).map((x) => x.trim()) } : null;
+        })(),
+        scout_hashtags_add: answers.filter((a) => a.topic === "scout").flatMap((a) => a.answer.match(/#[\w]+/g) ?? []),
+        comment_style: "",
         circle_add: answers.filter((a) => a.topic === "circle").flatMap((a) => a.answer.split(/;\s*/).map((x) => { const [name, ...who] = x.split(/,\s*/); return { name: name.trim(), who: who.join(", ").trim() || "friend" }; })),
         knowledge: loc ? [{ id: "shop-location", keywords: ["shop", "where", "location", "address"], content: `The shop is at ${loc.answer}.`, must_include: [loc.answer] }] : [],
         memories: life.map((a) => ({ kind: "self_fact", content: `The creator ${a.answer}`, expires_on: null })),
         summary: [
           ...(loc ? [`Business fact: the shop is at ${loc.answer}`] : []),
           ...life.map((a) => `Remembered: ${a.answer}`),
-          ...answers.filter((a) => ["storyline", "moments", "circle"].includes(a.topic)).map((a) => `Life (${a.topic}): ${a.answer}`),
+          ...answers.filter((a) => ["storyline", "moments", "circle", "short_form", "scout"].includes(a.topic)).map((a) => `Life (${a.topic}): ${a.answer}`),
         ],
       };
     })
     .on("interview.experience", (r) => ({ memories: [{ kind: "self_fact", content: `The creator ${between(lastUser(r), "NOTE: ", "\n") || lastUser(r).replace("NOTE: ", "")}`, expires_on: null }], weekend_idea: null }))
+    // Offline scout: a short comment about the caption's first words; sad or political posts are skipped.
+    .on("engagement.draft", (r) => {
+      const rows = [...lastUser(r).matchAll(/^(\d+) \| [^|]+ \| (.+)$/gm)];
+      return {
+        drafts: rows.map((m) => {
+          const caption = m[2];
+          const skip = /\b(rip|rest in peace|condolence|election|accident)\b/i.test(caption) ? "grief or politics: not a stranger's place to comment" : null;
+          const subject = caption.replace(/#[\w]+/g, "").split(/[.!?\n]/)[0].trim().split(/\s+/).slice(0, 4).join(" ").toLowerCase();
+          return { index: Number(m[1]), comment: skip ? "" : `ok but ${subject} is a whole storyline, I need part two`, skip };
+        }),
+      };
+    })
     .on("library.caption", () => ({ caption: "New in, and honestly it's my favourite this week.", hashtags: [], alt_text: "Business photo" }))
     .on("tiktok.caption", () => ({ title: "New laces, same me", caption: "Sunday reset, sneakers first 👟", hashtags: ["sneakers", "kampala", "fitcheck"] }))
     // Offline standard upgrade: fill each requested section from the reference persona.

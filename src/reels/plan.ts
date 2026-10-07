@@ -19,9 +19,13 @@ import { JOBS, jobId, queue } from "../queue/queues.js";
 import { trendsForPrompt } from "../trends/trends.js";
 import { stepSchema, stepSeconds } from "./explainer.js";
 import { OS_STYLES } from "./screens.js";
+import { shortFormBlock, PLAYFUL_ONLY } from "../engagement/shortform.js";
+import { SHORT_FORMATS } from "../persona/schema.js";
 
 /**
- * Reel planning. Two kinds:
+ * Reel planning. Three kinds:
+ *  - talk: one 5-10 s selfie clip, the creator talking or reacting to camera with a short
+ *    silly take, funny question or football banter; the line is the hook, the caption asks for replies.
  *  - moment: 1-3 short AI clips of the creator's life (5-20 s), a hook line on the first.
  *  - explainer: the creator introduces a tip in a short clip, then the steps play on a
  *    recreated phone screen (where to tap, what to switch). Only for creators whose
@@ -45,7 +49,8 @@ export const reelSchema = z.object({
   reason: z.string(),
   reel: z
     .object({
-      kind: z.enum(["moment", "explainer"]),
+      kind: z.enum(["moment", "explainer", "talk"]),
+      format: z.enum(SHORT_FORMATS).nullable().describe("Talk reels: which short-form format; null otherwise"),
       topic: z.string(),
       hook: z.string().describe("On-screen opening line, max 40 characters, plain words"),
       caption: z.string().describe("1-2 short lines in the creator's voice; for explainers say what the tip does"),
@@ -117,6 +122,11 @@ Kinds:
   - Rows: use realistic settings icon colours; include the neighbouring rows people really see so the screen is recognisable; at most 9 rows per screen.`
       : ""
   }
+${
+    p.engagement.formats.length
+      ? `- talk: ONE selfie clip (5-8 s, intro only, clips []), ${pr.subj} talk${pr.is === "is" ? "s" : ""} or react${pr.is === "is" ? "s" : ""} to camera, handheld, like a quick front-camera video: a silly take, a funny question, football banter, this-or-that or a hot take. The hook is the line itself (max 40 characters); the caption repeats the question or adds one line and asks people to answer in the comments. Set "format". ${PLAYFUL_ONLY}`
+      : ""
+  }
 Rules:
 - "wait" is fine if nothing is worth a reel now or it would repeat a recent one.
 - The hook is plain words, max 40 characters, no emoji, no hashtags. The caption is 1-2 short lines in ${pr.poss} voice; never describe the video.
@@ -154,7 +164,12 @@ export async function planReel(now = new Date(), opts: { operator?: boolean; dir
       material.length ? `REEL MATERIAL (real clips the business uploaded; cut one in when it shows the same thing):\n${materialList(material)}` : "",
       trends ? `TRENDS AND NEWS (only if it fits):\n${trends}` : "",
       brandPullBlock(p, recentCaptions, knowledge(), "post"),
-      explainers ? "This creator makes tips/explainers: prefer an explainer, with a moment now and then." : "This creator makes moment reels only.",
+      shortFormBlock(p, { day, recent: [...recentCaptions, ...recent.map((r) => r.topic)], trends, kind: "reel" }),
+      explainers
+        ? `This creator makes tips/explainers: prefer an explainer, with a ${p.engagement.formats.length ? "talk or moment" : "moment"} now and then.`
+        : p.engagement.formats.length
+          ? "Mix talk reels (they get replies) with moments; roughly every other reel is a talk."
+          : "This creator makes moment reels only.",
       opts.operator ? "OPERATOR REQUEST: make a reel right now. Do not wait." : "",
       directionBlock(opts.direction, "post").replace(/post/g, "reel"),
     ]
@@ -179,7 +194,7 @@ export async function planReel(now = new Date(), opts: { operator?: boolean; dir
     const idea = await client.query<{ id: number }>(
       `INSERT INTO content_ideas (format, structure, topic, hook, angle, plan, caption, visual_state, status, influencer_id)
        VALUES ('reel', $1, $2, $3, $4, $5, $6, $7, 'accepted', $8) RETURNING id`,
-      [reel.kind, reel.topic, reel.hook, reel.kind === "explainer" ? "how-to" : "moment", JSON.stringify(reel), reel.caption, JSON.stringify({ local_day: day, featured_item: reel.featured_item || undefined }), influencerId()],
+      [reel.kind, reel.topic, reel.hook, reel.kind === "explainer" ? "how-to" : reel.kind === "talk" ? (reel.format ?? "talk") : "moment", JSON.stringify(reel), reel.caption, JSON.stringify({ local_day: day, featured_item: reel.featured_item || undefined }), influencerId()],
     );
     const post = await client.query<{ id: string }>(
       `INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status, visual_state, origin)
@@ -209,8 +224,13 @@ export function normalizeReel(r: ReelPlan, p: Persona, explainers: boolean, mate
   out.intro = fixLoc(out.intro);
   out.clips = out.clips.map(fixLoc);
   if (out.kind === "explainer" && (!explainers || out.steps.length < 1)) out.kind = "moment";
-  if (out.kind === "explainer") out.clips = [];
-  else out.steps = [];
+  if (out.kind === "talk" && !p.engagement.formats.length) out.kind = "moment";
+  if (out.kind === "talk" && (!out.format || !p.engagement.formats.includes(out.format))) out.format = p.engagement.formats[0] ?? null;
+  if (out.kind !== "talk") out.format = null;
+  if (out.kind === "explainer" || out.kind === "talk") out.clips = [];
+  if (out.kind !== "explainer") out.steps = [];
+  // A talk reel is one short front-camera clip of the creator.
+  if (out.kind === "talk") out.intro = { ...out.intro, include_character: true, seconds: Math.min(8, Math.max(5, out.intro.seconds)) };
   if (!material.some((m) => m.id === out.material_id)) out.material_id = null;
   out.hook = out.hook.replace(/\s+/g, " ").trim().slice(0, 40);
   // Fit the cap: drop trailing steps/clips until it's short enough.

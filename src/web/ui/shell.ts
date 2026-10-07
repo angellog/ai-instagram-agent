@@ -51,6 +51,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
       ["stories", "/admin/stories", "Stories", "phone"],
       ["content", "/admin/content", "Content brain", "brain"],
       ["conversations", "/admin/conversations", "Conversations", "message"],
+      ["engagement", "/admin/engagement", "Engagement", "zap"],
       ["x", "/admin/x", "X (Twitter)", "message"],
       ["people", "/admin/people", "People & memory", "users"],
     ],
@@ -103,8 +104,8 @@ const APP_JS = String.raw`
     tb.setAttribute("aria-label","Theme: "+next);toast("Theme: "+next)}}
   // Wide tables: fade the edge that has more columns hidden behind it.
   function edges(t){var l=t.scrollLeft>2,r=t.scrollLeft+t.clientWidth<t.scrollWidth-2;t.classList.toggle("more-left",l);t.classList.toggle("more-right",r)}
-  d.querySelectorAll(".tw").forEach(function(t){edges(t);t.addEventListener("scroll",function(){edges(t)},{passive:true})});
-  addEventListener("resize",function(){d.querySelectorAll(".tw").forEach(edges)});
+  d.querySelectorAll(".tabs a.on").forEach(function(a){var b=a.parentElement;b.scrollLeft=a.offsetLeft-b.clientWidth/2+a.clientWidth/2});d.querySelectorAll(".tw,.tabs").forEach(function(t){edges(t);t.addEventListener("scroll",function(){edges(t)},{passive:true})});
+  addEventListener("resize",function(){d.querySelectorAll(".tw,.tabs").forEach(edges)});
   // mobile nav
   var mb=d.getElementById("menu");if(mb){mb.onclick=function(){d.body.classList.toggle("nav-open");mb.setAttribute("aria-expanded",d.body.classList.contains("nav-open"))}}
   var sc=d.querySelector(".scrim");if(sc){sc.onclick=function(){d.body.classList.remove("nav-open")}}

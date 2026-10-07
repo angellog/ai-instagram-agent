@@ -12,7 +12,7 @@ import { retrieveKnowledge, type KnowledgeEntry } from "./knowledge.js";
 export interface InteractionRow {
   id: number;
   influencer_id: number;
-  kind: "comment" | "comment_reply" | "dm" | "story_reply" | "story_mention";
+  kind: "comment" | "comment_reply" | "dm" | "story_reply" | "story_mention" | "mention";
   ig_object_id: string;
   ig_account_id: string;
   sender_ig_id: string;
@@ -159,7 +159,9 @@ export function renderContext(it: InteractionRow, ctx: ConversationContext, now 
   const u = ctx.user;
   const sinceFirst = Math.round((now.getTime() - new Date(u.first_interaction_at).getTime()) / 86_400_000);
   return [
-    `INTERACTION: ${it.kind} from @${u.username ?? it.sender_username ?? "unknown"} at ${new Date(it.occurred_at).toISOString()}`,
+    `INTERACTION: ${it.kind} from @${u.username ?? it.sender_username ?? "unknown"} at ${new Date(it.occurred_at).toISOString()}${
+      it.kind === "mention" ? " (they @mentioned you in a comment on someone else's post: your reply shows publicly under that post, so keep it short, friendly and about what they said; never sell)" : ""
+    }`,
     `MESSAGE: """${it.text}"""`,
     `PERSON: ${u.interaction_count} interactions over ${sinceFirst} days${u.trust === "vip" ? " (VIP regular)" : ""}.${
       u.relationship_summary ? ` Summary: ${u.relationship_summary}` : ""

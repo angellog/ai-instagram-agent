@@ -34,6 +34,8 @@ export async function processWebhookEvent(webhookEventId: number): Promise<{ que
       skipped++;
       continue;
     }
+    // Instagram Login delivers @mentions on other accounts' posts as ordinary comment events.
+    if ((it.kind === "comment" || it.kind === "comment_reply") && (await isForeignMention(influencerId, it))) it.kind = "mention";
     const id = await insertInteraction(webhookEventId, influencerId, it);
     if (id === undefined) {
       skipped++;
@@ -54,6 +56,16 @@ export async function processWebhookEvent(webhookEventId: number): Promise<{ que
     await recordEvent("debug", "ingest", "Webhook produced no new interactions", { webhookEventId, skipped });
   }
   return { queued, skipped };
+}
+
+/** A comment that @mentions the influencer on media that isn't theirs. */
+export async function isForeignMention(influencerId: number, it: NormalizedInteraction): Promise<boolean> {
+  if (!it.mediaId) return false;
+  const acct = await one<{ username: string | null }>("SELECT username FROM ig_accounts WHERE influencer_id = $1 AND ig_user_id = $2", [influencerId, it.igAccountId]);
+  const handle = acct?.username?.toLowerCase();
+  if (!handle || !new RegExp(`(^|[^\\w.])@${handle.replace(/[.]/g, "\\.")}\\b`, "i").test(it.text)) return false;
+  const ours = await one("SELECT 1 FROM posts WHERE influencer_id = $1 AND ig_media_id = $2", [influencerId, it.mediaId]);
+  return !ours;
 }
 
 export async function insertInteraction(webhookEventId: number | null, influencerId: number, it: NormalizedInteraction): Promise<number | undefined> {

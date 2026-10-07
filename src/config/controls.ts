@@ -46,6 +46,11 @@ export const controlsSchema = z.object({
   // Hard ceiling on reel length (Instagram allows more; short reels perform better).
   max_reel_seconds: z.number().int().min(5).max(90).default(55),
   max_comment_replies_per_hour: z.number().int().min(0).default(30),
+  // Answer @mentions on other accounts' posts (Instagram's /mentions edge). Same safety, review and hourly limits as comments.
+  mention_replies_enabled: z.boolean().default(true),
+  // Engagement scout: drafts comments on other people's posts for a person to post by hand.
+  scout_enabled: z.boolean().default(true),
+  scout_daily_drafts: z.number().int().min(0).max(30).default(8),
   max_dms_per_hour: z.number().int().min(0).default(40),
   // Probability of replying to a comment the agent judged worth answering but
   // not required (keeps the account from answering everything).

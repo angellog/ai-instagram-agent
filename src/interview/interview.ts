@@ -48,6 +48,8 @@ function bank(p: Persona): Record<string, Ask> {
     storyline: () => ({ topic: "storyline", question: `What is ${n} working towards over the next few weeks? Training for something, learning a skill, a project, saving for a trip. What are the steps, and what could go wrong along the way?`, why: "Becomes a storyline the feed follows one small step at a time, so posts read like a life, not stock photos.", placeholder: "e.g. learning to braid her own hair: buys the extensions, first attempt is a disaster, YouTube nights, auntie's lesson, wears it to church" }),
     circle: () => ({ topic: "circle", question: `Who are the people in ${n}'s life? A best friend, a sibling, a cousin, a coworker: first names and one detail each.`, why: `${n} mentions them the way real people mention friends (never their faces in photos).`, placeholder: "e.g. Nana, best friend, always late; Brian, cousin, sore loser at FIFA" }),
     moments: () => ({ topic: "moments", question: `Name a few small, very specific things that happen in ${n}'s days in ${city}. The kind of detail a real person posts about.`, why: "Posts built on real details don't look generic or AI-made.", placeholder: "e.g. the rolex guy starts folding hers before she orders; the power goes off mid-routine; rain on the iron-sheet roof" }),
+    short_form: () => ({ topic: "short_form", question: `What gets ${n}'s followers talking? A few funny questions ${pr.subj}'d ask, silly takes, and the football club ${pr.subj} support${pr.is === "is" ? "s" : ""} (and its rivals), if any.`, why: "Short talk reels and stories built to get replies. Playful only.", placeholder: "e.g. white sneakers in rainy season: brave or reckless?; Arsenal, rivals Spurs and Chelsea" }),
+    scout: () => ({ topic: "scout", question: `Which hashtags does ${n}'s crowd post under, and how should ${n} comment on other people's posts?`, why: "The engagement scout reads these hashtags and drafts comments for you to post.", placeholder: "e.g. #kampala #ugandanfashion; short, specific, warm, never selling" }),
     voice_greeting: () => ({ topic: "voice_greeting", question: `How does ${n} greet friends and react to compliments? Any slang or local phrases ${pr.subj} use${pr.is === "is" ? "s" : ""}?`, why: "Makes replies sound like a person from here.", placeholder: "e.g. 'eh nyabo!', 'webale', 'you're too kind'" }),
     voice_never: () => ({ topic: "voice_never", question: `Is there anything ${n} should never say, joke about or get into?`, why: "Becomes a boundary for every reply and post.", placeholder: "Topics, words, competitors" }),
     audience: () => ({ topic: "audience", question: `Who follows ${n}, and what do they ask most?`, why: "Shapes what gets posted and how replies sound.", placeholder: "Age, city, what they care about, common questions" }),
@@ -71,6 +73,8 @@ export async function nextQuestions(p: Persona, knowledge: KnowledgeEntry[], lim
   if (failing.has("life_arcs")) order.push("storyline");
   if (failing.has("circle")) order.push("circle");
   if (failing.has("moments")) order.push("moments");
+  if (failing.has("short_form")) order.push("short_form");
+  if (failing.has("scout")) order.push("scout");
   order.push("life_recent", "storyline", "voice_greeting", "audience", "life_upcoming", "business_hours", "business_products", "voice_never", "moments", "circle", "social_life", "places");
   const out: Question[] = [];
   for (const key of order) {
@@ -92,6 +96,11 @@ export const changeSchema = z.object({
   arcs_add: z.array(z.object({ title: z.string(), story: z.string(), beats: z.array(z.string()).describe("5-7 small ordered steps, an honest setback included") })).max(2),
   moments_add: z.array(z.string()).max(10),
   circle_add: z.array(z.object({ name: z.string(), who: z.string() })).max(4),
+  questions_add: z.array(z.string()).max(10),
+  silly_talk_add: z.array(z.string()).max(8),
+  football: z.object({ team: z.string(), league: z.string(), rivals: z.array(z.string()) }).nullable().describe("Only when the answer names a club they support; null otherwise"),
+  scout_hashtags_add: z.array(z.string()).max(8),
+  comment_style: z.string().describe("How they comment on other people's posts, if the answer says; empty otherwise"),
   knowledge: z
     .array(
       z.object({
@@ -113,6 +122,7 @@ const APPLY_SYSTEM = `You turn interview answers about an AI Instagram creator i
 - Tastes and hobbies become interests_add; phrases they use become signature_phrases_add; things to never say become avoid_phrases_add or boundaries_add.
 - A description of a place becomes location_looks for that location id.
 - Something they're working towards over weeks becomes arcs_add (title, 1-2 sentence story, 5-7 small ordered beats from the answer, an honest setback included). Small specific details of their days become moments_add. People in their life become circle_add (first name, one detail). Never romance storylines or partners.
+- Funny questions become questions_add, silly takes silly_talk_add, the club they support (with rivals) football, community hashtags (no #) scout_hashtags_add, and how they comment on others' posts comment_style. Playful only: drop anything romantic, sexual or about people's looks.
 - Skip anything already in the current persona or knowledge. Return JSON only.`;
 
 /** Answers → a reviewable change set (nothing is saved yet). */
@@ -162,6 +172,18 @@ export async function applyChanges(id: number, set: ChangeSet, qa: Array<{ topic
     const id = a.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "storyline";
     const beats = a.beats.map((b) => b.trim()).filter(Boolean);
     if (beats.length >= 2 && !doc.life.arcs.some((x: { id: string }) => x.id === id)) doc.life.arcs.push({ id, title: a.title.trim(), story: a.story.trim() || a.title.trim(), beats, every_days: 4 });
+  }
+  doc.engagement ??= {};
+  const eg = doc.engagement;
+  eg.questions = addUnique(eg.questions, set.questions_add);
+  eg.silly_talk = addUnique(eg.silly_talk, set.silly_talk_add);
+  eg.scout_hashtags = addUnique(eg.scout_hashtags, set.scout_hashtags_add.map((h) => h.replace(/^#+/, "")));
+  if (set.comment_style.trim()) eg.comment_style = set.comment_style.trim();
+  // Questions or takes with no format yet: start with the everyday formats.
+  if ((eg.questions?.length || eg.silly_talk?.length) && !eg.formats?.length) eg.formats = ["silly_talk", "funny_question", "this_or_that"];
+  if (set.football?.team.trim()) {
+    eg.football = { team: set.football.team.trim(), league: set.football.league.trim(), rivals: set.football.rivals.map((r) => r.trim()).filter(Boolean) };
+    eg.formats = [...new Set([...(eg.formats ?? []), "football_banter"])];
   }
   doc.life.circle ??= [];
   for (const c of set.circle_add) {

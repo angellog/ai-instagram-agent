@@ -9,7 +9,7 @@ import { recordEvent } from "../lib/events.js";
 import { llm } from "../llm/llm.js";
 import { parsePersona } from "../persona/parse.js";
 import type { Persona } from "../persona/schema.js";
-import { SLOTS } from "../persona/schema.js";
+import { SHORT_FORMATS, SLOTS } from "../persona/schema.js";
 import { outfits } from "../content/wardrobe.js";
 import { activeSoul } from "../souls/souls.js";
 import { latestBrief, refreshTrends } from "../trends/trends.js";
@@ -48,6 +48,11 @@ export const STANDARD = {
   arc_beats: 4,
   moments: 12,
   circle: 2,
+  // Short-form and the engagement scout (v1.0.29).
+  short_formats: 3,
+  questions: 10,
+  silly_talk: 6,
+  scout_hashtags: 5,
 } as const;
 
 export type FixKind = "auto" | "ai" | "manual";
@@ -87,6 +92,8 @@ const SECTION: Record<string, string> = {
   life_arcs: "life.arcs",
   moments: "life.moments",
   circle: "life.circle",
+  short_form: "engagement",
+  scout: "engagement",
 };
 
 const isWeekend = (a: Persona["daily_life"]["activities"][number]) => a.weekends_only || a.days.some((d) => d === "saturday" || d === "sunday");
@@ -105,6 +112,19 @@ export function socialLife(p: Persona): { ok: boolean; detail: string } {
   return {
     ok: enough && !missing.length,
     detail: `${short(p.interests.length, STANDARD.interests, "interests")}${missing.length ? `; nothing about ${missing.join(", ")}` : ", incl. films/music, a hobby and local events"}`,
+  };
+}
+
+/** Enough short-form material: formats, questions and silly takes; football banter needs a club. */
+export function shortForm(p: Persona): { ok: boolean; detail: string } {
+  const e = p.engagement;
+  const banterNoClub = e.formats.includes("football_banter") && !e.football?.team;
+  const ok = e.formats.length >= STANDARD.short_formats && e.questions.length >= STANDARD.questions && e.silly_talk.length >= STANDARD.silly_talk && !banterNoClub;
+  return {
+    ok,
+    detail: `${short(e.formats.length, STANDARD.short_formats, "formats")}, ${short(e.questions.length, STANDARD.questions, "questions")}, ${short(e.silly_talk.length, STANDARD.silly_talk, "silly takes")}${
+      banterNoClub ? "; football banter without a club" : e.football?.team ? `; football: ${e.football.team}` : ""
+    }`,
   };
 }
 
@@ -188,6 +208,22 @@ export function personaChecks(p: Persona): Check[] {
     },
     { key: "moments", group: "Daily life", label: "Specific moments, not stock", ok: p.life.moments.length >= STANDARD.moments, detail: short(p.life.moments.length, STANDARD.moments, "moments"), fix: "ai" },
     { key: "circle", group: "Persona", label: "People in their life", ok: p.life.circle.length >= STANDARD.circle, detail: p.life.circle.length ? short(p.life.circle.length, STANDARD.circle, "people") + `: ${p.life.circle.map((c) => c.name).join(", ")}` : `nobody yet (standard ${STANDARD.circle})`, fix: "ai" },
+    {
+      key: "short_form",
+      group: "Persona",
+      label: "Short-form that gets replies",
+      ok: shortForm(p).ok,
+      detail: shortForm(p).detail,
+      fix: "ai",
+    },
+    {
+      key: "scout",
+      group: "Persona",
+      label: "Engagement scout set up",
+      ok: p.engagement.scout_hashtags.length >= STANDARD.scout_hashtags && p.engagement.comment_style.trim().length >= 40,
+      detail: `${short(p.engagement.scout_hashtags.length, STANDARD.scout_hashtags, "hashtags to read")}, ${p.engagement.comment_style.trim().length >= 40 ? "comment style written" : "no comment style"}`,
+      fix: "ai",
+    },
     { key: "locations", group: "Daily life", label: "Places they go", ok: p.visual.locations.length >= STANDARD.locations, detail: short(p.visual.locations.length, STANDARD.locations, "locations"), fix: "ai" },
     {
       key: "trends",
@@ -296,6 +332,7 @@ Rules:
 - life.arcs: items {id, title, story, beats, every_days}. 2-3 storylines that run for weeks and suit this person's real life (learning a skill, saving for a trip, training for a race, a project at work, a home or shop change). id is lowercase-with-dashes; story is 1-2 sentences; beats are 5-7 small ordered steps, each one postable on its own, with honest setbacks along the way (not only wins); every_days 3-6. No romance storylines, nothing medical, political or about money troubles.
 - life.moments: 15-20 plain strings. Specific, local, sensory, slightly imperfect moments a real person in this city would post about (a named street food vendor's habit, the power cut mid-routine, the boda driver's playlist, rain on iron-sheet roofs), true to their culture, faith and budget. Never generic ("enjoying the sunset", "coffee time").
 - life.circle: 2-4 items {name, who}: recurring people in their life with a local first name and one telling detail (e.g. "best friend, always 40 minutes late"). Friends, a sibling, a coworker; no partners or love interests.
+- engagement: {formats, football, questions, silly_talk, scout_hashtags, comment_style}. formats: 3-5 of ${SHORT_FORMATS.join(", ")} that suit this person (football_banter only if their interests include a sport/team). football: {team, league, rivals} for the club they support (from interests; pick a club popular in their city if they follow a league but no club), or null. questions: 12 short, funny questions their followers would answer in the comments (would-you-rather, this-or-that, local and specific). silly_talk: 8 short silly takes in their voice. scout_hashtags: 6-8 community hashtags without # (their city, niche, scene) whose posts they'd comment on. comment_style: 2-3 sentences on how they comment on other people's posts (short, specific, warm, never generic, never selling, no links). Playful only: nothing romantic or sexual, nothing about anyone's looks, no betting, no politics.
 - brand: {name, category, products, natural_moments, curiosity_hooks, mention_rate}. name and category come from identity.affiliation and the BUSINESS KNOWLEDGE; products are 4-6 generic descriptions of what the brand sells (no invented product names, prices or offers); natural_moments are 5-8 moments from THIS person's own daily_life where the category belongs without being the subject (a breakfast stays about breakfast); curiosity_hooks are 2-4 questions followers would ask; mention_rate 0.2 unless content_rules give another share. Keep any existing values.`;
 
 /** Sections that are plain lists of strings: models sometimes send objects instead. */
@@ -328,7 +365,7 @@ export async function upgradePersona(id: number, failing: Check[]): Promise<stri
   // New locations must travel with new activities that use them.
   if (paths.includes("daily_life.activities") && !paths.includes("visual.locations")) paths.push("visual.locations");
   const need = failing.filter((c) => SECTION[c.key]).map((c) => `- ${c.label}: ${c.detail}`).join("\n");
-  const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region; ${STANDARD.arcs}+ life.arcs with ${STANDARD.arc_beats}+ beats each, ${STANDARD.moments}+ life.moments, ${STANDARD.circle}+ people in life.circle.`;
+  const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region; ${STANDARD.arcs}+ life.arcs with ${STANDARD.arc_beats}+ beats each, ${STANDARD.moments}+ life.moments, ${STANDARD.circle}+ people in life.circle; engagement with ${STANDARD.short_formats}+ formats, ${STANDARD.questions}+ questions, ${STANDARD.silly_talk}+ silly_talk, ${STANDARD.scout_hashtags}+ scout_hashtags and a comment_style.`;
   const shapes = structureExamples(paths);
   const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\n${paths.includes("brand") && inf.knowledge_yaml?.trim() ? `BUSINESS KNOWLEDGE (the only source of brand facts):\n${inf.knowledge_yaml}\n\n` : ""}WHAT FALLS SHORT:\n${need}\n\n${minimums}\n\n${
     shapes ? `STRUCTURE TO MATCH (from a different creator: copy the exact shape of each key, lists of plain strings stay plain strings; never copy the content):\n${shapes}\n\n` : ""
@@ -396,6 +433,13 @@ function asText(x: unknown): string | undefined {
 export function coerceShapes(path: string, value: unknown, set: (v: unknown) => void): void {
   const list = (v: unknown): string[] => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : []).map(asText).filter((s): s is string => Boolean(s));
   if (STRING_LISTS.has(path)) set(list(value));
+  if (path === "engagement" && value && typeof value === "object") {
+    const e = value as Record<string, unknown>;
+    for (const k of ["questions", "silly_talk", "scout_hashtags"]) if (e[k] !== undefined) e[k] = list(e[k]);
+    if (Array.isArray(e.scout_hashtags)) e.scout_hashtags = (e.scout_hashtags as string[]).map((h) => h.replace(/^#+/, "").trim()).filter(Boolean);
+    if (Array.isArray(e.formats)) e.formats = (e.formats as unknown[]).map((f) => String(f).toLowerCase().replace(/[^a-z]+/g, "_")).filter((f) => (SHORT_FORMATS as readonly string[]).includes(f));
+    if (e.football && typeof e.football === "object" && !(e.football as Record<string, unknown>).team) e.football = null;
+  }
   if (path === "life.arcs" && Array.isArray(value)) {
     for (const a of value as Array<Record<string, unknown>>) {
       if (!a || typeof a !== "object") continue;

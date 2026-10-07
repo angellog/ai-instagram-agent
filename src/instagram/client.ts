@@ -136,6 +136,11 @@ export class InstagramClient {
     return this.request("POST", `${commentId}/replies`, { message });
   }
 
+  /** Reply where this account was @mentioned on another account's media: under the comment, or on the media for a caption mention. */
+  replyToMention(o: { mediaId: string; commentId?: string; message: string }): Promise<{ id: string }> {
+    return this.request("POST", `${this.igUserId}/mentions`, { media_id: o.mediaId, ...(o.commentId ? { comment_id: o.commentId } : {}), message: o.message });
+  }
+
   hideComment(commentId: string, hide = true): Promise<{ success: boolean }> {
     return this.request("POST", commentId, { hide });
   }

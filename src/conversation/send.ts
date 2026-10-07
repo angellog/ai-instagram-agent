@@ -5,7 +5,7 @@ import { errorMessage, PermanentError, RateLimitedError, TransientError } from "
 import { recordEvent } from "../lib/events.js";
 import type { InteractionRow } from "./context.js";
 
-export type ReplyChannel = "public_reply" | "private_reply" | "dm";
+export type ReplyChannel = "public_reply" | "private_reply" | "dm" | "mention_reply";
 
 export const DM_WINDOW_MS = 24 * 3600 * 1000;
 export const PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 3600 * 1000;
@@ -19,7 +19,7 @@ export function windowOpen(it: Pick<InteractionRow, "kind" | "occurred_at">, cha
 }
 
 export async function outboundCountLastHour(kind: "comments" | "dms"): Promise<number> {
-  const channels = kind === "dms" ? ["dm"] : ["public_reply", "private_reply"];
+  const channels = kind === "dms" ? ["dm"] : ["public_reply", "private_reply", "mention_reply"];
   const r = await one<{ n: number }>(
     `SELECT count(*)::int AS n FROM messages WHERE influencer_id = $2 AND direction = 'out' AND channel = ANY($1)
      AND status IN ('sent','sending') AND created_at > now() - interval '1 hour'`,
@@ -83,6 +83,10 @@ export async function deliver(messageId: number, it: InteractionRow, opts: { fre
     const ig = await instagramClient();
     let igId: string;
     if (msg.channel === "public_reply") igId = (await ig.replyToComment(it.ig_object_id, msg.text)).id;
+    else if (msg.channel === "mention_reply") {
+      if (!it.media_id) throw new PermanentError("mention without a media id: nothing to reply on");
+      igId = (await ig.replyToMention({ mediaId: it.media_id, commentId: it.ig_object_id !== it.media_id ? it.ig_object_id : undefined, message: msg.text })).id;
+    }
     else if (msg.channel === "private_reply") igId = (await ig.sendPrivateReply(it.ig_object_id, msg.text)).message_id;
     else igId = (await ig.sendDirectMessage(it.sender_ig_id, msg.text)).message_id;
     await one("UPDATE messages SET status = 'sent', ig_object_id = $2, error = NULL WHERE id = $1", [messageId, igId]);

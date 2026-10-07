@@ -96,6 +96,15 @@ nothing concrete. The Standard requires 2+ arcs (4+ beats), 12+ moments and
 2+ people; the AI fix, the hatch prompt and the Interview can all add them.
 The Timeline page (`/admin/timeline`) shows it all, tenants included.
 
+### Engagement (`src/engagement/`)
+
+Short-form (`shortform.ts`) feeds talk reels and banter stories from the
+persona's `engagement` material. The scout (`scout.ts`) reads hashtags through
+the Facebook Login Graph API, drafts comments, and queues them in
+`engagement_drafts` for a person to post; it never writes to Instagram.
+@mentions on other accounts' posts become interactions of kind `mention` and
+are answered on channel `mention_reply` via `/mentions`. See `docs/ENGAGEMENT.md`.
+
 ## Data model
 
 `db/migrations/001_init.sql` (18 tables). Idempotency keys: `webhook_events.dedup_key`, `interactions(kind, ig_object_id)`, `messages(interaction_id, channel) WHERE out`, `posts.ig_media_id`, `generation_jobs.task_id`, `engagement_metrics(post_id, checkpoint)`, memory `(layer, user, kind, key) WHERE active`. Audit: `agent_decisions`, `safety_reviews`, `system_events`, `job_runs`, `cost_ledger`.
