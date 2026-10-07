@@ -45,6 +45,9 @@ function bank(p: Persona): Record<string, Ask> {
     social_life: () => ({ topic: "social_life", question: `What does ${n} do for fun? Films or series, music, games, a team ${pr.subj} follow${pr.is === "is" ? "s" : ""}, events ${pr.subj} go${pr.is === "is" ? "es" : ""} to in ${city}.`, why: "Small talk needs a life outside the niche.", placeholder: "Be specific: names of shows, artists, games, places" }),
     life_recent: () => ({ topic: "life_recent", question: `What has ${n} been up to lately? Anything ${pr.subj} did, saw or tried this week.`, why: `Becomes part of ${n}'s remembered story, used in chats.`, placeholder: "e.g. went to a sneaker meetup at Acacia, tried a new rolex spot" }),
     life_upcoming: () => ({ topic: "life_upcoming", question: `Anything coming up for ${n}? Events, trips, launches, a friend's wedding.`, why: "Plans give chats and posts something to look forward to.", placeholder: "Dates if you know them" }),
+    storyline: () => ({ topic: "storyline", question: `What is ${n} working towards over the next few weeks? Training for something, learning a skill, a project, saving for a trip. What are the steps, and what could go wrong along the way?`, why: "Becomes a storyline the feed follows one small step at a time, so posts read like a life, not stock photos.", placeholder: "e.g. learning to braid her own hair: buys the extensions, first attempt is a disaster, YouTube nights, auntie's lesson, wears it to church" }),
+    circle: () => ({ topic: "circle", question: `Who are the people in ${n}'s life? A best friend, a sibling, a cousin, a coworker: first names and one detail each.`, why: `${n} mentions them the way real people mention friends (never their faces in photos).`, placeholder: "e.g. Nana, best friend, always late; Brian, cousin, sore loser at FIFA" }),
+    moments: () => ({ topic: "moments", question: `Name a few small, very specific things that happen in ${n}'s days in ${city}. The kind of detail a real person posts about.`, why: "Posts built on real details don't look generic or AI-made.", placeholder: "e.g. the rolex guy starts folding hers before she orders; the power goes off mid-routine; rain on the iron-sheet roof" }),
     voice_greeting: () => ({ topic: "voice_greeting", question: `How does ${n} greet friends and react to compliments? Any slang or local phrases ${pr.subj} use${pr.is === "is" ? "s" : ""}?`, why: "Makes replies sound like a person from here.", placeholder: "e.g. 'eh nyabo!', 'webale', 'you're too kind'" }),
     voice_never: () => ({ topic: "voice_never", question: `Is there anything ${n} should never say, joke about or get into?`, why: "Becomes a boundary for every reply and post.", placeholder: "Topics, words, competitors" }),
     audience: () => ({ topic: "audience", question: `Who follows ${n}, and what do they ask most?`, why: "Shapes what gets posted and how replies sound.", placeholder: "Age, city, what they care about, common questions" }),
@@ -65,7 +68,10 @@ export async function nextQuestions(p: Persona, knowledge: KnowledgeEntry[], lim
   if (p.identity.affiliation && !hasFacts) order.push("business_location", "business_order");
   if (failing.has("social_life")) order.push("social_life");
   if (failing.has("local_look")) order.push("places");
-  order.push("life_recent", "voice_greeting", "audience", "life_upcoming", "business_hours", "business_products", "voice_never", "social_life", "places");
+  if (failing.has("life_arcs")) order.push("storyline");
+  if (failing.has("circle")) order.push("circle");
+  if (failing.has("moments")) order.push("moments");
+  order.push("life_recent", "storyline", "voice_greeting", "audience", "life_upcoming", "business_hours", "business_products", "voice_never", "moments", "circle", "social_life", "places");
   const out: Question[] = [];
   for (const key of order) {
     if (out.length >= limit) break;
@@ -83,6 +89,9 @@ export const changeSchema = z.object({
   boundaries_add: z.array(z.string()).max(4),
   weekend_ideas_add: z.array(z.string()).max(4),
   location_looks: z.array(z.object({ id: z.string(), look: z.string() })).max(6),
+  arcs_add: z.array(z.object({ title: z.string(), story: z.string(), beats: z.array(z.string()).describe("5-7 small ordered steps, an honest setback included") })).max(2),
+  moments_add: z.array(z.string()).max(10),
+  circle_add: z.array(z.object({ name: z.string(), who: z.string() })).max(4),
   knowledge: z
     .array(
       z.object({
@@ -103,6 +112,7 @@ const APPLY_SYSTEM = `You turn interview answers about an AI Instagram creator i
 - Things the creator did, does or will do become memories (third person, using their name): self_fact for ongoing truths and past experiences, self_plan for upcoming things (with a date if given).
 - Tastes and hobbies become interests_add; phrases they use become signature_phrases_add; things to never say become avoid_phrases_add or boundaries_add.
 - A description of a place becomes location_looks for that location id.
+- Something they're working towards over weeks becomes arcs_add (title, 1-2 sentence story, 5-7 small ordered beats from the answer, an honest setback included). Small specific details of their days become moments_add. People in their life become circle_add (first name, one detail). Never romance storylines or partners.
 - Skip anything already in the current persona or knowledge. Return JSON only.`;
 
 /** Answers → a reviewable change set (nothing is saved yet). */
@@ -144,6 +154,18 @@ export async function applyChanges(id: number, set: ChangeSet, qa: Array<{ topic
   for (const l of set.location_looks) {
     const loc = (doc.visual?.locations ?? []).find((x: { id: string }) => x.id === l.id);
     if (loc && l.look.trim()) loc.look = l.look.trim();
+  }
+  doc.life ??= {};
+  doc.life.moments = addUnique(doc.life.moments, set.moments_add);
+  doc.life.arcs ??= [];
+  for (const a of set.arcs_add) {
+    const id = a.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "storyline";
+    const beats = a.beats.map((b) => b.trim()).filter(Boolean);
+    if (beats.length >= 2 && !doc.life.arcs.some((x: { id: string }) => x.id === id)) doc.life.arcs.push({ id, title: a.title.trim(), story: a.story.trim() || a.title.trim(), beats, every_days: 4 });
+  }
+  doc.life.circle ??= [];
+  for (const c of set.circle_add) {
+    if (c.name.trim() && !doc.life.circle.some((x: { name: string }) => x.name.toLowerCase() === c.name.trim().toLowerCase())) doc.life.circle.push({ name: c.name.trim(), who: c.who.trim() || "friend" });
   }
   const personaYaml = stringify(doc, { lineWidth: 0 });
   parsePersona(personaYaml); // never save something the engine can't read

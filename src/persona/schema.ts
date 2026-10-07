@@ -140,6 +140,30 @@ export const personaSchema = z.object({
   }),
   // Post ideas that only make sense on a Saturday or Sunday.
   weekend_ideas: z.array(z.string()).default([]),
+  // A life that moves forward, so the feed reads like a timeline and not a stock
+  // library: storylines that run for weeks, small specific moments, and the
+  // recurring people around them (named in words; never faces in photos).
+  life: z
+    .object({
+      arcs: z
+        .array(
+          z.object({
+            id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+            title: z.string().min(1),
+            // What's going on, in a sentence or two.
+            story: z.string().min(1),
+            // Small steps in order; one post (or story) moves it one beat.
+            beats: z.array(z.string().min(1)).min(2),
+            // At most one beat every this many days, so a storyline breathes.
+            every_days: z.number().int().min(1).max(30).default(4),
+          }),
+        )
+        .default([]),
+      // Specific, local, sensory, slightly imperfect moments a real person would post about.
+      moments: z.array(z.string().min(1)).default([]),
+      circle: z.array(z.object({ name: z.string().min(1), who: z.string().min(1) })).default([]),
+    })
+    .default({ arcs: [], moments: [], circle: [] }),
   // What this influencer keeps up with: news searches (Google News) and RSS/Atom feeds.
   // Each source may carry a label (the platform or topic it represents), e.g.
   // { query: "TikTok Uganda", label: "TikTok Uganda" } or { url: "...", label: "Premier League" }.

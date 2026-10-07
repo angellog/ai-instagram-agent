@@ -70,13 +70,31 @@ event → normalize (drop echoes/self/other accounts) → interaction row (uniqu
 scheduler (persona local time) → content.plan
   → posting gate (paused, window, in-flight post, daily cap, spacing)       ← no LLM spend if closed
   → day plan (seeded, weighted, one per slot, weekday aware, location rotation)
-  → director: post or wait (sees plan, recent posts, learnings, follower requests)
+  → director: post or wait (sees plan, recent posts, learnings, follower requests, the life timeline)
+  → life + anti-generic: arc beat / moment / callback resolved; stock lines or no concrete anchor → feedback → retry
   → continuity (outfit/time-of-day/hairstyle) → repetition score (reject → feedback → retry ≤ N)
   → content.produce: per slide: budget → kie task (persisted task id) → download → pixel check
        → vision QC (identity, anatomy, text) → retry ≤ max_retries_per_image → compose → host → verify
   → structural QC → safety on caption + overlays → gate → approved (scheduled in window) | review | dry_run
   → post.publish → markPublished → engagement.collect ×3 (delayed) → analytics.process nightly → learnings
 ```
+
+### The life timeline (`src/content/life.ts`)
+
+Every persona has `life`: **arcs** (storylines with ordered beats and a pace,
+`every_days`), **moments** (specific, local, imperfect details) and a **circle**
+(recurring people, named in words, never shown by face). Posts and stories
+record what they stood on in `content_ideas.life` (`arc_id`, `beat_index`,
+`beat`, `moment`, `callback_post_id`). Arc progress, moment reuse and which
+older posts are open for a follow-up are all read back from that column,
+counting only live ideas, so a rejected or failed post gives its beat back.
+The director sees due beats, four unused moments for the day (seeded), the
+circle and up to four callbacks (published 4-30 days ago, not yet followed up).
+Chats see the latest beats and the circle, so small talk matches the feed.
+`genericProblems` sends an idea back once if it uses a stock line or stands on
+nothing concrete. The Standard requires 2+ arcs (4+ beats), 12+ moments and
+2+ people; the AI fix, the hatch prompt and the Interview can all add them.
+The Timeline page (`/admin/timeline`) shows it all, tenants included.
 
 ## Data model
 

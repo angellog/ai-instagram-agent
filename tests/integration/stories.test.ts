@@ -86,7 +86,7 @@ describe("Create a story now", () => {
 describe("story house rules", () => {
   const base: StoryPlan = {
     kind: "moment", activity_id: null, shot: "x", composition: "detail", include_character: false, location_id: null,
-    time_of_day: "morning", featured_item: "", text: "Morning laces", alt_text: "x",
+    time_of_day: "morning", featured_item: "", text: "Morning laces", alt_text: "x", arc_id: null, moment: "",
   };
   it("strips text from photos of her, adds the true shop line, and drops unverified numbers", async () => {
     await withInfluencer(1, async () => {

@@ -26,6 +26,7 @@ import { enforceContinuity } from "./continuity.js";
 import { recentContent, type RecentItem } from "./history.js";
 import { repetitionScore } from "./repetition.js";
 import { CAPTION_LIMITS, captionProblems, fitCaption, tidyCaption } from "./caption.js";
+import { genericProblems, lifeBlock, lifeContext, resolveLife } from "./life.js";
 
 export const COMPOSITIONS = ["close_up", "medium", "full_body", "detail", "flat_lay", "environment", "over_shoulder", "mirror"] as const;
 
@@ -59,6 +60,9 @@ export function ideaSchema(p: Persona) {
         library_item_id: z.string().nullable().describe("Id of a BUSINESS LIBRARY item to post instead of a new photo shoot, or null"),
         featured_item: z.string().describe("One item from the brand's category naturally present in the frame, described generically; empty when none would fit naturally"),
         slides: z.array(slide).min(1).max(p.carousel.max_slides),
+        arc_id: z.string().nullable().describe("Id of the STORYLINE this post moves one beat forward, or null"),
+        moment: z.string().describe("The one specific real-life moment this post stands on (from SMALL MOMENTS, a storyline beat or today's plan), in a short concrete sentence"),
+        callback_post_id: z.string().nullable().describe("Id from CALLBACKS when this post continues an earlier one, or null"),
         caption: z.string().describe("1-2 short lines: one simple thought or feeling. Never describe what the photo shows."),
         hashtags: z.array(z.string()).max(p.hashtags.max),
       })
@@ -129,6 +133,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
   const schema = ideaSchema(p);
   // Business uploads waiting for the right moment (operator direction wins over them).
   const library = opts.direction ? [] : await libraryForDirector();
+  const life = await lifeContext(p, day, now);
 
   const feedback: string[] = [];
   for (let attempt = 1; attempt <= c.max_concept_attempts; attempt++) {
@@ -143,7 +148,8 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
         directorPrompt({ p, day, slot, candidates, recent, requests: requests.map((r) => r.content), learnings, calendar, remembered, outfits, weekend, trends, knowledge: knowledge(), feedback }) +
         (opts.operator ? "\n\nOPERATOR REQUEST: the operator wants a post created right now to see this creator in action. Do not wait: propose the best idea for this moment." : "") +
         (opts.direction ? `\n\n${directionBlock(opts.direction, "post")}` : "") +
-        (library.length ? `\n\n${libraryBlock(library)}` : ""),
+        (library.length ? `\n\n${libraryBlock(library)}` : "") +
+        (lifeBlock(p, life, "post") ? `\n\n${lifeBlock(p, life, "post")}` : ""),
     });
 
     // The director chose a business upload: post that (caption in its voice) instead of a new shoot.
@@ -171,6 +177,9 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     if (p.brand && !brandMentionBudget(p, recent.map((r) => r.caption)).mayName && namesBrand(`${idea.caption} ${idea.hashtags.join(" ")}`, p.brand.name)) {
       capIssues.push(`it names ${p.brand.name}, which is not allowed in this post (mention rate); keep the brand's world in the photo, not the words`);
     }
+    // A feed of stock lines reads as AI: the idea must stand on something specific.
+    const used = resolveLife(p, life, idea);
+    const genIssues = genericProblems(idea, p, used, opts.direction);
     const rawCaption = idea.caption;
     idea.caption = tidyCaption(idea.caption, educational);
     const activity = idea.activity_id ? candidates.find((a) => a.id === idea.activity_id) : undefined;
@@ -201,8 +210,8 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
     );
 
     const ideaRow = await one<{ id: number }>(
-      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, repetition_score, repetition_detail, status, reject_reason, influencer_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, repetition_score, repetition_detail, status, reject_reason, influencer_id, life)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
       [
         idea.activity_id,
         idea.format,
@@ -218,6 +227,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
         rep.score >= c.repetition_threshold ? "rejected" : "accepted",
         rep.score >= c.repetition_threshold ? `too similar (${rep.score}): ${rep.reasons.join("; ")}` : null,
         influencerId(),
+        used ? JSON.stringify(used) : null,
       ],
     );
 
@@ -228,7 +238,7 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       intent: idea.structure,
       action: rep.score >= c.repetition_threshold ? "reject_repetitive" : "accept",
       confidence: 1 - rep.score,
-      contextUsed: ["recent_content", "activity_plan", ...(opts.direction ? ["operator_direction"] : []), ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : []), ...(calendar ? ["calendar"] : [])],
+      contextUsed: ["recent_content", "activity_plan", ...(used?.arc_id ? ["storyline"] : []), ...(used?.moment ? ["moment"] : []), ...(used?.callback_post_id ? ["callback"] : []), ...(opts.direction ? ["operator_direction"] : []), ...(learnings ? ["learnings"] : []), ...(requests.length ? ["content_requests"] : []), ...(calendar ? ["calendar"] : [])],
       reason: rep.score >= c.repetition_threshold ? rep.reasons.join("; ") : out.reason,
       output: { repetition: rep, continuity_adjustments: adjustments },
       latencyMs: Date.now() - started,
@@ -241,9 +251,14 @@ export async function planContent(now = new Date(), opts: PlanOptions = {}): Pro
       continue;
     }
     // A good idea with a bad caption goes back once more (the last attempt keeps the tidied caption).
-    if (capIssues.length && attempt < c.max_concept_attempts) {
-      await one("UPDATE content_ideas SET status = 'rejected', reject_reason = $2, caption = $3 WHERE id = $1", [ideaRow!.id, `caption: ${capIssues.join("; ")}`.slice(0, 500), rawCaption]);
-      feedback.push(`Attempt ${attempt}: the caption was rejected (${capIssues.join("; ")}). Keep the idea if it's good, but rewrite the caption as 1-2 short lines with one simple thought.`);
+    if ((capIssues.length || genIssues.length) && attempt < c.max_concept_attempts) {
+      const why = [...capIssues, ...genIssues];
+      await one("UPDATE content_ideas SET status = 'rejected', reject_reason = $2, caption = $3 WHERE id = $1", [ideaRow!.id, `${genIssues.length ? "generic" : "caption"}: ${why.join("; ")}`.slice(0, 500), rawCaption]);
+      feedback.push(
+        genIssues.length
+          ? `Attempt ${attempt} read as generic AI content (${why.join("; ")}). Anchor it in one specific thing from YOUR LIFE RIGHT NOW or today's plan, fill "moment", and write the caption about what made that moment real.`
+          : `Attempt ${attempt}: the caption was rejected (${capIssues.join("; ")}). Keep the idea if it's good, but rewrite the caption as 1-2 short lines with one simple thought.`,
+      );
       continue;
     }
 
@@ -341,8 +356,9 @@ ${
   - 1-2 short sentences, under ${CAPTION_LIMITS.short} characters. Educational carousels: one short hook line plus at most 3 short tip lines, under ${CAPTION_LIMITS.educational}.
   - Everyday words, no filler, at most 1-2 emoji. Ask a question only sometimes (about one post in three), and keep it short.
   - Never start the way a recent caption started; never reuse their phrases.
-  - Good: "golden hour > everything" · "Sunday reset. Coffee first, decisions later ☕️" · "small wins count too" · "which one tomorrow?"
-  - Bad: a paragraph narrating the place, the food, the sky and what you're wearing; anything that reads like an advert.
+  - Good (specific, a little imperfect, sounds like one real person): "the rolex guy remembered my order. that's the review." · "power went off mid-lace. we move." · "Nana was 40 minutes late. the pair was worth the wait" · "week 3 of 5am runs and my legs have opinions"
+  - Bad: a paragraph narrating the place, the food, the sky and what you're wearing; anything that reads like an advert; stock lines any account could post ("living my best life", "good vibes", "golden hour", "small wins", "Sunday reset").
+- Your feed is a timeline people follow. Every post stands on one specific real thing: a storyline beat, a small moment, a follow-up to an earlier post, a person in your life, today's plan. Storylines move one small beat at a time over weeks, never resolved in one post.
   - No hashtags inside the caption text; put them in "hashtags" (max ${p.hashtags.max}, from: ${p.hashtags.pool.join(" ")}).
 - Overlay text must be plain Latin text (no emoji).
 Return JSON only.`;

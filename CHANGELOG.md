@@ -8,11 +8,21 @@ console footer, `/health` and `/api/status`.
 **1. Liquid glass across the whole console** (the Config & keys look, everywhere)
 - Every section panel is glass now: cards, KPI tiles and tab bars (tabs are a glass pill bar with a solid chip for the current one). Table headers sit on stronger glass; inputs, previews, code and stat cells stay solid insets so dense data reads cleanly. DESIGN.md's rule is now "The Glass Panel Rule".
 - No sideways page scroll at phone or desktop width on any page. Wide tables scroll inside their panel and fade at whichever edge has more to see.
-- Long words, links and ids wrap inside panels; numbers in tables no longer break mid-figure.
+- Long words and links wrap inside panels; numbers, dates, ids and code in tables stay whole (the table scrolls instead).
 - Reels: the post page shows the playable reel with its cover, sized so both fit on a phone. Thumbnails on Overview, Posts and Stories use the cover image, never a broken video frame. Library reels get a cover frame taken from the first second.
 - Controls use plain labels ("AI brain", not `llm_brain`), and fields line up across a row.
 - Themed text selection, caret and scrollbars in both themes. Section kickers are plain sentence case. The Create progress bar animates smoothly (no layout thrash) and the step tick no longer overshoots; quotes are a tinted inset instead of a side stripe.
 - Every glass surface keeps its solid fallback (no backdrop-filter support, reduced transparency, more contrast).
+
+**2. A timeline that feels lived** (every influencer, standardised)
+- **Storylines:** each influencer has 2-3 storylines that run for weeks (Zuri: training for her first half marathon, restoring an Owino find, twelve books by December). Posts and stories move one small beat at a time, at the storyline's own pace, setbacks included. A rejected or failed post gives its beat back.
+- **Small moments:** a library of specific, local, slightly imperfect moments (the rolex guy folding hers before she orders, the power cut mid-lacing). The director gets four unused ones a day; a used one isn't offered again for 45 days.
+- **People in their life:** a recurring circle (Zuri: Nana, Brian, Mama Rose) named in captions and chats the way real people mention friends, never shown by face.
+- **Callbacks:** posts published 4-30 days ago are offered for a quiet follow-up, once each.
+- **Anti-generic check:** an idea built on a stock line ("living my best life", "good vibes", "golden hour", "small wins", "Sunday reset"…) or standing on nothing concrete is sent back once to be anchored in a beat, a moment, a person, a place or a number. The director's caption examples are now specific ones.
+- **Chats know the storyline:** replies see the latest beats and the circle, so "how's training going?" gets the same story the feed tells.
+- **Timeline page** (Identity → Timeline, tenants too): storylines with progress and links to the posts that moved them, the people, which moments are used or fresh, and the latest posts with what each stood on.
+- **Standard:** three new checks (2+ storylines with 4+ beats, 12+ moments, 2+ people) with an AI fix; the hatch prompt and template carry them, and the Interview asks for them and saves them. After deploy, run **Bring all up to standard** so the other four get their timelines. Migration `015_life.sql`.
 
 **Fix: fact check reads units.** A number now has to match its unit: "2 hours" in the delivery facts no longer lets "only 2 pairs left" through. A follower's own numbers and bare numbers work as before.
 

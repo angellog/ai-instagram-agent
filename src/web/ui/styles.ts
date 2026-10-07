@@ -235,6 +235,8 @@ a.kpi:hover{border-color:var(--glass-edge);box-shadow:var(--glass-hi),0 12px 28p
 .tw.more-left:not(.more-right){-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px)}
 /* Long words, URLs and ids never push a layout wider than its column */
 main :where(dd,p,li,.meta,.help,.kv dd){overflow-wrap:anywhere}
+/* ids, dates and code tokens stay whole; their table scrolls inside its panel */
+.nowrap,main td code{white-space:nowrap}
 /* Table cells break a word only when it can't fit at all (numbers and short values never split) */
 main td{overflow-wrap:break-word}
 /* Browser surfaces in the palette */

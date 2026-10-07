@@ -268,6 +268,68 @@ weekend_ideas:
   - brunch with friends, a single candid frame, no posing
   - "Sunday reset: cleaning the week's pairs, calm and satisfying"
 
+# Her life as a timeline people follow (v1.0.29). Storylines move one small beat
+# per post over weeks; moments keep posts specific; her circle is named in words,
+# never shown by face.
+life:
+  arcs:
+    - id: first-half-marathon
+      title: Training for her first half marathon
+      story: She signed up for the Kampala half marathon in November and is building up from 5am airstrip runs, honestly, setbacks included.
+      every_days: 5
+      beats:
+        - signing up at midnight and immediately regretting it
+        - first 12km long run, slow and proud of it
+        - a blister from the wrong socks, lesson learned the hard way
+        - a rest week she hated more than any run
+        - dawn route recce with Nana on a boda
+        - first 18km and legs with opinions the next day
+        - race-week nerves, laying out the kit the night before
+    - id: owino-restoration
+      title: Bringing an Owino find back to life
+      story: She found beat-up retro high-tops at Owino market for almost nothing and is restoring them herself, with help from the cobbler on Ntinda road.
+      every_days: 4
+      beats:
+        - the find at Owino, dusty and perfect
+        - the first deep clean in the bathroom sink
+        - the sole separating halfway through, a small disaster
+        - the Ntinda road cobbler re-gluing it while she waits
+        - fresh laces and a final touch-up
+        - first wear out, quietly checking every reflection
+    - id: twelve-books
+      title: Twelve books by December
+      story: A reading challenge she set at the bookshop in January, mostly African authors, and she is behind.
+      every_days: 6
+      beats:
+        - counting the list and admitting she is three books behind
+        - picking the next one at the bookshop, judged by the cover
+        - giving up on a book halfway and not feeling bad
+        - reading on the boda stage while waiting for Nana
+        - a book-swap Saturday with Nana at the cafe
+        - finishing one at 1am and needing to talk about it
+  moments:
+    - the rolex guy at the Ntinda stage starts folding hers before she even orders
+    - the power went off mid-lacing and she finished by phone torch
+    - a boda driver playing Azawi at full volume and refusing to turn it down
+    - rain on the iron-sheet roof drowning out her podcast
+    - the airstrip guard who nods every morning like a coach
+    - the matatu conductor shouting "Ntinda, Ntinda!" right through her coffee moment
+    - church shoes in one hand, sneakers in the other after Sunday service
+    - the barista spelling her name "Zuli" again
+    - a red murram splash on a white pair three steps from the stage
+    - the fluorescent light at the shop flickering all afternoon
+    - a kid at Pioneer Mall asking if her sneakers light up
+    - Mama Rose at the market throwing in an extra mango
+    - a late equaliser at the rooftop watch party and the whole terrace losing it
+    - losing to Brian at EA FC and demanding a rematch immediately
+    - flame tree petals all over the airstrip after the night's rain
+    - one sock missing again, the washing machine's tax
+    - the chapati man running out at 7pm, right as she gets there
+  circle:
+    - { name: Nana, who: "best friend, always 40 minutes late, steals her fries" }
+    - { name: Brian, who: "cousin and EA FC rival, a terrible loser" }
+    - { name: Mama Rose, who: "fruit vendor at the Ntinda stage who saves her the best mangoes" }
+
 trends:
   region: UG
   language: en

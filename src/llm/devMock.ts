@@ -13,6 +13,8 @@ import type { CompletionRequest } from "./types.js";
  */
 export function createDevMockProvider(): MockProvider {
   const lastUser = (r: CompletionRequest) => r.messages[r.messages.length - 1]?.content ?? "";
+  // The first moment the life block offered, or a plain one when there is none.
+  const firstMoment = (u: string) => /SMALL MOMENTS YOU COULD USE[^\n]*\n- (.+)/.exec(u)?.[1]?.trim() ?? "";
   const between = (s: string, a: string, b: string) => {
     const i = s.indexOf(a);
     if (i < 0) return "";
@@ -154,9 +156,20 @@ export function createDevMockProvider(): MockProvider {
       const life = answers.filter((a) => a.topic.startsWith("life"));
       return {
         interests_add: [], signature_phrases_add: [], avoid_phrases_add: [], boundaries_add: [], weekend_ideas_add: [], location_looks: [],
+        // Storylines, moments and people, read the plain way: "title: step; step; step", one moment per ";", "Name, detail; Name, detail".
+        arcs_add: answers.filter((a) => a.topic === "storyline").map((a) => {
+          const [title, rest = ""] = a.answer.split(/:\s*/, 2);
+          return { title: title.trim(), story: title.trim(), beats: rest.split(/;\s*/).filter(Boolean) };
+        }),
+        moments_add: answers.filter((a) => a.topic === "moments").flatMap((a) => a.answer.split(/;\s*/).filter(Boolean)),
+        circle_add: answers.filter((a) => a.topic === "circle").flatMap((a) => a.answer.split(/;\s*/).map((x) => { const [name, ...who] = x.split(/,\s*/); return { name: name.trim(), who: who.join(", ").trim() || "friend" }; })),
         knowledge: loc ? [{ id: "shop-location", keywords: ["shop", "where", "location", "address"], content: `The shop is at ${loc.answer}.`, must_include: [loc.answer] }] : [],
         memories: life.map((a) => ({ kind: "self_fact", content: `The creator ${a.answer}`, expires_on: null })),
-        summary: [...(loc ? [`Business fact: the shop is at ${loc.answer}`] : []), ...life.map((a) => `Remembered: ${a.answer}`)],
+        summary: [
+          ...(loc ? [`Business fact: the shop is at ${loc.answer}`] : []),
+          ...life.map((a) => `Remembered: ${a.answer}`),
+          ...answers.filter((a) => ["storyline", "moments", "circle"].includes(a.topic)).map((a) => `Life (${a.topic}): ${a.answer}`),
+        ],
       };
     })
     .on("interview.experience", (r) => ({ memories: [{ kind: "self_fact", content: `The creator ${between(lastUser(r), "NOTE: ", "\n") || lastUser(r).replace("NOTE: ", "")}`, expires_on: null }], weekend_idea: null }))
@@ -189,7 +202,7 @@ export function createDevMockProvider(): MockProvider {
       return {
         decision: "post",
         reason: "A light moment worth a story.",
-        story: { ...pick, activity_id: act ? Number(act[1]) : null, location_id: act?.[4] && act[4] !== "-" ? act[4] : null, time_of_day: "morning", featured_item: "", alt_text: pick.shot },
+        story: { ...pick, arc_id: null, moment: firstMoment(u), activity_id: act ? Number(act[1]) : null, location_id: act?.[4] && act[4] !== "-" ? act[4] : null, time_of_day: "morning", featured_item: "", alt_text: pick.shot },
       };
     })
     .on("content.plan", (r) => {
@@ -202,10 +215,10 @@ export function createDevMockProvider(): MockProvider {
         ["Morning rotation check", "Three pairs, one decision, zero coffee yet."],
         ["Three ways to keep white pairs clean", "Save this before your next rainy walk."],
         ["Why I always pack a second pair", "Learned this the muddy way."],
-        ["Reading list and a quiet coffee", "Slow afternoons hit different."],
-        ["Golden hour fit check", "The light did most of the work today."],
+        ["Reading list and a quiet coffee", "Chapter 4 and the barista already knows my order."],
+        ["Fit check before Ntinda", "Changed the laces twice. Ntinda won't notice, I will."],
         ["Market run in my comfiest pair", "Owino at 8am is a sport of its own."],
-        ["Rooftop sunset, new laces", "Tiny upgrade, big mood."],
+        ["Rooftop sunset, new laces", "Fresh laces, same old rooftop chairs."],
         ["Lunch break walk around town", "Ten thousand steps, one clean pair."],
       ];
       const fresh = topics.filter(([t]) => !recentBlock.includes(t.toLowerCase()));
@@ -240,6 +253,10 @@ export function createDevMockProvider(): MockProvider {
           outfit: "cream ribbed knit crop top with light-wash wide-leg denim",
           featured_item: "",
           // Like a director that likes business uploads: take the first one offered.
+          // Like a director that follows the timeline: a due storyline beat, and the first moment offered.
+          arc_id: /^- \[([a-z0-9-]+)\][^\n]*DUE:/m.exec(u)?.[1] ?? null,
+          moment: firstMoment(u),
+          callback_post_id: null,
           library_item_id: /BUSINESS LIBRARY/.test(u) ? (/- id ([0-9a-f-]{36}) \|/.exec(u)?.[1] ?? null) : null,
           slides: Array.from({ length: carousel ? 4 : 1 }, (_, i) => slide(i)),
           caption: `${line} ${["Which pair would you pick?", "Tell me your go-to this week.", "Rate the fit 1–10."][attempt % 3]}`,

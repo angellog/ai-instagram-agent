@@ -43,6 +43,11 @@ export const STANDARD = {
   trend_queries: 5,
   interests: 8,
   trends_max_age_h: 36,
+  // A timeline, not a stock library (v1.0.29).
+  arcs: 2,
+  arc_beats: 4,
+  moments: 12,
+  circle: 2,
 } as const;
 
 export type FixKind = "auto" | "ai" | "manual";
@@ -79,6 +84,9 @@ const SECTION: Record<string, string> = {
   brand: "brand",
   local_look: "visual.locations",
   social_life: "interests",
+  life_arcs: "life.arcs",
+  moments: "life.moments",
+  circle: "life.circle",
 };
 
 const isWeekend = (a: Persona["daily_life"]["activities"][number]) => a.weekends_only || a.days.some((d) => d === "saturday" || d === "sunday");
@@ -170,6 +178,16 @@ export function personaChecks(p: Persona): Check[] {
       detail: `${p.visual.locations.filter((l) => (l.look ?? "").trim().length >= 60).length}/${p.visual.locations.length} places describe how they really look (floors, walls, furniture, signage, what's outside)`,
       fix: "ai",
     },
+    {
+      key: "life_arcs",
+      group: "Daily life",
+      label: "Storylines that run for weeks",
+      ok: p.life.arcs.length >= STANDARD.arcs && p.life.arcs.every((a) => a.beats.length >= STANDARD.arc_beats),
+      detail: `${short(p.life.arcs.length, STANDARD.arcs, "storylines")}${p.life.arcs.some((a) => a.beats.length < STANDARD.arc_beats) ? `; some have fewer than ${STANDARD.arc_beats} beats` : p.life.arcs.length ? `: ${p.life.arcs.map((a) => a.title).join(", ")}`.slice(0, 120) : ""}`,
+      fix: "ai",
+    },
+    { key: "moments", group: "Daily life", label: "Specific moments, not stock", ok: p.life.moments.length >= STANDARD.moments, detail: short(p.life.moments.length, STANDARD.moments, "moments"), fix: "ai" },
+    { key: "circle", group: "Persona", label: "People in their life", ok: p.life.circle.length >= STANDARD.circle, detail: p.life.circle.length ? short(p.life.circle.length, STANDARD.circle, "people") + `: ${p.life.circle.map((c) => c.name).join(", ")}` : `nobody yet (standard ${STANDARD.circle})`, fix: "ai" },
     { key: "locations", group: "Daily life", label: "Places they go", ok: p.visual.locations.length >= STANDARD.locations, detail: short(p.visual.locations.length, STANDARD.locations, "locations"), fix: "ai" },
     {
       key: "trends",
@@ -275,10 +293,13 @@ Rules:
 - visual.locations: items {id, description, slots, look}; ids are lowercase-with-dashes. look is 1-3 sentences on how THIS real place looks in this person's city today, concrete enough for a photographer: floor, walls, windows, furniture, lighting, signage, what is on the shelves, who else is around, what is visible outside. Use real local knowledge (e.g. a Kampala home has tiled floors, burglar-bar windows, a walled compound; a phone shop in Pioneer Mall is a small glass-fronted unit with glass counters full of phones and accessories on pegboards, fluorescent light, a busy corridor outside). A shop or workplace must read as a business, never a home.
 - trends: {region, language, max_items, queries: [{query, label}], feeds: [{url, label}], avoid}; keep existing feeds; label queries like "TikTok <Country>", "Instagram <City>", "X <Country>".
 - interests: a list of plain strings. Keep every existing one and add until there are 8+, covering: movies/series and music they actually watch and listen to (specific), a hobby (gaming, a sport they play, reading, cooking), a sport or team they follow, and local events and nightlife in their city (concerts, festivals, meetups), all true to this person's culture, faith and budget.
+- life.arcs: items {id, title, story, beats, every_days}. 2-3 storylines that run for weeks and suit this person's real life (learning a skill, saving for a trip, training for a race, a project at work, a home or shop change). id is lowercase-with-dashes; story is 1-2 sentences; beats are 5-7 small ordered steps, each one postable on its own, with honest setbacks along the way (not only wins); every_days 3-6. No romance storylines, nothing medical, political or about money troubles.
+- life.moments: 15-20 plain strings. Specific, local, sensory, slightly imperfect moments a real person in this city would post about (a named street food vendor's habit, the power cut mid-routine, the boda driver's playlist, rain on iron-sheet roofs), true to their culture, faith and budget. Never generic ("enjoying the sunset", "coffee time").
+- life.circle: 2-4 items {name, who}: recurring people in their life with a local first name and one telling detail (e.g. "best friend, always 40 minutes late"). Friends, a sibling, a coworker; no partners or love interests.
 - brand: {name, category, products, natural_moments, curiosity_hooks, mention_rate}. name and category come from identity.affiliation and the BUSINESS KNOWLEDGE; products are 4-6 generic descriptions of what the brand sells (no invented product names, prices or offers); natural_moments are 5-8 moments from THIS person's own daily_life where the category belongs without being the subject (a breakfast stays about breakfast); curiosity_hooks are 2-4 questions followers would ask; mention_rate 0.2 unless content_rules give another share. Keep any existing values.`;
 
 /** Sections that are plain lists of strings: models sometimes send objects instead. */
-const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas", "interests"]);
+const STRING_LISTS = new Set(["visual.character.wardrobe", "weekend_ideas", "interests", "life.moments"]);
 const CLOSET_LISTS = ["tops", "bottoms", "layers", "one_pieces", "activewear"];
 
 /** The value at a dotted path. */
@@ -307,7 +328,7 @@ export async function upgradePersona(id: number, failing: Check[]): Promise<stri
   // New locations must travel with new activities that use them.
   if (paths.includes("daily_life.activities") && !paths.includes("visual.locations")) paths.push("visual.locations");
   const need = failing.filter((c) => SECTION[c.key]).map((c) => `- ${c.label}: ${c.detail}`).join("\n");
-  const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region.`;
+  const minimums = `Minimums: closet ${STANDARD.tops} tops, ${STANDARD.bottoms} bottoms, ${STANDARD.layers} layers, ${STANDARD.activewear} activewear sets (one_pieces only if they fit this person's style), ${STANDARD.occasions}+ occasions; ${STANDARD.signature_outfits}+ signature outfits; ${STANDARD.activities}+ activities over ${STANDARD.activity_slots}+ slots incl. ${STANDARD.weekend_activities}+ weekend ones (weekends_only or saturday/sunday days); ${STANDARD.weekend_ideas}+ weekend_ideas; ${STANDARD.locations}+ locations; ${STANDARD.trend_queries}+ labelled trend queries and a region; ${STANDARD.arcs}+ life.arcs with ${STANDARD.arc_beats}+ beats each, ${STANDARD.moments}+ life.moments, ${STANDARD.circle}+ people in life.circle.`;
   const shapes = structureExamples(paths);
   const prompt = `CURRENT PERSONA:\n${inf.persona_yaml}\n\n${paths.includes("brand") && inf.knowledge_yaml?.trim() ? `BUSINESS KNOWLEDGE (the only source of brand facts):\n${inf.knowledge_yaml}\n\n` : ""}WHAT FALLS SHORT:\n${need}\n\n${minimums}\n\n${
     shapes ? `STRUCTURE TO MATCH (from a different creator: copy the exact shape of each key, lists of plain strings stay plain strings; never copy the content):\n${shapes}\n\n` : ""
@@ -375,6 +396,14 @@ function asText(x: unknown): string | undefined {
 export function coerceShapes(path: string, value: unknown, set: (v: unknown) => void): void {
   const list = (v: unknown): string[] => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : []).map(asText).filter((s): s is string => Boolean(s));
   if (STRING_LISTS.has(path)) set(list(value));
+  if (path === "life.arcs" && Array.isArray(value)) {
+    for (const a of value as Array<Record<string, unknown>>) {
+      if (!a || typeof a !== "object") continue;
+      a.beats = list(a.beats);
+      if (typeof a.id === "string") a.id = a.id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      if (typeof a.every_days === "string") a.every_days = Number(a.every_days) || 4;
+    }
+  }
   if (path === "visual.character.closet" && value && typeof value === "object") {
     const c = value as Record<string, unknown>;
     for (const k of CLOSET_LISTS) if (c[k] !== undefined) c[k] = list(c[k]);

@@ -22,6 +22,7 @@ import { brandMentionBudget, brandPullBlock } from "./brandpull.js";
 import { pronouns } from "../persona/pronouns.js";
 import type { VisualState } from "./history.js";
 import { planOutfits } from "./wardrobe.js";
+import { lifeBlock, lifeContext, resolveLife } from "./life.js";
 
 /**
  * Story updates: 1-3 light, in-the-moment frames a day from the influencer's
@@ -53,6 +54,8 @@ export const storySchema = z.object({
       location_id: z.string().nullable(),
       time_of_day: z.enum(TIMES_OF_DAY),
       featured_item: z.string().describe("One item from the brand's category naturally in the shot, described generically; empty if none fits"),
+      arc_id: z.string().nullable().describe("Id of the STORYLINE this story moves one beat forward, or null"),
+      moment: z.string().describe("The specific small moment this story shows, in a short concrete sentence; empty if none"),
       text: z.string().describe(`On-image line, plain words, max ${MAX_STORY_TEXT} characters, no emoji, no hashtags. MUST be empty when include_character is true.`),
       alt_text: z.string().describe("Plain description of the image, max 200 chars"),
     })
@@ -132,6 +135,7 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
   const mayName = brandMentionBudget(p, recentWords).mayName;
   const shop = mayName ? shopLine() : undefined;
   const weekend = weekday === 0 || weekday === 6;
+  const life = await lifeContext(p, day, now, { callbacks: false });
 
   const started = Date.now();
   const out = await llm().structured(storySchema, {
@@ -148,6 +152,7 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
       todaysPosts.length ? `ALREADY ON THE FEED TODAY: ${todaysPosts.map((r) => `"${r.topic}"`).join("; ")}. A story can be a behind-the-scenes angle, never the same shot.` : "",
       `RECENT STORIES (newest first; don't repeat):\n${stories.map((s) => `- ${s.kind}: ${s.shot.slice(0, 90)}${s.text ? ` / text "${s.text}"` : ""}`).join("\n") || "- none yet"}`,
       trends ? `TRENDS AND NEWS (reference only if it fits; never add details beyond the headline):\n${trends}` : "",
+      lifeBlock(p, life, "story"),
       opts.operator ? "OPERATOR REQUEST: the operator wants a story right now. Do not wait: pick the best moment." : "",
       directionBlock(opts.direction, "story"),
     ]
@@ -185,12 +190,13 @@ export async function planStory(now = new Date(), opts: { operator?: boolean; di
     alt_text: s.alt_text.slice(0, 200),
   };
   const topic = `${s.kind}: ${s.shot}`.slice(0, 120);
+  const used = resolveLife(p, life, s);
 
   const { ideaId, postId } = await tx(async (client) => {
     const idea = await client.query<{ id: number }>(
-      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, status, influencer_id)
-       VALUES ($1, 'story', $2, $3, $4, $5, $6, '', $7, 'accepted', $8) RETURNING id`,
-      [s.activity_id, s.kind, topic, s.text || s.kind, out.reason, JSON.stringify({ source: "story", kind: s.kind, slides: [slide] }), JSON.stringify(state), influencerId()],
+      `INSERT INTO content_ideas (activity_id, format, structure, topic, hook, angle, plan, caption, visual_state, status, influencer_id, life)
+       VALUES ($1, 'story', $2, $3, $4, $5, $6, '', $7, 'accepted', $8, $9) RETURNING id`,
+      [s.activity_id, s.kind, topic, s.text || s.kind, out.reason, JSON.stringify({ source: "story", kind: s.kind, slides: [slide] }), JSON.stringify(state), influencerId(), used ? JSON.stringify(used) : null],
     );
     const post = await client.query<{ id: string }>(
       `INSERT INTO posts (influencer_id, content_idea_id, media_type, caption, status, visual_state, origin)

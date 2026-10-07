@@ -11,6 +11,7 @@ import { registerCreate } from "./pages/create.js";
 import { registerLibrary } from "./pages/library.js";
 import { registerUsers } from "./pages/users.js";
 import { registerInterview } from "./pages/interview.js";
+import { registerTimeline } from "./pages/timeline.js";
 import { registerTrends } from "./pages/trends.js";
 import { registerStandard } from "./pages/standard.js";
 import { registerTikTok } from "./pages/tiktok.js";
@@ -36,6 +37,7 @@ export function registerAdmin(app: FastifyInstance): void {
   registerLibrary(app);
   registerUsers(app);
   registerInterview(app);
+  registerTimeline(app);
   registerTrends(app);
   registerStandard(app);
   registerTikTok(app);

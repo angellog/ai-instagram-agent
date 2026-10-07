@@ -617,7 +617,7 @@ ${card(
 ${card(
   table(
     ["Day", "Slot", "Activity", "Location", "Decision", "Why"],
-    activities.map((a) => [esc(a.day), esc(a.slot.replace("_", " ")), esc(a.activity), esc(a.location ?? ""), pill(a.decision), `<span class="small">${esc(a.reason ?? "")}</span>`]),
+    activities.map((a) => [`<span class="nowrap">${esc(a.day)}</span>`, esc(a.slot.replace("_", " ")), esc(a.activity), `<span class="nowrap">${esc(a.location ?? "")}</span>`, pill(a.decision), `<span class="small">${esc(a.reason ?? "")}</span>`]),
     "The day plan is created the first time the planner runs each day.",
   ),
   { title: "Virtual day" },

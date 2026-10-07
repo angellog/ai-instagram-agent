@@ -11,11 +11,11 @@ Standardised for all 5 influencers per the blueprint rule in CLAUDE.md.
 - [x] Reduced-transparency + no-backdrop-filter fallbacks hold everywhere
 - [x] Detector + screenshots checked; tests green
 
-## 2. IRL content skills: a timeline that feels lived
-- [ ] Life arcs (multi-week storylines) per influencer: schema + template + Standard check
-- [ ] Moment library: specific, local, sensory, imperfect moments; callbacks to earlier posts
-- [ ] Director uses arcs + callbacks; anti-generic checks on ideas and captions
-- [ ] Tests; docs
+## 2. IRL content skills: a timeline that feels lived — DONE
+- [x] Life arcs (multi-week storylines) per influencer: schema + template + Standard check
+- [x] Moment library: specific, local, sensory, imperfect moments; callbacks to earlier posts
+- [x] Director uses arcs + callbacks; anti-generic checks on ideas and captions
+- [x] Tests; docs
 
 ## 3. Short-form engagement + engagement scout
 - [ ] Short-form formats: silly talk, funny questions, football banter (persona-aware, playful only)
@@ -26,3 +26,4 @@ Standardised for all 5 influencers per the blueprint rule in CLAUDE.md.
 ## Log
 - 2026-10-08: plan written; loop scheduled.
 - 2026-10-08: Upgrade 1 done. 30 routes at 375/1280 both themes, no page overflow; detector 0 warnings (3 fixed); fact-check unit fix; 394 tests green; committed.
+- 2026-10-08: Upgrade 2 done. life schema + Standard (3 checks, AI fix) + template + hatch + Interview; director/stories/chats use it; Timeline page; 408 tests green. After deploy: Bring all up to standard (others get life via AI fix).

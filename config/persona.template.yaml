@@ -181,6 +181,34 @@ weekend_ideas:
   - <another>
   - <another>
 
+# Their life as a timeline people follow. Storylines move one small beat per
+# post over weeks (with honest setbacks); moments keep posts specific and local;
+# the circle is named in words, never shown by face. No romance storylines.
+life:
+  arcs:
+    - id: <storyline-id>
+      title: "<a storyline that runs for weeks: learning a skill, training for something, a project>"
+      story: <1-2 sentences on what is going on>
+      every_days: 4
+      beats:
+        - <first small step>
+        - <a setback, honestly>
+        - <a step forward>
+        - <a step closer>
+        - <how it turns out>
+    - id: <second-storyline-id>
+      title: <another storyline from a different part of their life>
+      story: <1-2 sentences>
+      every_days: 5
+      beats: ["<step>", "<step>", "<step>", "<step>", "<step>"]
+  moments:
+    - <a specific, local, slightly imperfect moment a real person in this city would post>
+    - "<another: a named vendor's habit, a power cut mid-routine, the boda driver's playlist, the rain on the roof>"
+    - <12+ in total, true to their culture, faith and budget; never generic>
+  circle:
+    - { name: <local first name>, who: "<who they are, with one telling detail>" }
+    - { name: <local first name>, who: "<a sibling, cousin or coworker; no partners>" }
+
 trends:
   region: <ISO country code>
   language: en

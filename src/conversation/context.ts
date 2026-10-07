@@ -6,6 +6,7 @@ import { trendsForPrompt } from "../trends/trends.js";
 import { relationshipMemories, selfMemories, worldMemories, type MemoryRow } from "../memory/store.js";
 import { localParts, slotForHour } from "../lib/time.js";
 import { persona } from "../persona/loader.js";
+import { lifeForChat } from "../content/life.js";
 import { retrieveKnowledge, type KnowledgeEntry } from "./knowledge.js";
 
 export interface InteractionRow {
@@ -50,6 +51,8 @@ export interface ConversationContext {
   selfLife: MemoryRow[];
   /** What the creator is doing today, from the day plan. */
   today: string;
+  /** Storylines and the people in their life, as the feed has told them so far. */
+  life?: string;
   contextUsed: string[];
 }
 
@@ -147,7 +150,9 @@ export async function buildContext(it: InteractionRow, user: UserRow, conversati
   const selfLife = await selfMemories(it.text);
   if (selfLife.length) contextUsed.push("self_canon");
   const today = await todayForChat();
-  return { user, conversationId, history, memories, post, knowledge, recentOwnPosts, calendar, selfLife, today, contextUsed };
+  const life = await lifeForChat(persona());
+  if (life) contextUsed.push("life_timeline");
+  return { user, conversationId, history, memories, post, knowledge, recentOwnPosts, calendar, selfLife, today, life, contextUsed };
 }
 
 export function renderContext(it: InteractionRow, ctx: ConversationContext, now = new Date()): string {
@@ -172,6 +177,7 @@ export function renderContext(it: InteractionRow, ctx: ConversationContext, now 
     ctx.calendar ? `WHAT'S GOING ON AROUND YOU (mention only if it is relevant to what they said):\n${ctx.calendar}` : "",
     ctx.recentOwnPosts.length ? `YOUR RECENT POSTS: ${ctx.recentOwnPosts.map((p) => p.topic).join(" | ")}` : "",
     ctx.today ? `YOUR DAY (true for today; use it when they ask what you're up to): ${ctx.today}` : "",
+    ctx.life ? `WHAT'S GOING ON IN YOUR LIFE LATELY (the same story your feed tells; bring it up only when it fits the chat): ${ctx.life}` : "",
     `YOUR OWN LIFE (things you've already said about yourself in chats; never contradict them, build on them):\n${
       ctx.selfLife.map((m) => `- ${m.content}`).join("\n") || "- nothing yet: whatever you share now becomes part of your story"
     }`,

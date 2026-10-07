@@ -98,6 +98,9 @@ ${card(
     [`${STANDARD.weekend_ideas}+`, "weekend post ideas"],
     [`${STANDARD.locations}+`, "places"],
     [`${STANDARD.trend_queries}+`, "labelled news searches"],
+    [`${STANDARD.arcs}+`, `storylines, ${STANDARD.arc_beats}+ beats each`],
+    [`${STANDARD.moments}+`, "specific moments"],
+    [`${STANDARD.circle}+`, "people in their life"],
   ]
     .map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`)
     .join("")}</div>

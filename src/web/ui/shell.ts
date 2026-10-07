@@ -60,6 +60,7 @@ const NAV: Array<[section: string, items: NavItem[]]> = [
     [
       ["persona", "/admin/persona", "Persona & soul", "user"],
       ["interview", "/admin/interview", "Interview", "message"],
+      ["timeline", "/admin/timeline", "Timeline", "route"],
       ["profile", "/admin/profile", "Profile kit", "instagram"],
       ["controls", "/admin/controls", "Controls", "sliders"],
     ],
