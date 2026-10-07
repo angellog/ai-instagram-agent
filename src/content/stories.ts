@@ -269,7 +269,7 @@ Return JSON only.`;
 export async function recentStories(limit = 30) {
   return many<{ id: string; status: string; created_at: Date; published_at: Date | null; scheduled_for: Date | null; cover: string | null; kind: string | null; text: string | null }>(
     `SELECT p.id, p.status, p.created_at, p.published_at, p.scheduled_for,
-       (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover,
+       (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY (pa.media_kind = 'video'), position LIMIT 1) AS cover,
        ci.structure AS kind, ci.plan->'slides'->0->>'overlay_heading' AS text
      FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id
      WHERE p.influencer_id = $1 AND p.media_type = 'STORY' ORDER BY p.created_at DESC LIMIT $2`,

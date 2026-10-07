@@ -52,9 +52,35 @@ export function missingDetails(text: string, entries: KnowledgeEntry[]): string[
   return missing;
 }
 
+const NOT_UNITS = new Set("a an and are as at be but by do for from if in is it its me my of on or our so the to up us was we were will with you your".split(" "));
+
+/** Each number with the word right after it ("2 hours" -> 2/hour, "9am" -> 9/am); phones and bare numbers have no unit. */
+export function quantitiesIn(text: string): Array<{ n: string; unit: string }> {
+  const out: Array<{ n: string; unit: string }> = [];
+  const re = /\+?\d[\d\s().-]*\d|\d/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const digits = m[0].replace(/\D/g, "");
+    if (digits.length >= 9) {
+      out.push({ n: phoneKey(digits), unit: "" });
+      continue;
+    }
+    const nums = m[0].match(/\d+/g) ?? [];
+    const word = /^\s?([a-z]+)/i.exec(text.slice(m.index + m[0].length))?.[1]?.toLowerCase() ?? "";
+    const unit = NOT_UNITS.has(word) ? "" : word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+    nums.forEach((n, i) => out.push({ n, unit: i === nums.length - 1 ? unit : "" }));
+  }
+  return out;
+}
+
+/**
+ * Numbers in the text the knowledge (or the follower) doesn't back. A number with
+ * a unit needs the same number with the same unit, or the bare number, so "2 hours"
+ * in the knowledge never vouches for "only 2 pairs left".
+ */
 export function unverifiedNumbers(text: string, shown: KnowledgeEntry[], inbound: string): string[] {
-  const known = new Set([...shown.flatMap((e) => numbersIn(e.content)), ...numbersIn(inbound)]);
-  return [...new Set(numbersIn(text).filter((n) => !known.has(n)))];
+  const known = [...shown.flatMap((e) => quantitiesIn(e.content)), ...numbersIn(inbound).map((n) => ({ n, unit: "" }))]; // the follower's own numbers back any unit
+  const ok = (q: { n: string; unit: string }) => known.some((k) => k.n === q.n && (!q.unit || !k.unit || k.unit === q.unit));
+  return [...new Set(quantitiesIn(text).filter((q) => !ok(q)).map((q) => q.n))];
 }
 
 export function checkFacts(text: string, o: { used: KnowledgeEntry[]; shown: KnowledgeEntry[]; inbound: string }): FactProblems {

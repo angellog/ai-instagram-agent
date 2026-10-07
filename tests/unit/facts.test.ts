@@ -52,6 +52,14 @@ describe("fact check", () => {
     expect(checkFacts("Pioneer Mall, Level 5, Shop PH-100, Kampala", { used: [store], shown: [store], inbound: "where?" })).toEqual({ missing: [], unverified: [] });
   });
 
+  it("matches a number with its unit, so one fact can't vouch for another", () => {
+    const delivery = { ...order, content: "A rider brings it within 40 minutes to 2 hours. Open 9am to 7pm." };
+    expect(unverifiedNumbers("Only 2 pairs left!", [delivery], "")).toEqual(["2"]);
+    expect(unverifiedNumbers("Usually 2 hours, sometimes 40 minutes", [delivery], "")).toEqual([]);
+    expect(unverifiedNumbers("We open at 9 am", [delivery], "")).toEqual([]);
+    expect(unverifiedNumbers("2 is the limit", [delivery], "")).toEqual([]); // no unit: the bare number is enough
+  });
+
   it("reads numbers the way people write them", () => {
     expect(numbersIn("Level 5, Shop PH-100")).toEqual(["5", "100"]);
     expect(numbersIn("+256 789 652 909")).toEqual(["789652909"]);

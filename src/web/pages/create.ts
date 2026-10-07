@@ -59,7 +59,7 @@ const CSS = `<style>
 .cr-pct{font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .cr-time{color:var(--muted);font-variant-numeric:tabular-nums}
 .cr-bar{position:relative;height:14px;border-radius:99px;background:var(--surface-3);overflow:hidden}
-.cr-fill{position:absolute;inset:0 auto 0 0;width:0;border-radius:99px;background:linear-gradient(90deg,var(--brand),#ff9a5c);transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.cr-fill{position:absolute;inset:0;border-radius:99px;background:linear-gradient(90deg,var(--brand),#ff9a5c);transform:translateX(-100%);transition:transform .7s cubic-bezier(.25,1,.5,1)}
 .cr-fill::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,rgb(255 255 255/.22) 0 10px,transparent 10px 20px);background-size:28px 28px;animation:cr-stripes 900ms linear infinite}
 .cr-fill::before{content:"";position:absolute;right:-6px;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgb(255 90 31/.35),0 0 18px 6px rgb(255 120 60/.55);animation:cr-glow 1.4s ease-in-out infinite}
 .cr-done .cr-fill::after,.cr-done .cr-fill::before,.cr-failed .cr-fill::after,.cr-failed .cr-fill::before{animation:none;opacity:0}
@@ -73,7 +73,7 @@ const CSS = `<style>
 .cr-dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);border:2px solid var(--line-2);color:var(--muted);transition:background .3s,border-color .3s,transform .3s}
 .cr-steps .active{color:var(--ink);font-weight:600}.cr-steps .active .cr-dot{border-color:var(--brand);color:var(--brand);position:relative}
 .cr-steps .active .cr-dot::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid transparent;border-top-color:var(--brand);animation:cr-spin .9s linear infinite}
-.cr-steps .done .cr-dot{background:var(--ok);border-color:var(--ok);color:#fff;animation:cr-pop .35s cubic-bezier(.2,.8,.2,1.4)}
+.cr-steps .done .cr-dot{background:var(--ok);border-color:var(--ok);color:#fff;animation:cr-pop .35s cubic-bezier(.25,1,.5,1)}
 .cr-steps .failed .cr-dot{background:var(--bad);border-color:var(--bad);color:#fff}
 @keyframes cr-spin{to{transform:rotate(360deg)}}
 @keyframes cr-pop{0%{transform:scale(.6)}100%{transform:scale(1)}}
@@ -173,7 +173,7 @@ ${card(
   function animatePct(to){var from=shown,start=performance.now();(function step(n){var k=Math.min(1,(n-start)/600);shown=from+(to-from)*(1-Math.pow(1-k,3));pct.textContent=Math.round(shown)+"%";if(k<1)requestAnimationFrame(step)})(start)}
   function render(p){
     last=p;base=p.elapsedMs;t0=Date.now();
-    fill.style.width=p.pct+"%";bar.setAttribute("aria-valuenow",Math.round(p.pct));animatePct(p.pct);
+    fill.style.transform="translateX("+(p.pct-100)+"%)";bar.setAttribute("aria-valuenow",Math.round(p.pct));animatePct(p.pct);
     if(p.topic)topic.textContent=p.topic;
     detail.textContent=p.detail;
     document.querySelectorAll("#cr-steps li").forEach(function(li){var s=p.steps.find(function(x){return x.key===li.dataset.key});li.className=s?s.state:"";

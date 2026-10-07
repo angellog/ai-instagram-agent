@@ -1,6 +1,6 @@
 ---
 name: Influencer OS
-description: Operator console for running a roster of AI influencers; calm solid working surfaces with glass only on the controls that float above them.
+description: Operator console for running a roster of AI influencers; liquid-glass section panels over a faint light field, with dense data on solid insets.
 colors:
   signal-orange: "#ff5a1f"
   ember-action: "#c8410e"
@@ -161,14 +161,14 @@ components:
 
 **Creative North Star: "The Glass Control Room"**
 
-Influencer OS is a control room for one operator running several AI creators. The room is calm and legible: the working surfaces (tables, cards, forms, previews) are solid, and only the controls that float above them are glass. That means the top bar, sidebar, menus, dialogs, toasts and the Config & keys panels. Behind the glass is a faint orange-and-blue light field, like screens glowing in a dim room. It gives the glass something to refract without ever competing with the content.
+Influencer OS is a control room for one operator running several AI creators. The room is calm and legible. Every section panel is glass, the same liquid glass first built for Config & keys: cards, KPI tiles, tab bars, the top bar, sidebar, menus, dialogs and toasts. The things you read closely stay solid inside that glass: table headers sit on a stronger glass, and inputs, previews, code blocks and stat cells are solid insets. Behind the glass is a faint orange-and-blue light field, like screens glowing in a dim room. It gives the glass something to refract without ever competing with the content.
 
 Density is moderate and task-first. The same pages must work in a few thumb taps on a phone on the shop floor and in long laptop set-up sessions. FeetBit orange is a signal, not a paint: it marks the one primary action, the active place in the nav, progress and counts. Everything else is ink on quiet neutrals. Light and dark themes are designed together and carry equal weight.
 
 The feel is precise and quiet. It uses soft corners, hairline borders, one clear primary action per page, and short motion that confirms state rather than decorates.
 
 **Key Characteristics:**
-- Solid working surfaces; glass reserved for floating chrome and Config panels.
+- Glass section panels everywhere; dense data (inputs, previews, code, stat cells) on solid insets.
 - Orange used as a rare signal (10% or less of any screen).
 - Status always carries words or an icon as well as colour.
 - Light and dark designed as a pair; tabular figures everywhere.
@@ -240,7 +240,7 @@ This is a hybrid system. Working content is flat: surfaces sit at rest on a hair
 - **Glass** (`inset 0 1px 0 rgb(255 255 255/.85), inset 0 -1px 0 rgb(16 18 26/.04), 0 1px 1px rgb(16 18 26/.04), 0 8px 28px -6px rgb(16 18 26/.12)`; dark uses a 10% white edge and a deeper 60% shadow): glass panels and the Config section bar.
 
 ### Named Rules
-**The Floating Glass Rule.** Glass is for surfaces that float over content (top bar, sidebar, menus, dialogs, toasts, sticky section bars) and for Config & keys panels. Tables, lists, previews and ordinary cards stay solid. If it doesn't float, it isn't glass.
+**The Glass Panel Rule.** Every section panel is glass: cards, KPI tiles, tab bars, and the floating chrome (top bar, sidebar, menus, dialogs, toasts, sticky section bars). What you read or type into closely sits on a solid inset inside the glass: inputs, previews, code blocks, stat cells. Wide tables scroll inside their panel and fade at the edge that has more, so the page itself never scrolls sideways.
 
 **The Solid Fallback Rule.** Every glass surface has a solid twin. Without backdrop-filter support, or under `prefers-reduced-transparency` or `prefers-contrast: more`, glass becomes solid Surface, the light field disappears, and borders strengthen to Hairline Strong.
 
@@ -293,7 +293,7 @@ A sticky glass pill bar under the top bar. It lists sections with a status dot (
 ### Do:
 - **Do** keep orange to one primary action per page plus navigation, progress and badges (the Rare Signal Rule).
 - **Do** pair every status colour with a word or icon, and keep body text at 4.5:1 or better in both themes.
-- **Do** use glass only for floating chrome and Config panels, and give every glass surface its solid fallback.
+- **Do** make every section panel glass with dense data on solid insets, and give every glass surface its solid fallback.
 - **Do** design light and dark together, and check both before shipping.
 - **Do** make the daily jobs (approve, edit, see what broke) work one-handed at 375px, with 38–40px targets.
 - **Do** use Fira Code for anything copyable: keys, IDs, masked secrets, YAML.

@@ -82,7 +82,7 @@ main{padding:var(--s6);max-width:1320px;width:100%;margin:0 auto}
 /* ---------------------------------------------------------------- content */
 .ph{display:flex;flex-wrap:wrap;gap:var(--s4);align-items:flex-end;justify-content:space-between;margin:4px 0 var(--s5)}
 .ph h1{font-size:26px;line-height:1.2;margin:0;letter-spacing:-.02em}.ph .sub{margin:6px 0 0;color:var(--muted);max-width:70ch}
-.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:4px}
+.eyebrow{font-size:13.5px;color:var(--muted);font-weight:500;margin-bottom:4px}
 .ph-actions{display:flex;flex-wrap:wrap;gap:8px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);margin-bottom:var(--s4);min-width:0}
 .card-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px var(--s5) 0}
@@ -112,7 +112,7 @@ tbody tr{transition:background var(--t-fast)}tbody tr:hover{background:var(--sur
 .btn.ghost{border-color:transparent;background:transparent}.btn.sm{min-height:32px;padding:4px 10px;font-size:13px}
 .btn[disabled],.btn.busy{opacity:.55;cursor:progress}
 form.inline{display:inline}
-.field{display:grid;gap:6px;margin-bottom:14px}.field label{font-weight:600;font-size:14px}.field .req{color:var(--bad)}.help{margin:0;color:var(--muted);font-size:12.5px}
+.field{display:grid;gap:6px;margin-bottom:14px;align-content:start}.field label{font-weight:600;font-size:14px}.field .req{color:var(--bad)}.help{margin:0;color:var(--muted);font-size:12.5px}
 input,select,textarea{font:inherit;font-size:15px;min-height:40px;padding:8px 11px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);width:100%;max-width:100%;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
 textarea{min-height:90px;resize:vertical;line-height:1.5}textarea.mono{font-family:var(--mono);font-size:13px}
@@ -126,6 +126,7 @@ input[type=checkbox]{width:18px;height:18px;min-height:0;accent-color:var(--prim
 .slides figure{margin:0;scroll-snap-align:start;flex:none}.slides img{height:320px;aspect-ratio:4/5;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;background:var(--surface-2)}
 .slides figcaption{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted)}
 .slides.story img,.thumbs.story img{aspect-ratio:9/16}.slides.story img{height:420px}
+.slides video{height:420px;aspect-ratio:9/16;border-radius:12px;border:1px solid var(--line);display:block;background:var(--surface-2);object-fit:cover}
 .slide-tools{display:flex;gap:6px;align-items:center;margin-top:6px}.slide-tools form{display:inline}.slide-tools .btn{padding:0;width:34px;min-height:34px;justify-content:center}
 .slide-cover{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--brand)}.slide-cover svg{fill:currentColor}
 .edit-caption textarea{min-height:120px}.counter{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}.counter.over{color:var(--bad);font-weight:600}
@@ -135,7 +136,7 @@ input[type=checkbox]{width:18px;height:18px;min-height:0;accent-color:var(--prim
 pre{white-space:pre-wrap;word-break:break-word;background:var(--surface-2);padding:12px;border-radius:10px;font-size:12.5px;max-height:420px;overflow:auto;margin:0}
 details summary{cursor:pointer;color:var(--ink-2)}
 .bar{height:8px;background:var(--surface-3);border-radius:9px;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:var(--brand);border-radius:9px}
-.quote{border-left:3px solid var(--line-2);padding:2px 0 2px 12px;margin:8px 0;color:var(--ink-2)}
+.quote{background:var(--surface-2);border-radius:10px;padding:8px 12px;margin:8px 0;color:var(--ink-2)}
 .list{list-style:none;margin:0;padding:0}.list li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.list li:last-child{border:0}
 .meta{color:var(--muted);font-size:12.5px}
 .steps{list-style:none;display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0 0 var(--s5)}
@@ -177,7 +178,7 @@ dialog .dh{padding:18px 20px 0;font-weight:700;font-size:17px;flex:none}.dialog-
 @media (max-width:640px){.top .crumb{display:none}.top{gap:6px}.top .pill{font-size:11px;padding:2px 7px}.top .btn.sm span{display:none}.top .btn.sm{padding:4px 8px}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi{padding:12px}.kpi-h{font-size:11.5px}
   .banner{padding:8px 16px;font-size:13px}.ph-actions{width:100%}.grid{grid-template-columns:minmax(0,1fr)}
-  .cr-card{padding:16px}.ph h1{font-size:22px}.slides img{height:260px}.kpi-v{font-size:22px}th,td{padding:8px 6px}.card-b{padding:12px 14px 16px}.card-h{padding:12px 14px 0}.tw{margin:0 -14px;padding:0 14px}}
+  .cr-card{padding:16px}.ph h1{font-size:22px}.slides img{height:260px}.slides.story img,.slides video{height:250px}.kpi-v{font-size:22px}th,td{padding:8px 6px}.card-b{padding:12px 14px 16px}.card-h{padding:12px 14px 0}.tw{margin:0 -14px;padding:0 14px}}
 /* ---------------------------------------------------------------- liquid glass
    One material, used where depth means something: the chrome that floats over
    content (top bar, section nav, menus, dialogs, toasts) and the Config panels.
@@ -198,8 +199,8 @@ dialog .dh{padding:18px 20px 0;font-weight:700;font-size:17px;flex:none}.dialog-
   --glass-shadow:0 1px 1px rgb(0 0 0/.3),0 12px 36px -8px rgb(0 0 0/.6);--field-a:rgb(255 106 51/.22);--field-b:rgb(90 120 255/.15);--field-c:rgb(255 150 60/.07)}}
 body::before{content:"";position:fixed;inset:-10vmax;z-index:-1;pointer-events:none;
   background:radial-gradient(38vmax 30vmax at 82% 4%,var(--field-a),transparent 70%),radial-gradient(34vmax 28vmax at 8% 92%,var(--field-b),transparent 70%),radial-gradient(26vmax 22vmax at 48% 55%,var(--field-c),transparent 72%)}
-.glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
-.glass{border:1px solid var(--glass-edge);box-shadow:var(--glass-hi),var(--glass-shadow)}
+.glass,.card,.kpi,.tabs,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+.glass,.card,.kpi{border:1px solid var(--glass-edge);box-shadow:var(--glass-hi),var(--glass-shadow)}
 .top{border-bottom:1px solid var(--glass-line);box-shadow:var(--glass-hi)}
 .side{border-right:1px solid var(--glass-line)}
 .mode-menu,.switch .menu,dialog{background:var(--glass-strong);border-color:var(--glass-edge);box-shadow:var(--glass-hi),var(--shadow-lg)}
@@ -207,12 +208,40 @@ dialog::backdrop{background:rgb(10 12 16/.32);-webkit-backdrop-filter:blur(6px) 
 .dialog-f{background:transparent;border-top-color:var(--glass-line)}
 .toast{-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);background:color-mix(in srgb,var(--ink) 88%,transparent);box-shadow:inset 0 1px 0 rgb(255 255 255/.12),var(--shadow-lg)}
 .toast.bad{background:color-mix(in srgb,var(--bad) 92%,transparent)}
-.glass input,.glass select,.glass textarea{background:color-mix(in srgb,var(--surface) 72%,transparent);border-color:var(--glass-line);box-shadow:inset 0 1px 2px rgb(16 18 26/.06)}
-.glass input:hover,.glass select:hover{border-color:var(--line-2)}
-.glass input:focus,.glass select:focus,.glass textarea:focus{background:var(--surface);border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
-.glass .btn:not(.primary){background:color-mix(in srgb,var(--surface) 55%,transparent);border-color:var(--glass-line);box-shadow:var(--glass-hi)}
-.glass .btn:not(.primary):hover{background:var(--surface)}
-.glass .btn.primary{box-shadow:inset 0 1px 0 rgb(255 255 255/.28),0 6px 16px -6px color-mix(in srgb,var(--primary) 70%,transparent)}
+.glass input,.glass select,.glass textarea,.card input,.card select,.card textarea{background:color-mix(in srgb,var(--surface) 72%,transparent);border-color:var(--glass-line);box-shadow:inset 0 1px 2px rgb(16 18 26/.06)}
+.glass input:hover,.glass select:hover,.card input:hover,.card select:hover{border-color:var(--line-2)}
+.glass input:focus,.glass select:focus,.glass textarea:focus,.card input:focus,.card select:focus,.card textarea:focus{background:var(--surface);border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
+.glass .btn:not(.primary),.card .btn:not(.primary){background:color-mix(in srgb,var(--surface) 55%,transparent);border-color:var(--glass-line);box-shadow:var(--glass-hi)}
+.glass .btn:not(.primary):hover,.card .btn:not(.primary):hover{background:var(--surface)}
+.glass .btn.primary,.card .btn.primary{box-shadow:inset 0 1px 0 rgb(255 255 255/.28),0 6px 16px -6px color-mix(in srgb,var(--primary) 70%,transparent)}
+/* Glass everywhere (DESIGN.md: The Glass Control Room). Every section panel is glass;
+   dense data sits on calm, legible insets inside it. */
+.card{border-radius:20px}.kpi{border-radius:18px}
+.card th{background:var(--glass-strong);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+.card tbody tr:hover{background:color-mix(in srgb,var(--surface) 70%,transparent)}
+.card pre,.card .stats div{background:color-mix(in srgb,var(--surface-2) 72%,transparent)}
+a.kpi:hover{border-color:var(--glass-edge);box-shadow:var(--glass-hi),0 12px 28px -8px rgb(16 18 26/.18)}
+/* Page tabs: the Config & keys pill bar */
+.tabs{display:flex;gap:4px;padding:5px;margin:0 0 var(--s4);border:1px solid var(--glass-edge);border-radius:16px;box-shadow:var(--glass-hi),var(--glass-shadow);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs a{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:0;border-radius:11px;color:var(--ink-2);transition:background var(--t-fast) var(--ease),color var(--t-fast)}
+.tabs a:hover{background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--ink)}
+.tabs a.on,.tabs a[aria-current]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(16 18 26/.08),var(--glass-hi)}
+.tabs .count{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+/* Wide tables scroll inside their card; a soft fade says there's more to the side. */
+.tw{position:relative}
+.tw.more-right{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
+.tw.more-left.more-right{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent)}
+.tw.more-left:not(.more-right){-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px)}
+/* Long words, URLs and ids never push a layout wider than its column */
+main :where(dd,p,li,.meta,.help,.kv dd){overflow-wrap:anywhere}
+/* Table cells break a word only when it can't fit at all (numbers and short values never split) */
+main td{overflow-wrap:break-word}
+/* Browser surfaces in the palette */
+::selection{background:color-mix(in srgb,var(--brand) 32%,transparent);color:var(--ink)}
+input,textarea{caret-color:var(--brand)}
+*{scrollbar-color:color-mix(in srgb,var(--ink) 22%,transparent) transparent;scrollbar-width:thin}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--ink) 22%,transparent);border-radius:99px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-track{background:transparent}
 /* ---------------------------------------------------------------- config & keys */
 .cfg-ready{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s5) var(--s6);align-items:center;padding:var(--s5) var(--s6);border-radius:22px;margin-bottom:var(--s4)}
 .ring{--p:0;width:104px;height:104px;border-radius:50%;display:grid;place-items:center;position:relative;
@@ -249,13 +278,13 @@ dialog::backdrop{background:rgb(10 12 16/.32);-webkit-backdrop-filter:blur(6px) 
 @media (max-width:640px){.cfg-ready{grid-template-columns:1fr;justify-items:start;padding:var(--s4)}.ring{width:84px;height:84px}.ring b{font-size:21px}
   .cfg-group .card-h{padding:14px var(--s4) 0}.cfg-group .card-b{padding:12px var(--s4) var(--s4)}.cfg-group .cols{grid-template-columns:minmax(0,1fr)}.cfg-nav{border-radius:14px}}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  .glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--surface)}.toast{background:var(--ink)}.toast.bad{background:var(--bad)}}
+  .glass,.card,.kpi,.tabs,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav{background:var(--surface)}.card th{background:var(--surface)}.toast{background:var(--ink)}.toast.bad{background:var(--bad)}}
 @media (prefers-reduced-transparency:reduce),(prefers-contrast:more){
   body::before{display:none}
-  .glass,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.toast{-webkit-backdrop-filter:none;backdrop-filter:none}
-  .glass,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.ring::before{background:var(--surface)}.top{background:var(--bg)}
+  .glass,.card,.kpi,.tabs,.card th,.top,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.toast{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .glass,.card,.kpi,.tabs,.card th,.side,.mode-menu,.switch .menu,dialog,.cfg-nav,.ring::before{background:var(--surface)}.top{background:var(--bg)}
   .toast{background:var(--ink)}.toast.bad{background:var(--bad)}
-  .glass,.cfg-nav{border-color:var(--line-2)}.cfg-group .field,.checks li{background:var(--surface-2);border-color:var(--line)}}
+  .glass,.card,.kpi,.tabs,.cfg-nav{border-color:var(--line-2)}.tw{-webkit-mask-image:none!important;mask-image:none!important}.cfg-group .field,.checks li{background:var(--surface-2);border-color:var(--line)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.side,.top,.toasts{display:none}.app{display:block}}
 `;

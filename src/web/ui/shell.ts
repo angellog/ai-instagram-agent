@@ -100,6 +100,10 @@ const APP_JS = String.raw`
   var tb=d.getElementById("theme");if(tb){tb.onclick=function(){var cur=root.dataset.theme||"system";var next=cur==="system"?"light":cur==="light"?"dark":"system";
     if(next==="system"){delete root.dataset.theme;try{localStorage.removeItem("aia-theme")}catch(e){}}else{root.dataset.theme=next;try{localStorage.setItem("aia-theme",next)}catch(e){}}
     tb.setAttribute("aria-label","Theme: "+next);toast("Theme: "+next)}}
+  // Wide tables: fade the edge that has more columns hidden behind it.
+  function edges(t){var l=t.scrollLeft>2,r=t.scrollLeft+t.clientWidth<t.scrollWidth-2;t.classList.toggle("more-left",l);t.classList.toggle("more-right",r)}
+  d.querySelectorAll(".tw").forEach(function(t){edges(t);t.addEventListener("scroll",function(){edges(t)},{passive:true})});
+  addEventListener("resize",function(){d.querySelectorAll(".tw").forEach(edges)});
   // mobile nav
   var mb=d.getElementById("menu");if(mb){mb.onclick=function(){d.body.classList.toggle("nav-open");mb.setAttribute("aria-expanded",d.body.classList.contains("nav-open"))}}
   var sc=d.querySelector(".scrim");if(sc){sc.onclick=function(){d.body.classList.remove("nav-open")}}

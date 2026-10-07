@@ -268,7 +268,7 @@
     "northStar": "The Glass Control Room",
     "overview": "**Creative North Star: \"The Glass Control Room\"**\n\nInfluencer OS is a control room for one operator running several AI creators. The room is calm and legible: the working surfaces (tables, cards, forms, previews) are solid, and only the controls that float above them are glass. That means the top bar, sidebar, menus, dialogs, toasts and the Config & keys panels. Behind the glass is a faint orange-and-blue light field, like screens glowing in a dim room. It gives the glass something to refract without ever competing with the content.\n\nDensity is moderate and task-first. The same pages must work in a few thumb taps on a phone on the shop floor and in long laptop set-up sessions. FeetBit orange is a signal, not a paint: it marks the one primary action, the active place in the nav, progress and counts. Everything else is ink on quiet neutrals. Light and dark themes are designed together and carry equal weight.\n\nThe feel is precise and quiet. It uses soft corners, hairline borders, one clear primary action per page, and short motion that confirms state rather than decorates.",
     "keyCharacteristics": [
-      "Solid working surfaces; glass reserved for floating chrome and Config panels.",
+      "Glass section panels everywhere; dense data (inputs, previews, code, stat cells) on solid insets.",
       "Orange used as a rare signal (10% or less of any screen).",
       "Status always carries words or an icon as well as colour.",
       "Light and dark designed as a pair; tabular figures everywhere.",
@@ -296,8 +296,8 @@
         "section": "typography"
       },
       {
-        "name": "The Floating Glass Rule",
-        "body": "Glass is for surfaces that float over content (top bar, sidebar, menus, dialogs, toasts, sticky section bars) and for Config & keys panels. Tables, lists, previews and ordinary cards stay solid. If it doesn't float, it isn't glass.",
+        "name": "The Glass Panel Rule",
+        "body": "Every section panel is glass: cards, KPI tiles, tab bars, and the floating chrome (top bar, sidebar, menus, dialogs, toasts, sticky section bars). What you read or type into closely sits on a solid inset inside the glass: inputs, previews, code blocks, stat cells. Wide tables scroll inside their panel and fade at the edge that has more, so the page itself never scrolls sideways.",
         "section": "elevation"
       },
       {
@@ -309,7 +309,7 @@
     "dos": [
       "Do keep orange to one primary action per page plus navigation, progress and badges (the Rare Signal Rule).",
       "Do pair every status colour with a word or icon, and keep body text at 4.5:1 or better in both themes.",
-      "Do use glass only for floating chrome and Config panels, and give every glass surface its solid fallback.",
+      "Do make every section panel glass with dense data on solid insets, and give every glass surface its solid fallback.",
       "Do design light and dark together, and check both before shipping.",
       "Do make the daily jobs (approve, edit, see what broke) work one-handed at 375px, with 38–40px targets.",
       "Do use Fira Code for anything copyable: keys, IDs, masked secrets, YAML."

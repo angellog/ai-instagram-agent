@@ -9,7 +9,7 @@ web
 ## Users
 
 - **Primary: the operator (Angelo), running AI influencers for FeetBit today.** He sets influencers up, approves or edits what they post, watches replies, costs and failures, and switches operating modes.
-- **Next: the same operator running influencers for client brands through Salesgen** (for example See-Me Cosmetics and AG Gadgets). The operator or his team runs the console for them; clients do not log in themselves. A self-serve, multi-tenant product is not planned.
+- **Next: the same operator running influencers for client brands through Salesgen** (for example See-Me Cosmetics and AG Gadgets). The operator onboards each influencer; a client business can be invited as a tenant user that signs in and sees only its own influencer's dashboard (no other influencers, no platform settings, no spend controls). There are no subscriptions or billing.
 
 ## Product Purpose
 
@@ -32,7 +32,7 @@ A single operator can run a roster of distinct AI creators for real local busine
 ## Capabilities and Constraints
 
 - Server-rendered HTML (Fastify + TypeScript) with small progressive-enhancement scripts; no front-end build step. The design system lives in `src/web/ui/{styles,shell,kit,icons}.ts` and is described in `docs/design/HANDOFF.md`.
-- One login (`ADMIN_TOKEN`) for the whole console. Every influencer-scoped page runs inside the influencer picked in the sidebar switcher.
+- Admin sign-in (an admin user, or `ADMIN_TOKEN`) sees everything and picks the influencer in the sidebar switcher. Tenant users (invited on Team & access, email + password) are pinned to one influencer and can't reach platform pages.
 - Posts and Stories can be edited before approval: caption, slide order, cover, slide removal, story text, delete.
 - Posts carry each platform's AI-content flag (`is_ai_generated` on Instagram, `is_aigc` on TikTok).
 - Instagram and TikTok tokens can die. The console marks the account disconnected, holds its posts, and returns them to Reviews after a reconnect.

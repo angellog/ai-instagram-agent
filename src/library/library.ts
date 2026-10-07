@@ -213,6 +213,13 @@ export async function planLibraryPost(itemId: string, o: { caption?: string; has
     if (facts.unverified.length) caption = `${caption}\n\n(check: ${facts.unverified.join(", ")} not in the notes)`;
   }
   const finalCaption = mediaType === "STORY" ? "" : fitCaption(caption, hashtags, p);
+  // A reel gets a cover frame (Instagram's cover_url, and the thumbnail across the console).
+  let cover: { url: string; bytes: number } | undefined;
+  if (mediaType === "REEL") {
+    const frame = (await toFeedJpeg(await frameAt(await download(item.files[0].url, 250 * 1024 * 1024, "video/"), 1), "story")).jpeg;
+    const hosted = await hostImage(frame, `${mediaPrefix(influencerId())}/library/${item.id}/cover-${sha256(frame).slice(0, 10)}.jpg`);
+    cover = { url: hosted.url, bytes: frame.length };
+  }
 
   const postId = await tx(async (client) => {
     const idea = await client.query<{ id: number }>(
@@ -236,6 +243,13 @@ export async function planLibraryPost(itemId: string, o: { caption?: string; has
         `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc, media_kind, duration_s)
          VALUES ($1, $2, $3, 'business upload', $4, $5, $5, 'library', $6, $7, '', $8, $9, $10)`,
         [post.rows[0].id, i, i ? "slide" : "cover", JSON.stringify({ kind: "none", alt_text: alt }), f.url, f.width, f.height, JSON.stringify({ bytes: f.bytes }), f.mime.startsWith("video/") ? "video" : "image", f.duration_s ?? null],
+      );
+    }
+    if (cover) {
+      await client.query(
+        `INSERT INTO post_assets (post_id, position, role, prompt, overlay, generated_url, public_url, storage_provider, width, height, sha256, qc, media_kind)
+         VALUES ($1, $2, 'slide', 'reel cover (first second)', $3, $4, $4, 'library', 1080, 1920, '', $5, 'image')`,
+        [post.rows[0].id, item.files.length, JSON.stringify({ kind: "none", alt_text: alt }), cover.url, JSON.stringify({ bytes: cover.bytes })],
       );
     }
     await client.query("UPDATE library_items SET status = 'planned', post_id = $2, last_error = NULL, updated_at = now() WHERE id = $1", [item.id, post.rows[0].id]);

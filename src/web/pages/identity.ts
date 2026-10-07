@@ -32,6 +32,30 @@ const CONTROL_GROUPS: Array<[string, string, Array<keyof Controls>]> = [
   ["Creativity guards", "", ["repetition_threshold", "max_concept_attempts"]],
 ];
 
+/** Human labels for control keys ("max_dms_per_hour" → "Max DMs per hour"). */
+const LABEL_OVERRIDES: Partial<Record<string, string>> = {
+  llm_brain: "AI brain",
+  require_review_for_yellow: "Review yellow (sensitive) items",
+  daily_llm_budget_usd: "Daily AI budget (USD)",
+  daily_image_budget_usd: "Daily image budget (USD)",
+  daily_budget_usd: "Daily budget (USD)",
+  monthly_budget_usd: "Monthly budget (USD)",
+  daily_x_api_budget_usd: "Daily X API budget (USD)",
+  x_daily_read_cap: "X reads per day",
+  x_enabled: "X (Twitter)",
+  tiktok_enabled: "TikTok",
+  tiktok_default_privacy: "TikTok default audience",
+  tiktok_allow_comments: "TikTok comments",
+  max_dms_per_hour: "Max DMs per hour",
+  optional_reply_rate: "Optional reply rate (0-1)",
+  repetition_threshold: "Repetition threshold (0-1)",
+  max_reel_seconds: "Max reel length (seconds)",
+};
+export function controlLabel(k: string): string {
+  const l = LABEL_OVERRIDES[k] ?? k.replace(/_/g, " ");
+  return l.charAt(0).toUpperCase() + l.slice(1);
+}
+
 const PRIVACY_LABEL: Record<string, string> = { PUBLIC_TO_EVERYONE: "Everyone", FOLLOWER_OF_CREATOR: "Followers", MUTUAL_FOLLOW_FRIENDS: "Friends", SELF_ONLY: "Only me" };
 
 /** The TikTok account card on the Persona page: status, what it can do, and the buttons to connect or check it. */
@@ -257,7 +281,7 @@ ${card(
     const body = `${header("Controls", { sub: `Operating rules for ${esc(currentInfluencer().name)}. Changes apply within seconds; no deploy.` })}
 <form method="post" action="/admin/controls">
 ${CONTROL_GROUPS.map(([title, sub, keys]) =>
-  card(`${sub ? `<p class="meta" style="margin-top:0">${esc(sub)}</p>` : ""}<div class="cols">${keys.map((k) => field(k.replace(/_/g, " "), control(k), { help: HELP[k] })).join("")}</div>`, { title, id: keys.includes("llm_brain") ? "brain" : undefined }),
+  card(`${sub ? `<p class="meta" style="margin-top:0">${esc(sub)}</p>` : ""}<div class="cols">${keys.map((k) => field(controlLabel(k), control(k), { help: HELP[k] })).join("")}</div>`, { title, id: keys.includes("llm_brain") ? "brain" : undefined }),
 ).join("")}
 <div class="row">${button("Save controls", { variant: "primary", icon: "check" })}${link("Platform budgets", "/admin/costs#platform", { variant: "ghost" })}</div>
 </form>`;
@@ -278,7 +302,7 @@ ${CONTROL_GROUPS.map(([title, sub, keys]) =>
         if (typeof cur === "boolean") v = text === "true";
         else if (typeof cur === "number") {
           v = Number(text);
-          if (!Number.isFinite(v as number)) throw new Error(`${k.replace(/_/g, " ")} must be a number`);
+          if (!Number.isFinite(v as number)) throw new Error(`${controlLabel(k)} must be a number`);
         }
         // Only what changed becomes this influencer's own value; the rest keeps inheriting platform defaults.
         if (v !== cur) patch[k] = v;

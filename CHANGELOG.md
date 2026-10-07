@@ -3,6 +3,19 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.29: Liquid glass everywhere, real-life timelines, short-form and engagement (in progress, not deployed)
+
+**1. Liquid glass across the whole console** (the Config & keys look, everywhere)
+- Every section panel is glass now: cards, KPI tiles and tab bars (tabs are a glass pill bar with a solid chip for the current one). Table headers sit on stronger glass; inputs, previews, code and stat cells stay solid insets so dense data reads cleanly. DESIGN.md's rule is now "The Glass Panel Rule".
+- No sideways page scroll at phone or desktop width on any page. Wide tables scroll inside their panel and fade at whichever edge has more to see.
+- Long words, links and ids wrap inside panels; numbers in tables no longer break mid-figure.
+- Reels: the post page shows the playable reel with its cover, sized so both fit on a phone. Thumbnails on Overview, Posts and Stories use the cover image, never a broken video frame. Library reels get a cover frame taken from the first second.
+- Controls use plain labels ("AI brain", not `llm_brain`), and fields line up across a row.
+- Themed text selection, caret and scrollbars in both themes. Section kickers are plain sentence case. The Create progress bar animates smoothly (no layout thrash) and the step tick no longer overshoots; quotes are a tinted inset instead of a side stripe.
+- Every glass surface keeps its solid fallback (no backdrop-filter support, reduced transparency, more contrast).
+
+**Fix: fact check reads units.** A number now has to match its unit: "2 hours" in the delivery facts no longer lets "only 2 pairs left" through. A follower's own numbers and bare numbers work as before.
+
 ## v1.0.28: Tenant set-up and the Interview
 
 **Each influencer stands alone** (tenant set-up, no billing)

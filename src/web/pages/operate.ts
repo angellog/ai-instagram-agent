@@ -90,6 +90,16 @@ export async function rerunInteraction(id: number): Promise<string> {
   return "Re-run queued; refresh in a few seconds";
 }
 
+/** A reel on the post page: the video itself (cover as poster), its length, and the cover on its own. */
+function reelView(assets: Array<{ public_url: string | null; media_kind: "image" | "video"; duration_s: string | null; overlay: { alt_text?: string } | null }>): string {
+  const video = assets.find((a) => a.media_kind === "video" && a.public_url);
+  const cover = assets.find((a) => a.media_kind === "image" && a.public_url);
+  if (!video) return `<span class="muted">Not made yet</span>`;
+  return `<div class="slides story"><figure><video src="${esc(video.public_url!)}"${cover ? ` poster="${esc(cover.public_url!)}"` : ""} controls playsinline preload="metadata" aria-label="${esc(video.overlay?.alt_text ?? "Reel")}"></video><figcaption><span>9:16 reel${video.duration_s ? ` · ${Math.round(Number(video.duration_s))}s` : ""}</span></figcaption></figure>${
+    cover ? `<figure><img src="${esc(cover.public_url!)}" alt="Reel cover"><figcaption><span class="slide-cover">${icon("star", 12)}Cover</span></figcaption></figure>` : ""
+  }</div>`;
+}
+
 function localTime(tz: string): string {
   try {
     return new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit" }).format(new Date());
@@ -114,7 +124,7 @@ export function registerOperate(app: FastifyInstance): void {
       one<{ n: number }>("SELECT count(*)::int AS n FROM safety_reviews WHERE status = 'pending' AND influencer_id = $1", [id]),
       many<{ id: string; status: string; caption: string; created_at: Date; cover: string | null; topic: string | null }>(
         `SELECT p.id, p.status, p.caption, p.created_at, ci.topic,
-           (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover
+           (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY (pa.media_kind = 'video'), position LIMIT 1) AS cover
          FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' ORDER BY p.created_at DESC LIMIT 6`,
         [id],
       ),
@@ -274,7 +284,7 @@ ${cards.join("") || card(empty("Nothing waiting", "The agent is handling things 
     const rows = await many<{ id: string; status: string; media_type: string; platform: string; caption: string; created_at: Date; published_at: Date | null; scheduled_for: Date | null; score: number | null; cover: string | null; topic: string | null; slides: number }>(
       `SELECT p.id, p.status, p.media_type, p.platform, p.caption, p.created_at, p.published_at, p.scheduled_for, ci.topic,
          (SELECT score FROM engagement_metrics em WHERE em.post_id = p.id ORDER BY collected_at DESC LIMIT 1) AS score,
-         (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY position LIMIT 1) AS cover,
+         (SELECT public_url FROM post_assets pa WHERE pa.post_id = p.id ORDER BY (pa.media_kind = 'video'), position LIMIT 1) AS cover,
          (SELECT count(*)::int FROM post_assets pa WHERE pa.post_id = p.id) AS slides
        FROM posts p LEFT JOIN content_ideas ci ON ci.id = p.content_idea_id
        WHERE p.influencer_id = $1 AND p.media_type <> 'STORY' AND ($2 IN ('all', 'tiktok') OR p.status = $2 OR ($2 = 'attention' AND p.status IN ('awaiting_review','qc_failed','failed','dry_run')))
@@ -356,7 +366,7 @@ ${card(
     );
     if (!p) return reply.code(404).send("not found");
     const [assets, decisions, metrics, attempts, costs] = await Promise.all([
-      many<{ position: number; public_url: string | null; prompt: string | null; overlay: any }>("SELECT position, public_url, prompt, overlay FROM post_assets WHERE post_id = $1 ORDER BY position", [id]),
+      many<{ position: number; public_url: string | null; prompt: string | null; overlay: any; media_kind: "image" | "video"; duration_s: string | null }>("SELECT position, public_url, prompt, overlay, media_kind, duration_s FROM post_assets WHERE post_id = $1 ORDER BY position", [id]),
       many<{ agent: string; action: string; reason: string | null; safety_level: string | null; created_at: Date }>(
         "SELECT agent, action, reason, safety_level, created_at FROM agent_decisions WHERE subject_type = 'post' AND subject_id = $1 ORDER BY id",
         [id],
@@ -454,7 +464,9 @@ ${card(
     })}
 ${p.last_error ? `<div class="callout bad">${icon("alert")}<p>${esc(p.last_error)}</p></div>` : ""}
 ${publishBar}
-${card(
+${p.media_type === "REEL"
+  ? card(reelView(assets), { title: "Reel" })
+  : card(
   `<div class="slides${isStory || isTikTok ? " story" : ""}">${
     assets
       .map((a) =>
