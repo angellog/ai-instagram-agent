@@ -40,9 +40,9 @@ describe("fact check", () => {
   });
 
   it("accepts the WhatsApp number in local or international format", () => {
-    expect(missingDetails("WhatsApp 0789 652 909 or DM @feetbitstores", [order])).toEqual([]);
-    expect(missingDetails("WhatsApp +256789652909 or DM @feetbitstores", [order])).toEqual([]);
-    expect(missingDetails("just DM @feetbitstores", [order])).toEqual(["+256 789 652 909"]);
+    expect(missingDetails("WhatsApp 0789 652 909 or DM @feetbit.sneakers", [order])).toEqual([]);
+    expect(missingDetails("WhatsApp +256789652909 or DM @feetbit.sneakers", [order])).toEqual([]);
+    expect(missingDetails("just DM @feetbit.sneakers", [order])).toEqual(["+256 789 652 909"]);
   });
 
   it("catches numbers the knowledge doesn't give", () => {

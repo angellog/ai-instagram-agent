@@ -38,7 +38,7 @@ function bank(p: Persona): Record<string, Ask> {
     business_location: () =>
       brand ? { topic: "business_location", question: `Where exactly is ${brand}? Building or mall, floor, shop number, area and city.`, why: `${n} is asked "where's the shop?" and can only answer with the real address.`, placeholder: "e.g. Pioneer Mall, Level 5, Shop PH-100, Kampala" } : undefined,
     business_order: () =>
-      brand ? { topic: "business_order", question: `How do customers order or get in touch with ${brand}? WhatsApp number, Instagram handle, delivery or pick-up.`, why: "Replies to \"how do I order?\" quote this exactly.", placeholder: "e.g. WhatsApp 0789 652 909, DM @feetbitstores, delivery within Kampala" } : undefined,
+      brand ? { topic: "business_order", question: `How do customers order or get in touch with ${brand}? WhatsApp number, Instagram handle, delivery or pick-up.`, why: "Replies to \"how do I order?\" quote this exactly.", placeholder: "e.g. WhatsApp 0789 652 909, DM @feetbit.sneakers, delivery within Kampala" } : undefined,
     business_hours: () => (brand ? { topic: "business_hours", question: `What are ${brand}'s opening days and hours?`, why: "People ask before visiting.", placeholder: "e.g. Mon-Sat 9am-8pm, Sun 12-6pm" } : undefined),
     business_products: () =>
       brand ? { topic: "business_products", question: `What does ${brand} sell most right now, and is there anything ${n} should always mention or never promise?`, why: `Keeps ${n}'s product talk true.`, placeholder: "Best sellers, new arrivals, rules (e.g. never promise sizes)" } : undefined,

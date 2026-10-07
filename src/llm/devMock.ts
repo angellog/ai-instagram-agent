@@ -49,7 +49,7 @@ export function createDevMockProvider(): MockProvider {
           action: "escalate",
           channel: "private",
           reply_value: "required",
-          response: "Good question! The FeetBit team handles sizes and prices, message them on WhatsApp +256 789 652 909 or DM @feetbitstores.",
+          response: "Good question! The FeetBit team handles sizes and prices, message them on WhatsApp +256 789 652 909 or DM @feetbit.sneakers.",
           used_memory_ids: [],
           used_knowledge_ids: kn,
           workflow: "none",

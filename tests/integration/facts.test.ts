@@ -85,7 +85,7 @@ describe("replies that state business facts", () => {
       .on("conversation.classify", () => ({ ...classify(), intent: "order_intent" }))
       .on("conversation.decide", () => ({
         ...decide("")(), used_knowledge_ids: ["feetbit-order"],
-        response: "The team sorts orders on WhatsApp 0789 652 909, or DM @feetbitstores 🙌",
+        response: "The team sorts orders on WhatsApp 0789 652 909, or DM @feetbit.sneakers 🙌",
       }));
     setLLM(new LLM(mock));
     const id = await ingest(commentPayload({ commentId: "loc4", text: "what's the whatsapp number to order?" }));

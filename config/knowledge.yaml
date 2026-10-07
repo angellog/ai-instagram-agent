@@ -13,11 +13,14 @@ entries:
     must_include: ["Pioneer Mall", "Level 5", "Shop PH-100", "Kampala"]
 
   - id: feetbit-order
-    keywords: [order, price, cost, how much, size, sizes, available, stock, restock, delivery, deliver, whatsapp, contact, number, call]
+    keywords: [order, buy, price, cost, how much, size, sizes, available, stock, restock, delivery, deliver, whatsapp, contact, number, call, pay, payment, cash on delivery, mobile money, upcountry]
     content: >
-      Orders, prices, sizes and stock are handled by the FeetBit team, not by Zuri.
-      Point people to WhatsApp +256 789 652 909 or a DM to @feetbitstores.
-    must_include: ["+256 789 652 909", "@feetbitstores"]
+      To order: WhatsApp +256 789 652 909 or DM @feetbit.sneakers. In Kampala it is
+      cash on delivery: once the price, size, phone number and location are agreed, a
+      rider brings it, usually within 40 minutes to 2 hours. Upcountry orders (sent by
+      bus) and international orders are paid in full before the pair leaves Kampala.
+      Prices, sizes and stock are confirmed by the FeetBit team per order.
+    must_include: ["+256 789 652 909", "@feetbit.sneakers"]
 
   - id: ai-creator
     keywords: [ai, real, human, bot, fake, robot, generated, person]
