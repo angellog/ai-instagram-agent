@@ -180,3 +180,38 @@ describe("the X page", () => {
     expect(fx.calls.every((c) => c.method === "GET")).toBe(true);
   });
 });
+
+describe("a rejected token", () => {
+  it("pauses X work once, stays silent, and resumes by itself when a new token is saved", async () => {
+    await connect();
+    fx.revoked = true;
+    expect(await poll()).toEqual({ skipped: expect.stringMatching(/^X rejected the bearer token/) });
+    const after = await one<{ auth_failed_token: string; auth_error: string }>("SELECT auth_failed_token, auth_error FROM x_accounts");
+    expect(after!.auth_failed_token).toMatch(/^[0-9a-f]{16}$/);
+    expect(after!.auth_failed_token).not.toContain("bearer-test");
+    expect(after!.auth_error).toMatch(/Unauthorized/);
+
+    // Same token: no more calls to X, no new events.
+    fx.calls = [];
+    expect(await poll()).toEqual({ skipped: expect.stringMatching(/^X rejected/) });
+    expect(await withInfluencer(1, collectXMetrics)).toEqual({ skipped: expect.stringMatching(/^X rejected/) });
+    expect(fx.calls).toHaveLength(0);
+    expect((await many("SELECT 1 FROM system_events WHERE source = 'x' AND message LIKE 'X rejected%'")).length).toBe(1);
+    expect((await get("/admin/x")).body).toContain("Paused: X rejected the token");
+
+    // A different token: polling resumes and the warning clears.
+    fx.revoked = false;
+    fx.mentions = [mention("1600000000000000001")];
+    await setSetting("X_BEARER_TOKEN", "bearer-new");
+    expect(await poll()).toMatchObject({ inserted: 1 });
+    expect((await one<{ auth_failed_token: string | null }>("SELECT auth_failed_token FROM x_accounts"))!.auth_failed_token).toBeNull();
+    expect((await get("/admin/x")).body).not.toContain("Paused: X rejected the token");
+  });
+
+  it("is caught by the daily metrics run too", async () => {
+    await connect();
+    fx.revoked = true;
+    expect(await withInfluencer(1, collectXMetrics)).toEqual({ skipped: expect.stringMatching(/^X rejected/) });
+    expect((await one<{ auth_error: string }>("SELECT auth_error FROM x_accounts"))!.auth_error).toMatch(/Unauthorized/);
+  });
+});

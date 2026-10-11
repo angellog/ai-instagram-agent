@@ -2,7 +2,8 @@ import { getControls } from "../config/controls.js";
 import { influencerId } from "../context.js";
 import { many, one } from "../db/pool.js";
 import { errorMessage, PermanentError } from "../lib/errors.js";
-import { assertXRead, primaryX, recordXRead, updateXStats, xBlocker, xClient } from "./accounts.js";
+import { assertXRead, clearXAuthFailure, markXAuthFailed, primaryX, recordXRead, updateXStats, X_TOKEN_REJECTED, xBlocker, xClient } from "./accounts.js";
+import { XAuthError } from "./client.js";
 
 /** Posts are measured daily for this many days after they go out; most engagement lands in the first week. */
 export const METRICS_WINDOW_DAYS = 7;
@@ -14,7 +15,7 @@ export async function collectXMetrics(): Promise<MetricsResult> {
   const acct = await primaryX();
   if (!acct) return { skipped: "No X account connected" };
   const c = await getControls();
-  const blocker = await xBlocker(c);
+  const blocker = await xBlocker(c, acct);
   if (blocker) return { skipped: blocker };
   try {
     await assertXRead(c, 2);
@@ -23,7 +24,15 @@ export async function collectXMetrics(): Promise<MetricsResult> {
     throw e;
   }
   const client = await xClient();
-  const user = await client.user(acct.x_user_id);
+  let user;
+  try {
+    user = await client.user(acct.x_user_id);
+  } catch (e) {
+    if (!(e instanceof XAuthError)) throw e;
+    await markXAuthFailed(acct, e);
+    return { skipped: X_TOKEN_REJECTED };
+  }
+  await clearXAuthFailure(acct.id);
   await recordXRead("x.read.user", { users: 1 }, String(acct.id));
   await updateXStats(acct.id, user);
 

@@ -3,6 +3,11 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.30: X stops retrying a rejected token
+
+- When X refuses the bearer token (401/403), mentions and metrics pause and the X page says so once, with what X answered, instead of failing every 15 minutes. One alert goes to Telegram.
+- The rejected token is remembered only as a 16-character fingerprint (never stored). Saving a different token under Config & keys → X resumes polling on its own and clears the warning.
+
 ## v1.0.29: Liquid glass everywhere, real-life timelines, short-form and engagement (not deployed yet)
 
 **1. Liquid glass across the whole console** (the Config & keys look, everywhere)

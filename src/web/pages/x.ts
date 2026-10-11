@@ -4,7 +4,7 @@ import { setting } from "../../config/settings.js";
 import { influencerId } from "../../context.js";
 import { spendSummary } from "../../cost/ledger.js";
 import { many, one } from "../../db/pool.js";
-import { connectX, disconnectX, primaryX, xReadsToday } from "../../x/accounts.js";
+import { connectX, disconnectX, primaryX, tokenFingerprint, X_TOKEN_REJECTED, xReadsToday } from "../../x/accounts.js";
 import { collectXMetrics, latestPostMetrics } from "../../x/metrics.js";
 import { pollMentions } from "../../x/poll.js";
 import { attempt, consoleRouter, render, type Req } from "../console.js";
@@ -53,6 +53,9 @@ ${card(steps, { title: hasToken ? "Connect an account" : "Step 1 of 2" })}`;
       sub: `Watching <a href="https://x.com/${esc(acct.username)}" target="_blank" rel="noopener">@${esc(acct.username)}</a>. Read-only: mentions every 15 minutes, post metrics daily. Replies come in phase 2.`,
       actions: `${action("/admin/x/poll", "Check mentions now", { icon: "refresh", variant: "primary" })}${action("/admin/x/metrics", "Collect metrics", { icon: "activity", variant: "ghost" })}`,
     })}
+${acct.auth_failed_token && hasToken && acct.auth_failed_token === tokenFingerprint(hasToken)
+  ? card(empty("Paused: X rejected the token", `${esc(X_TOKEN_REJECTED)}. Polling resumes on its own as soon as a different token is saved.${acct.auth_error ? `<div class="meta">X said: ${esc(acct.auth_error)}</div>` : ""}`, link("Open Config & keys", "/admin/config#x", { variant: "primary" })), { title: "Action needed" })
+  : ""}
 <div class="kpis">
 ${kpi("Followers", n(acct.stats.followers), { icon: "users" })}
 ${kpi("New mentions", n(counts?.unseen), { hint: `${n(counts?.week)} in the last 7 days`, icon: "message", tone: counts?.unseen ? "info" : undefined })}

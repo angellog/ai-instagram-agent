@@ -3,8 +3,8 @@ import { influencerId } from "../context.js";
 import { one } from "../db/pool.js";
 import { errorMessage, PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
-import { assertXRead, primaryX, recordXRead, xBlocker, xClient } from "./accounts.js";
-import type { XPost, XUser } from "./client.js";
+import { assertXRead, clearXAuthFailure, markXAuthFailed, primaryX, recordXRead, X_TOKEN_REJECTED, xBlocker, xClient } from "./accounts.js";
+import { XAuthError, type XPost, type XUser } from "./client.js";
 
 /** Mentions per page, and how many pages one poll may read. The first poll only backfills one page. */
 export const MENTION_PAGE_SIZE = 20;
@@ -21,7 +21,7 @@ export async function pollMentions(): Promise<PollResult> {
   const acct = await primaryX();
   if (!acct) return { skipped: "No X account connected" };
   const c = await getControls();
-  const blocker = await xBlocker(c);
+  const blocker = await xBlocker(c, acct);
   if (blocker) return skip(acct.id, blocker);
   // Caps reached: skip quietly (and say so on the X page) instead of failing every 15 minutes.
   try {
@@ -41,7 +41,14 @@ export async function pollMentions(): Promise<PollResult> {
   let pages = 0;
   do {
     await assertXRead(c, 1);
-    const page = await client.mentions(acct.x_user_id, { sinceId: since, maxResults: MENTION_PAGE_SIZE, paginationToken: token });
+    let page;
+    try {
+      page = await client.mentions(acct.x_user_id, { sinceId: since, maxResults: MENTION_PAGE_SIZE, paginationToken: token });
+    } catch (e) {
+      if (!(e instanceof XAuthError)) throw e;
+      await markXAuthFailed(acct, e);
+      return { skipped: X_TOKEN_REJECTED };
+    }
     pages++;
     await recordXRead("x.read.mentions", { posts: page.data.length, users: page.users.length }, String(acct.id));
     newest ??= page.newestId;
@@ -54,6 +61,7 @@ export async function pollMentions(): Promise<PollResult> {
     token = page.nextToken;
   } while (token && pages < maxPages);
 
+  await clearXAuthFailure(acct.id);
   const truncated = Boolean(token);
   const note = `${inserted} new mention${inserted === 1 ? "" : "s"}${truncated && since ? " (older ones skipped)" : ""}`;
   await one("UPDATE x_accounts SET mentions_since_id = coalesce($2, mentions_since_id), last_polled_at = now(), last_poll_note = $3, updated_at = now() WHERE id = $1", [acct.id, newest ?? null, note]);

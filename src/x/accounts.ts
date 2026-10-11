@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Controls } from "../config/controls.js";
 import { setting } from "../config/settings.js";
 import { influencerId } from "../context.js";
@@ -6,7 +7,7 @@ import { many, one, tx } from "../db/pool.js";
 import type { FetchLike } from "../lib/async.js";
 import { PermanentError } from "../lib/errors.js";
 import { recordEvent } from "../lib/events.js";
-import { readCostUsd, X_API, XClient, type XUser } from "./client.js";
+import { readCostUsd, X_API, XAuthError, XClient, type XUser } from "./client.js";
 
 export interface XAccount {
   id: number;
@@ -19,6 +20,8 @@ export interface XAccount {
   mentions_since_id: string | null;
   last_polled_at: Date | null;
   last_poll_note: string | null;
+  auth_failed_token: string | null;
+  auth_error: string | null;
   created_at: Date;
 }
 
@@ -40,12 +43,43 @@ export async function primaryX(id = influencerId()): Promise<XAccount | undefine
   return one<XAccount>("SELECT * FROM x_accounts WHERE influencer_id = $1 AND is_primary", [id]);
 }
 
+/** A short fingerprint of a token, so a rejected token can be recognised without storing it. */
+export function tokenFingerprint(token: string): string {
+  return createHash("sha256").update(token).digest("hex").slice(0, 16);
+}
+
+export const X_TOKEN_REJECTED = "X rejected the bearer token. Generate it once on console.x.com (Keys and tokens → Bearer Token), paste it under Config & keys → X (Twitter), and don't regenerate it afterwards";
+
 /** Why X work can't run right now, or undefined when it can. Checked before any API call. */
-export async function xBlocker(c: Controls): Promise<string | undefined> {
+export async function xBlocker(c: Controls, acct?: Pick<XAccount, "auth_failed_token">): Promise<string | undefined> {
   if (c.paused) return "Paused";
   if (!c.x_enabled) return "X is switched off in Controls";
-  if (!(await setting("X_BEARER_TOKEN"))) return "No X bearer token: add it under Config & keys → X (Twitter)";
+  const bearer = await setting("X_BEARER_TOKEN");
+  if (!bearer) return "No X bearer token: add it under Config & keys → X (Twitter)";
+  // Same token X already refused: wait for a new one rather than retrying every 15 minutes.
+  if (acct?.auth_failed_token && acct.auth_failed_token === tokenFingerprint(bearer)) return X_TOKEN_REJECTED;
   return undefined;
+}
+
+/**
+ * X refused the current token. Remember it (by fingerprint) and alert once;
+ * work resumes by itself as soon as a different token is saved.
+ */
+export async function markXAuthFailed(acct: XAccount, e: XAuthError): Promise<void> {
+  const fp = tokenFingerprint((await setting("X_BEARER_TOKEN")) ?? "");
+  const r = await one<{ id: number }>(
+    "UPDATE x_accounts SET auth_failed_token = $2, auth_error = $3, last_poll_note = $4, updated_at = now() WHERE id = $1 AND auth_failed_token IS DISTINCT FROM $2 RETURNING id",
+    [acct.id, fp, e.message, `Skipped: ${X_TOKEN_REJECTED}`],
+  );
+  if (!r) return;
+  await recordEvent("warn", "x", `X rejected the bearer token for @${acct.username}; X work paused until a new token is saved`, { influencerId: influencerId(), error: e.message });
+  const { notify } = await import("../notify/telegram.js");
+  await notify(`🔌 X rejected the bearer token for @${acct.username}\nMentions and metrics are paused until you paste a fresh token in Config & keys → X (Twitter).`, "/admin/x").catch(() => undefined);
+}
+
+/** A read worked: forget any earlier rejection. */
+export async function clearXAuthFailure(accountId: number): Promise<void> {
+  await one("UPDATE x_accounts SET auth_failed_token = NULL, auth_error = NULL WHERE id = $1 AND auth_failed_token IS NOT NULL", [accountId]);
 }
 
 /** Items (posts + accounts) read from X today, across all influencers: the count cap. */
