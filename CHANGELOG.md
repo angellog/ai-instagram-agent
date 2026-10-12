@@ -3,6 +3,14 @@
 All notable changes. Versions are git tags; the running version is shown in the
 console footer, `/health` and `/api/status`.
 
+## v1.0.31: X moves out to its own worker
+
+X (Twitter) belongs to FeetBit's brand account, not to a persona, so it now runs in the standalone `feetbit-x-worker` (repo angellog/feetbit-x-worker, Railway project feetbit-postiz), which logs in as the account owner.
+
+- Removed the X module, the X (Twitter) page, its controls and its Config & keys entry.
+- Migration 018 drops the agent's X tables (they never held data: its bearer token was always refused) and deletes the stored X token.
+- Boot removes the old `x-poll` and `x-metrics` schedulers from Redis so nothing keeps firing.
+
 ## v1.0.30: X stops retrying a rejected token
 
 - When X refuses the bearer token (401/403), mentions and metrics pause and the X page says so once, with what X answered, instead of failing every 15 minutes. One alert goes to Telegram.

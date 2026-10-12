@@ -47,8 +47,6 @@ export const ADMIN_CONTROLS: ControlKey[] = [
   "daily_llm_budget_usd",
   "daily_image_budget_usd",
   "max_retries_per_image",
-  "daily_x_api_budget_usd",
-  "x_daily_read_cap",
   "reels_per_week",
   "max_reel_seconds",
 ];

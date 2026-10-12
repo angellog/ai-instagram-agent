@@ -1,3 +1,5 @@
+> **Moved (v1.0.31):** X now lives in the standalone `feetbit-x-worker` repo, next to Postiz on Railway. This plan is kept for history.
+
 # X (Twitter) channel — build plan
 
 Adds X as a third channel to this agent (after Instagram and TikTok), for **@feetbitsneakers**.

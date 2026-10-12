@@ -16,7 +16,6 @@ import { registerEngagement } from "./pages/engagement.js";
 import { registerTrends } from "./pages/trends.js";
 import { registerStandard } from "./pages/standard.js";
 import { registerTikTok } from "./pages/tiktok.js";
-import { registerX } from "./pages/x.js";
 
 export { selectedInfluencer } from "./console.js";
 export { rerunInteraction } from "./pages/operate.js";
@@ -43,7 +42,6 @@ export function registerAdmin(app: FastifyInstance): void {
   registerTrends(app);
   registerStandard(app);
   registerTikTok(app);
-  registerX(app);
   registerHatch(app);
   app.get("/admin/logout", async (req, reply) => {
     const t = /(?:^|;\s*)aia_user=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];

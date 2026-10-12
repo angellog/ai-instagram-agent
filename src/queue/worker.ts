@@ -8,8 +8,6 @@ import { runCreate } from "../content/create.js";
 import { planStory } from "../content/stories.js";
 import { standardize } from "../influencers/standard.js";
 import { refreshTikTokTokens } from "../tiktok/accounts.js";
-import { collectXMetrics } from "../x/metrics.js";
-import { pollMentions } from "../x/poll.js";
 import { syncProfile } from "../instagram/profileSync.js";
 import { refreshTrends } from "../trends/trends.js";
 import { one } from "../db/pool.js";
@@ -103,9 +101,6 @@ export const HANDLERS: Record<string, Handler> = {
   [JOBS.profileSync]: () => forEachActiveInfluencer("profile sync", () => syncProfile()),
   // Drafts comments for a person to post; a no-op until a scout token is set.
   [JOBS.engagementScout]: () => forEachActiveInfluencer("engagement scout", async () => (await import("../engagement/scout.js")).runScout()),
-  // X (read-only in phase 1): each is a no-op for influencers without an X account.
-  [JOBS.xPoll]: () => forEachActiveInfluencer("x mentions", pollMentions),
-  [JOBS.xMetrics]: () => forEachActiveInfluencer("x metrics", collectXMetrics),
   [JOBS.hatchFaces]: scoped((j) => generateFaceCandidates(String(j.data.batch ?? Date.now()))),
   // A hatching influencer has no persona yet: loose context, so costs and events are still theirs.
   [JOBS.hatchPersona]: (j) => withInfluencerLoose(ownerOf(j), () => composePersonaForHatch(ownerOf(j), String(j.data.batch ?? ""))),
@@ -268,9 +263,6 @@ export async function upsertSchedulers(): Promise<void> {
     ["analytics", "engagement-scout", { pattern: "15 9,15 * * *" }, JOBS.engagementScout],
     ["maintenance", "reviews-expire", { pattern: "5 * * * *" }, JOBS.reviewsExpire],
     ["maintenance", "sweep", { every: 10 * 60_000 }, JOBS.sweep],
-    ["maintenance", "x-poll", { every: 15 * 60_000 }, JOBS.xPoll],
-    // 04:40 UTC = 07:40 in Kampala: yesterday's posts have had a full evening.
-    ["analytics", "x-metrics", { pattern: "40 4 * * *" }, JOBS.xMetrics],
   ];
   for (const [q, id, repeat, name] of s) {
     await queue(q).upsertJobScheduler(id, repeat.pattern ? { pattern: repeat.pattern, tz: "UTC" } : { every: repeat.every! }, {
@@ -281,6 +273,9 @@ export async function upsertSchedulers(): Promise<void> {
   }
   // v0 had one global content-plan scheduler; it is replaced by per-influencer ones.
   await queue("content").removeJobScheduler("content-plan").catch(() => undefined);
+  // X moved to the standalone feetbit-x-worker (v1.0.31): drop its schedulers from Redis.
+  await queue("maintenance").removeJobScheduler("x-poll").catch(() => undefined);
+  await queue("analytics").removeJobScheduler("x-metrics").catch(() => undefined);
   await syncInfluencerSchedulers();
 }
 
